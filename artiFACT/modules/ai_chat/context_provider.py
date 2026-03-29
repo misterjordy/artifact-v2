@@ -31,7 +31,8 @@ async def get_available_context(
     topics: dict[str, list[FcNode]] = {}
     for prog in programs:
         topics[str(prog.node_uid)] = [
-            n for n in readable
+            n
+            for n in readable
             if n.node_depth > 0 and _is_descendant(n, prog.node_uid, readable_set, all_nodes)
         ]
 
@@ -69,10 +70,7 @@ async def get_facts_for_context(
     if not await can(user, "read", node_uid, db):
         return [], 0
 
-    stmt = (
-        select(FcFact)
-        .where(FcFact.node_uid == node_uid, FcFact.is_retired.is_(False))
-    )
+    stmt = select(FcFact).where(FcFact.node_uid == node_uid, FcFact.is_retired.is_(False))
     result = await db.execute(stmt)
     facts = result.scalars().all()
 

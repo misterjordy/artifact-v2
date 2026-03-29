@@ -9,9 +9,7 @@ import pytest
 
 from artiFACT.kernel.auth.session import (
     SESSION_TTL,
-    REVALIDATION_WINDOW,
     create_session,
-    destroy_session,
     force_destroy_user_sessions,
     validate_session,
 )
@@ -78,11 +76,13 @@ async def test_session_revalidation_catches_deactivated_user(
     mock_redis = AsyncMock()
     # Session exists but last_validated_at is old (>15 min)
     old_time = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
-    session_data = json.dumps({
-        "user_uid": str(deactivated_user.user_uid),
-        "cac_dn": deactivated_user.cac_dn,
-        "last_validated_at": old_time,
-    })
+    session_data = json.dumps(
+        {
+            "user_uid": str(deactivated_user.user_uid),
+            "cac_dn": deactivated_user.cac_dn,
+            "last_validated_at": old_time,
+        }
+    )
     mock_redis.get.return_value = session_data
     mock_redis.delete.return_value = True
 
@@ -106,11 +106,13 @@ async def test_session_revalidation_within_15min_window(active_user: FcUser) -> 
     mock_redis = AsyncMock()
     # Session exists, last_validated_at is recent (<15 min)
     recent_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
-    session_data = json.dumps({
-        "user_uid": str(active_user.user_uid),
-        "cac_dn": active_user.cac_dn,
-        "last_validated_at": recent_time,
-    })
+    session_data = json.dumps(
+        {
+            "user_uid": str(active_user.user_uid),
+            "cac_dn": active_user.cac_dn,
+            "last_validated_at": recent_time,
+        }
+    )
     mock_redis.get.return_value = session_data
 
     # DB returns the user (for the basic lookup, not revalidation)
@@ -130,16 +132,20 @@ async def test_session_revalidation_within_15min_window(active_user: FcUser) -> 
 async def test_force_destroy_kills_all_user_sessions(active_user: FcUser) -> None:
     """ZT auto-remediation: force_destroy should delete all sessions for a user."""
     user_uid = active_user.user_uid
-    session_data_match = json.dumps({
-        "user_uid": str(user_uid),
-        "cac_dn": "test-user",
-        "last_validated_at": datetime.now(timezone.utc).isoformat(),
-    })
-    session_data_other = json.dumps({
-        "user_uid": str(uuid.uuid4()),
-        "cac_dn": "other-user",
-        "last_validated_at": datetime.now(timezone.utc).isoformat(),
-    })
+    session_data_match = json.dumps(
+        {
+            "user_uid": str(user_uid),
+            "cac_dn": "test-user",
+            "last_validated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    session_data_other = json.dumps(
+        {
+            "user_uid": str(uuid.uuid4()),
+            "cac_dn": "other-user",
+            "last_validated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
     mock_redis = AsyncMock()
     # scan_iter returns an async iterable (not a coroutine)

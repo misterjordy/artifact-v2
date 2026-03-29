@@ -10,9 +10,7 @@ from artiFACT.kernel.models import FcNode
 from artiFACT.kernel.tree.descendants import get_descendants
 
 
-async def validate_title_unique(
-    db: AsyncSession, title: str, parent_uid: uuid.UUID | None
-) -> None:
+async def validate_title_unique(db: AsyncSession, title: str, parent_uid: uuid.UUID | None) -> None:
     """Raise Conflict if a sibling with the same title already exists."""
     if parent_uid is None:
         stmt = select(FcNode).where(

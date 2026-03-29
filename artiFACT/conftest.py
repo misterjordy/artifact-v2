@@ -4,11 +4,13 @@ import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from artiFACT.kernel.models import Base, FcFact, FcFactVersion, FcNode, FcNodePermission, FcUser
+from artiFACT.kernel.models import Base, FcNode, FcNodePermission, FcUser
 from artiFACT.modules.audit.recorder import register_subscribers
-from artiFACT.modules.search.acronym_miner import register_subscribers as register_search_subscribers
+from artiFACT.modules.search.acronym_miner import (
+    register_subscribers as register_search_subscribers,
+)
 
 TEST_DATABASE_URL = "postgresql+asyncpg://artifact:artifact_dev@postgres:5432/artifact_test"
 
@@ -183,6 +185,7 @@ def _register_audit_subscribers():
     """Register audit subscribers for every test."""
     from artiFACT.kernel.events import _subscribers
     from artiFACT.modules.audit.recorder import _pending_events
+
     _subscribers.clear()
     _pending_events.clear()
     register_subscribers()
@@ -193,4 +196,5 @@ def _register_audit_subscribers():
 def _reset_redis():
     """Reset Redis singleton so each test gets a fresh connection on its event loop."""
     import artiFACT.kernel.auth.session as session_mod
+
     session_mod._redis = None

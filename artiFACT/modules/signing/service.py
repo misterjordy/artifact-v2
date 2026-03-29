@@ -49,11 +49,14 @@ async def sign_node(
         )
         db.add(sig)
 
-    await publish("signature.created", {
-        "signature_uid": str(sig.signature_uid),
-        "node_uid": str(node_uid),
-        "actor_uid": str(actor.user_uid),
-        "fact_count": len(versions),
-    })
+    await publish(
+        "signature.created",
+        {
+            "signature_uid": str(sig.signature_uid),
+            "node_uid": str(node_uid),
+            "actor_uid": str(actor.user_uid),
+            "fact_count": len(versions),
+        },
+    )
 
     return sig

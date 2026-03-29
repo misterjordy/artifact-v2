@@ -1,13 +1,12 @@
 """Seed data for Sprint 9: artiFACT taxonomy + ConOps/SDD templates."""
 
 import asyncio
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from artiFACT.kernel.config import settings
-from artiFACT.kernel.models import FcDocumentTemplate, FcNode, FcUser
+from artiFACT.kernel.models import FcDocumentTemplate, FcNode
 
 ARTIFACT_TAXONOMY = [
     "System Overview",

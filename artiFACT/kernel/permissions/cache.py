@@ -1,9 +1,7 @@
 """Permission cache read/write/invalidate (Redis-backed)."""
 
-import json
 import uuid
 
-import redis.asyncio as aioredis
 
 from artiFACT.kernel.auth.session import get_redis
 

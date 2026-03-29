@@ -4,18 +4,9 @@ import json
 import uuid
 
 import redis
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from artiFACT.kernel.background import app as celery_app
 from artiFACT.kernel.config import settings
-from artiFACT.kernel.models import (
-    FcDocumentTemplate,
-    FcFact,
-    FcFactVersion,
-    FcNode,
-    FcUser,
-)
 from artiFACT.kernel.s3 import get_s3_client, upload_bytes
 from artiFACT.modules.export.docgen.docx_builder import build_docx
 from artiFACT.modules.export.docgen.prefilter import (
@@ -46,7 +37,6 @@ def _publish_progress(
 def _get_sync_engine():
     """Get synchronous DB engine for use in Celery tasks."""
     from sqlalchemy import create_engine
-    from sqlalchemy.orm import Session
 
     sync_url = settings.DATABASE_URL.replace("+asyncpg", "+psycopg2")
     return create_engine(sync_url)
@@ -73,8 +63,6 @@ def generate_document(
     """
     import asyncio
 
-    from artiFACT.modules.export.factsheet import _expand_nodes
-
     engine = _get_sync_engine()
 
     with engine.connect() as conn:
@@ -82,7 +70,9 @@ def generate_document(
 
         # Load template
         row = conn.execute(
-            text("SELECT name, abbreviation, sections FROM fc_document_template WHERE template_uid = :uid"),
+            text(
+                "SELECT name, abbreviation, sections FROM fc_document_template WHERE template_uid = :uid"
+            ),
             {"uid": template_uid},
         ).fetchone()
         if not row:
@@ -90,7 +80,7 @@ def generate_document(
             return {"error": "Template not found"}
 
         template_name = row[0]
-        template_abbrev = row[1]
+        _ = row[1]
         sections = row[2] if isinstance(row[2], list) else json.loads(row[2])
 
         # Load facts
@@ -113,15 +103,17 @@ def generate_document(
         facts = []
         overall_classification = "UNCLASSIFIED"
         for r in fact_rows:
-            facts.append({
-                "sentence": r[0],
-                "classification": r[1] or "UNCLASSIFIED",
-                "tags": r[2] or [],
-                "effective_date": r[3],
-                "last_verified": r[4],
-                "state": r[5],
-                "node": r[6],
-            })
+            facts.append(
+                {
+                    "sentence": r[0],
+                    "classification": r[1] or "UNCLASSIFIED",
+                    "tags": r[2] or [],
+                    "effective_date": r[3],
+                    "last_verified": r[4],
+                    "state": r[5],
+                    "node": r[6],
+                }
+            )
             if r[1] and "CUI" in (r[1] or "").upper():
                 overall_classification = r[1]
 
@@ -143,9 +135,7 @@ def generate_document(
     for i, section in enumerate(sections):
         pct = 10 + (i / len(sections)) * 30
         _publish_progress(session_uid, f"Scoring: {section['title']}", pct)
-        scores = loop.run_until_complete(
-            score_facts_for_section(ai_call, facts, section, sections)
-        )
+        scores = loop.run_until_complete(score_facts_for_section(ai_call, facts, section, sections))
         affinity_scores[section["key"]] = scores
 
     assignments = assign_facts_to_sections(affinity_scores, facts)
@@ -169,7 +159,11 @@ def generate_document(
 
     _publish_progress(session_uid, "Uploading to storage", 90)
     s3_key = f"exports/{actor_uid}/{session_uid}.docx"
-    upload_bytes(s3_key, docx_bytes, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    upload_bytes(
+        s3_key,
+        docx_bytes,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
 
     # Generate presigned URL
     s3_client = get_s3_client()

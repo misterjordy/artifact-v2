@@ -1,0 +1,70 @@
+stages:
+  - lint
+  - test
+  - build
+  - deploy-test
+  - smoke-test
+  - deploy-prod
+
+lint:
+  stage: lint
+  script:
+    - ruff check .
+    - mypy artiFACT/
+    - ruff format --check .
+
+test:
+  stage: test
+  services:
+    - postgres:16
+    - redis:7
+  variables:
+    DATABASE_URL: "postgresql://test:test@postgres/artifact_test"
+    REDIS_URL: "redis://redis:6379"
+  script:
+    - alembic upgrade head
+    - pytest --cov=artiFACT --cov-report=xml -x
+    - coverage report --fail-under=80
+
+zap-scan:
+  stage: test
+  image: ghcr.io/zaproxy/zaproxy:stable
+  script:
+    - zap-baseline.py -t https://artifact.jordanaallred.com -r zap-report.html -l WARN
+  artifacts:
+    paths: [zap-report.html]
+  allow_failure: true
+
+build:
+  stage: build
+  script:
+    - docker build -t $ECR_REPO:$CI_COMMIT_SHA -f docker/Dockerfile .
+    - docker build -t $ECR_REPO:$CI_COMMIT_SHA-worker -f docker/Dockerfile.worker .
+    - docker push $ECR_REPO:$CI_COMMIT_SHA
+    - docker push $ECR_REPO:$CI_COMMIT_SHA-worker
+
+deploy-test:
+  stage: deploy-test
+  environment: test
+  script:
+    - cd terraform/environments/test
+    - terraform init
+    - terraform apply -auto-approve -var="image_tag=$CI_COMMIT_SHA"
+    - alembic upgrade head
+
+smoke-test:
+  stage: smoke-test
+  script:
+    - pytest tests/smoke/ --base-url=$TEST_URL
+
+deploy-prod:
+  stage: deploy-prod
+  environment: prod
+  when: manual
+  only:
+    - main
+  script:
+    - cd terraform/environments/prod
+    - terraform init
+    - terraform apply -auto-approve -var="image_tag=$CI_COMMIT_SHA"
+    - alembic upgrade head

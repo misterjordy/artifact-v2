@@ -1,6 +1,5 @@
 """Tests for chat service: integration with real permissions, events, encryption. Only LLM httpx calls mocked."""
 
-import json
 import uuid
 from unittest.mock import AsyncMock
 
@@ -126,7 +125,7 @@ class TestChat:
         chunks = [
             b'data: {"choices":[{"delta":{"content":"Hello "}}]}\n\n',
             b'data: {"choices":[{"delta":{"content":"world."}}]}\n\n',
-            b'data: [DONE]\n\n',
+            b"data: [DONE]\n\n",
         ]
 
         class FakeStreamResponse:
@@ -197,6 +196,7 @@ class TestRateLimit:
 
         # Override rate limit to a small number for testing
         import artiFACT.kernel.rate_limiter as rl
+
         original_limits = rl.DEFAULT_LIMITS.copy()
         rl.DEFAULT_LIMITS["api_write"] = 3
 

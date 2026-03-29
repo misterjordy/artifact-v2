@@ -3,7 +3,6 @@
 import uuid
 from datetime import datetime, timezone
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
@@ -45,9 +44,7 @@ async def test_search_returns_ranked_results(
     await _publish_fact(
         db, child_node, "The system owner is responsible for configuration.", admin_user
     )
-    await _publish_fact(
-        db, child_node, "Network interfaces must be documented.", admin_user
-    )
+    await _publish_fact(db, child_node, "Network interfaces must be documented.", admin_user)
     await _publish_fact(
         db, child_node, "The system owner reviews all changes to the system.", admin_user
     )
@@ -93,9 +90,7 @@ async def test_search_accessible_to_all_authenticated_users(
     child_node: FcNode,
 ):
     """Search works for all authenticated users regardless of role."""
-    await _publish_fact(
-        db, child_node, "Access check fact for search validation.", admin_user
-    )
+    await _publish_fact(db, child_node, "Access check fact for search validation.", admin_user)
 
     # The service has no role-based filtering — all users get the same results.
     # Each call below exercises the real tsvector query and real tree cache.

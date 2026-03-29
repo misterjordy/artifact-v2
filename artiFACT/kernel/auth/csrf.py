@@ -1,12 +1,12 @@
-"""CSRF token generate/validate middleware."""
+"""CSRF token generate/validate middleware (pure ASGI)."""
 
 import hashlib
 import hmac
 import secrets
 
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from artiFACT.kernel.config import settings
 
@@ -23,9 +23,7 @@ def generate_csrf_token() -> str:
 
 def sign_token(token: str) -> str:
     """Sign a CSRF token using the app secret key."""
-    return hmac.new(
-        settings.SECRET_KEY.encode(), token.encode(), hashlib.sha256
-    ).hexdigest()
+    return hmac.new(settings.SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
 
 
 def set_csrf_cookie(response: Response, token: str) -> None:
@@ -40,23 +38,43 @@ def set_csrf_cookie(response: Response, token: str) -> None:
     )
 
 
-class CSRFMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if request.url.path in EXEMPT_PATHS:
-            return await call_next(request)
+class CSRFMiddleware:
+    """Pure ASGI middleware for CSRF validation."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        path = request.url.path
+
+        if path in EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+            return
 
         if request.method in STATE_CHANGING_METHODS:
             cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
             header_token = request.headers.get(CSRF_HEADER_NAME)
 
             if not cookie_token or not header_token:
-                return JSONResponse(
-                    status_code=403, content={"detail": "CSRF token missing"}
-                )
+                response = _json_response(403, {"detail": "CSRF token missing"})
+                await response(scope, receive, send)
+                return
 
             if not hmac.compare_digest(cookie_token, header_token):
-                return JSONResponse(
-                    status_code=403, content={"detail": "CSRF token mismatch"}
-                )
+                response = _json_response(403, {"detail": "CSRF token mismatch"})
+                await response(scope, receive, send)
+                return
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
+
+
+def _json_response(status_code: int, body: dict) -> Response:
+    """Build a Starlette JSON response."""
+    from starlette.responses import JSONResponse
+
+    return JSONResponse(status_code=status_code, content=body)

@@ -1,6 +1,5 @@
 """Export module API endpoints — ALL routes require auth."""
 
-import asyncio
 import json
 import uuid
 
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.db import get_db
-from artiFACT.kernel.exceptions import Forbidden, NotFound
+from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import FcUser
 from artiFACT.kernel.permissions.resolver import can
 from artiFACT.modules.export.download_manager import get_download_url, get_progress
@@ -34,6 +33,8 @@ from artiFACT.modules.export.template_manager import (
     list_templates,
     update_template,
 )
+from artiFACT.kernel.access_logger import log_data_access
+from artiFACT.modules.admin.anomaly_detector import check_anomaly
 from artiFACT.modules.export.docgen.orchestrator import generate_document
 from artiFACT.modules.export.views import preview_assignments
 
@@ -42,6 +43,7 @@ sync_router = APIRouter(prefix="/api/v1/sync", tags=["sync"])
 
 
 # ── Factsheet endpoints ──
+
 
 @router.get("/factsheet")
 async def export_factsheet(
@@ -63,6 +65,19 @@ async def export_factsheet(
     }
 
     stream = await export_facts(db, format, uid_list, state_list, user)
+
+    # ZT Pillar 5: log data access
+    await log_data_access(
+        db,
+        user.user_uid,
+        "export",
+        {
+            "format": format,
+            "node_uids": [str(u) for u in uid_list],
+        },
+    )
+    await check_anomaly(db, user.user_uid, "export")
+
     return StreamingResponse(
         stream,
         media_type=content_types.get(format, "application/json"),
@@ -71,6 +86,7 @@ async def export_factsheet(
 
 
 # ── Document generation endpoints ──
+
 
 @router.post("/document", response_model=DocumentOut, status_code=202)
 async def trigger_document_generation(
@@ -147,6 +163,7 @@ async def download_document(
 
 # ── Template CRUD endpoints ──
 
+
 @router.get("/templates", response_model=list[TemplateOut])
 async def list_document_templates(
     user: FcUser = Depends(get_current_user),
@@ -201,7 +218,9 @@ async def update_document_template(
         raise Forbidden("Only admins can update templates")
     updates = body.model_dump(exclude_unset=True)
     if "sections" in updates and updates["sections"] is not None:
-        updates["sections"] = [s.model_dump() if hasattr(s, "model_dump") else s for s in updates["sections"]]
+        updates["sections"] = [
+            s.model_dump() if hasattr(s, "model_dump") else s for s in updates["sections"]
+        ]
     tpl = await update_template(db, template_uid, updates)
     await db.commit()
     return TemplateOut.model_validate(tpl)
@@ -222,6 +241,7 @@ async def delete_document_template(
 
 # ── Views (prefilter preview) ──
 
+
 @router.post("/views", response_model=ViewsOut)
 async def views_preview(
     body: ViewsRequest,
@@ -235,6 +255,7 @@ async def views_preview(
 
 # ── Sync endpoints ──
 
+
 @sync_router.get("/changes", response_model=DeltaFeedOut)
 async def delta_feed(
     cursor: int = Query(0, ge=0),
@@ -244,6 +265,18 @@ async def delta_feed(
 ) -> DeltaFeedOut:
     """Delta feed for incremental sync. Uses monotonic seq cursor."""
     result = await get_delta_feed(db, cursor, limit)
+
+    # ZT Pillar 5: log sync delta access
+    await log_data_access(
+        db,
+        user.user_uid,
+        "sync_delta",
+        {
+            "cursor": cursor,
+            "count": len(result.get("changes", [])),
+        },
+    )
+
     return DeltaFeedOut(**result)
 
 
@@ -253,4 +286,16 @@ async def full_dump(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Full dump of all entities for emergency export."""
-    return await get_full_dump(db)
+    result = await get_full_dump(db)
+
+    # ZT Pillar 5: log sync full access
+    await log_data_access(
+        db,
+        user.user_uid,
+        "sync_full",
+        {
+            "total_count": len(result.get("facts", [])),
+        },
+    )
+
+    return result

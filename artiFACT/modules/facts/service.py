@@ -64,14 +64,17 @@ async def create_fact(
     )
     await db.flush()
 
-    await publish("fact.created", {
-        "fact_uid": str(fact.fact_uid),
-        "version_uid": str(version.version_uid),
-        "node_uid": str(node_uid),
-        "actor_uid": str(actor.user_uid),
-        "state": version.state,
-        "sentence": sentence,
-    })
+    await publish(
+        "fact.created",
+        {
+            "fact_uid": str(fact.fact_uid),
+            "version_uid": str(version.version_uid),
+            "node_uid": str(node_uid),
+            "actor_uid": str(actor.user_uid),
+            "state": version.state,
+            "sentence": sentence,
+        },
+    )
 
     return fact, version
 
@@ -114,21 +117,22 @@ async def edit_fact(
     )
     await db.flush()
 
-    await publish("fact.edited", {
-        "fact_uid": str(fact.fact_uid),
-        "version_uid": str(version.version_uid),
-        "node_uid": str(fact.node_uid),
-        "actor_uid": str(actor.user_uid),
-        "state": version.state,
-        "sentence": sentence,
-    })
+    await publish(
+        "fact.edited",
+        {
+            "fact_uid": str(fact.fact_uid),
+            "version_uid": str(version.version_uid),
+            "node_uid": str(fact.node_uid),
+            "actor_uid": str(actor.user_uid),
+            "state": version.state,
+            "sentence": sentence,
+        },
+    )
 
     return fact, version
 
 
-async def retire_fact(
-    db: AsyncSession, fact_uid: UUID, actor: FcUser
-) -> FcFact:
+async def retire_fact(db: AsyncSession, fact_uid: UUID, actor: FcUser) -> FcFact:
     """Retire a fact (soft delete)."""
     fact = await db.get(FcFact, fact_uid)
     if not fact:
@@ -143,18 +147,19 @@ async def retire_fact(
     fact.retired_at = _utcnow()
     fact.retired_by_uid = actor.user_uid
 
-    await publish("fact.retired", {
-        "fact_uid": str(fact.fact_uid),
-        "node_uid": str(fact.node_uid),
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "fact.retired",
+        {
+            "fact_uid": str(fact.fact_uid),
+            "node_uid": str(fact.node_uid),
+            "actor_uid": str(actor.user_uid),
+        },
+    )
 
     return fact
 
 
-async def unretire_fact(
-    db: AsyncSession, fact_uid: UUID, actor: FcUser
-) -> FcFact:
+async def unretire_fact(db: AsyncSession, fact_uid: UUID, actor: FcUser) -> FcFact:
     """Unretire a previously retired fact."""
     fact = await db.get(FcFact, fact_uid)
     if not fact:
@@ -169,18 +174,19 @@ async def unretire_fact(
     fact.retired_at = None
     fact.retired_by_uid = None
 
-    await publish("fact.unretired", {
-        "fact_uid": str(fact.fact_uid),
-        "node_uid": str(fact.node_uid),
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "fact.unretired",
+        {
+            "fact_uid": str(fact.fact_uid),
+            "node_uid": str(fact.node_uid),
+            "actor_uid": str(actor.user_uid),
+        },
+    )
 
     return fact
 
 
-async def get_fact_versions(
-    db: AsyncSession, fact_uid: UUID
-) -> list[FcFactVersion]:
+async def get_fact_versions(db: AsyncSession, fact_uid: UUID) -> list[FcFactVersion]:
     """Return all versions for a fact, newest first."""
     fact = await db.get(FcFact, fact_uid)
     if not fact:

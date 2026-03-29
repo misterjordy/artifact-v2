@@ -17,9 +17,7 @@ async def flush_pending_events(db: AsyncSession) -> list[FcEventLog]:
     return events
 
 
-async def get_events_for_entity(
-    db: AsyncSession, entity_uid: str
-) -> list[FcEventLog]:
+async def get_events_for_entity(db: AsyncSession, entity_uid: str) -> list[FcEventLog]:
     """Return all events for an entity, newest first."""
     stmt = (
         select(FcEventLog)

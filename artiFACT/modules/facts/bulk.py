@@ -9,9 +9,7 @@ from artiFACT.modules.facts.reassign import reassign_fact
 from artiFACT.modules.facts.service import retire_fact
 
 
-async def bulk_retire(
-    db: AsyncSession, fact_uids: list[UUID], actor: FcUser
-) -> list[UUID]:
+async def bulk_retire(db: AsyncSession, fact_uids: list[UUID], actor: FcUser) -> list[UUID]:
     """Retire multiple facts. All-or-nothing: if any fails, none retire."""
     retired = []
     for uid in fact_uids:

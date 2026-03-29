@@ -21,7 +21,12 @@ from artiFACT.modules.queue.schemas import (
     ReviseRequest,
 )
 from artiFACT.modules.queue.scope_resolver import get_approvable_nodes
-from artiFACT.modules.queue.service import approve_move, approve_proposal, reject_move, reject_proposal
+from artiFACT.modules.queue.service import (
+    approve_move,
+    approve_proposal,
+    reject_move,
+    reject_proposal,
+)
 
 router = APIRouter(prefix="/api/v1/queue", tags=["queue"])
 
@@ -115,9 +120,7 @@ async def revise(
     user: FcUser = Depends(get_current_user),
 ) -> dict:
     """Revise language: reject original + publish revised (atomic)."""
-    revised = await revise_and_publish(
-        db, version_uid, body.revised_sentence, user, note=body.note
-    )
+    revised = await revise_and_publish(db, version_uid, body.revised_sentence, user, note=body.note)
     await flush_pending_events(db)
     await db.commit()
     return {"status": "revised", "version_uid": str(revised.version_uid)}

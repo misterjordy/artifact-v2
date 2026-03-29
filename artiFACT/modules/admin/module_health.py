@@ -45,12 +45,17 @@ async def get_module_health(db: AsyncSession) -> list[dict]:
     s3_ok = check_s3()
 
     modules = [
-        "auth_admin", "taxonomy", "facts", "audit",
-        "queue", "search", "signing", "ai_chat",
-        "import_pipeline", "export", "admin",
+        "auth_admin",
+        "taxonomy",
+        "facts",
+        "audit",
+        "queue",
+        "search",
+        "signing",
+        "ai_chat",
+        "import_pipeline",
+        "export",
+        "admin",
     ]
 
-    return [
-        {"module": name, "db": db_ok, "redis": redis_ok, "s3": s3_ok}
-        for name in modules
-    ]
+    return [{"module": name, "db": db_ok, "redis": redis_ok, "s3": s3_ok} for name in modules]

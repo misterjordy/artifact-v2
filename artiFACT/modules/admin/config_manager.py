@@ -43,11 +43,14 @@ async def upsert_config(
         db.add(row)
         await db.flush()
 
-    await publish("admin.config_changed", {
-        "key": key,
-        "old_value": old_value,
-        "new_value": value,
-        "actor_uid": str(actor_uid),
-    })
+    await publish(
+        "admin.config_changed",
+        {
+            "key": key,
+            "old_value": old_value,
+            "new_value": value,
+            "actor_uid": str(actor_uid),
+        },
+    )
 
     return row

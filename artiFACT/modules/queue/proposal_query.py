@@ -8,9 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.models import FcEventLog, FcFact, FcFactVersion, FcNode, FcUser
 
 
-async def get_proposals(
-    db: AsyncSession, node_uids: list[uuid.UUID]
-) -> list[dict]:
+async def get_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict]:
     """Pending proposed versions scoped to node_uids. One query with JOINs."""
     if not node_uids:
         return []
@@ -42,9 +40,7 @@ async def get_proposals(
     return [row._asdict() for row in result.all()]
 
 
-async def get_move_proposals(
-    db: AsyncSession, node_uids: list[uuid.UUID]
-) -> list[dict]:
+async def get_move_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict]:
     """Pending move proposals from fc_event_log where target is in scope."""
     if not node_uids:
         return []
@@ -86,25 +82,25 @@ async def get_move_proposals(
 
         actor = await db.get(FcUser, event.actor_uid) if event.actor_uid else None
 
-        moves.append({
-            "event_uid": event.event_uid,
-            "fact_uid": fact_uid,
-            "display_sentence": sentence,
-            "source_node_uid": fact.node_uid,
-            "source_node_title": source_node.title if source_node else "",
-            "target_node_uid": target_uid,
-            "target_node_title": target_node.title if target_node else "",
-            "actor_uid": event.actor_uid,
-            "actor_name": actor.display_name if actor else None,
-            "occurred_at": event.occurred_at,
-        })
+        moves.append(
+            {
+                "event_uid": event.event_uid,
+                "fact_uid": fact_uid,
+                "display_sentence": sentence,
+                "source_node_uid": fact.node_uid,
+                "source_node_title": source_node.title if source_node else "",
+                "target_node_uid": target_uid,
+                "target_node_title": target_node.title if target_node else "",
+                "actor_uid": event.actor_uid,
+                "actor_name": actor.display_name if actor else None,
+                "occurred_at": event.occurred_at,
+            }
+        )
 
     return moves
 
 
-async def get_unsigned(
-    db: AsyncSession, node_uids: list[uuid.UUID]
-) -> list[dict]:
+async def get_unsigned(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict]:
     """Published but not yet signed versions in scope."""
     if not node_uids:
         return []

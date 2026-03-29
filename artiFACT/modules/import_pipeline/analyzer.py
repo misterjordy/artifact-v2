@@ -63,8 +63,12 @@ def _call_ai(api_key: str, provider: str, model: str, messages: list[dict]) -> s
         resp = httpx.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": messages, "max_tokens": 4096,
-                  "response_format": {"type": "json_object"}},
+            json={
+                "model": model,
+                "messages": messages,
+                "max_tokens": 4096,
+                "response_format": {"type": "json_object"},
+            },
             timeout=120,
         )
         resp.raise_for_status()
@@ -79,10 +83,17 @@ def _call_ai(api_key: str, provider: str, model: str, messages: list[dict]) -> s
                 api_messages.append(msg)
         resp = httpx.post(
             "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
-                     "Content-Type": "application/json"},
-            json={"model": model, "max_tokens": 4096, "system": system_content,
-                  "messages": api_messages},
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": 4096,
+                "system": system_content,
+                "messages": api_messages,
+            },
             timeout=120,
         )
         resp.raise_for_status()
@@ -124,7 +135,7 @@ def analyze_document(session_uid_str: str) -> None:
             chunks = _chunk_text(text)
             _publish_progress(session_uid_str, f"Split into {len(chunks)} chunks", 20)
 
-            user = db.get(FcUser, session.created_by_uid)
+            db.get(FcUser, session.created_by_uid)
             ai_key = db.execute(
                 select(FcUserAiKey).where(FcUserAiKey.user_uid == session.created_by_uid)
             ).scalar_one_or_none()
@@ -153,14 +164,17 @@ def analyze_document(session_uid_str: str) -> None:
                     session_uid_str, f"Extracted from chunk {i + 1}/{len(chunks)}", pct
                 )
 
-            existing_versions = db.execute(
-                select(FcFactVersion).join(
+            db.execute(
+                select(FcFactVersion)
+                .join(
                     FcImportSession,
                     FcFactVersion.fact_uid == FcImportSession.program_node_uid,
-                ).where(False)
+                )
+                .where(False)
             ).scalars().all()
 
             from sqlalchemy import text as sa_text
+
             existing_rows = db.execute(
                 sa_text(
                     "SELECT fv.display_sentence, f.fact_uid "

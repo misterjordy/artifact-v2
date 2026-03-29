@@ -32,25 +32,34 @@ async def recommend_locations(
         select(FcNode).where(FcNode.is_archived.is_(False)).order_by(FcNode.node_depth)
     )
     nodes = nodes_result.scalars().all()
-    taxonomy = "\n".join(
-        f"{'  ' * n.node_depth}{n.title} (uid: {n.node_uid})" for n in nodes
-    )
+    taxonomy = "\n".join(f"{'  ' * n.node_depth}{n.title} (uid: {n.node_uid})" for n in nodes)
 
     ai_key_result = await db.execute(
         select(FcUserAiKey).where(FcUserAiKey.user_uid == actor.user_uid)
     )
     ai_key = ai_key_result.scalar_one_or_none()
     if not ai_key:
-        return [{"sentence": s, "recommended_node_uid": str(program_node_uid),
-                 "reasoning": "No AI key configured"} for s in sentences]
+        return [
+            {
+                "sentence": s,
+                "recommended_node_uid": str(program_node_uid),
+                "reasoning": "No AI key configured",
+            }
+            for s in sentences
+        ]
 
     plaintext_key = decrypt(ai_key.encrypted_key)
     messages = [
         {"role": "system", "content": RECOMMEND_PROMPT},
-        {"role": "user", "content": json.dumps({
-            "sentences": sentences,
-            "taxonomy": taxonomy,
-        })},
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "sentences": sentences,
+                    "taxonomy": taxonomy,
+                }
+            ),
+        },
     ]
 
     response_text = await _call_provider(ai_key, plaintext_key, messages, stream=False)
@@ -59,5 +68,11 @@ async def recommend_locations(
         data = json.loads(response_text)
         return data.get("recommendations", [])
     except (json.JSONDecodeError, TypeError):
-        return [{"sentence": s, "recommended_node_uid": str(program_node_uid),
-                 "reasoning": "AI response parsing failed"} for s in sentences]
+        return [
+            {
+                "sentence": s,
+                "recommended_node_uid": str(program_node_uid),
+                "reasoning": "AI response parsing failed",
+            }
+            for s in sentences
+        ]

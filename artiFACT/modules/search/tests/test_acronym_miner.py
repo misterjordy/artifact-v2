@@ -3,7 +3,6 @@
 import uuid
 from datetime import datetime, timezone
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.session import get_redis
@@ -47,9 +46,7 @@ async def test_acronym_query_uses_correct_table_and_columns(
     await _publish_fact(
         db, child_node, "The DOD requires all COCOM to follow SOP procedures.", admin_user
     )
-    await _publish_fact(
-        db, child_node, "Network ACL rules enforce DOD policy.", admin_user
-    )
+    await _publish_fact(db, child_node, "Network ACL rules enforce DOD policy.", admin_user)
 
     entries = await mine_acronyms(db)
 
@@ -67,9 +64,7 @@ async def test_acronym_cache_invalidated_on_publish(
     db: AsyncSession, admin_user: FcUser, child_node: FcNode
 ):
     """Publishing a fact fires fact.published event which clears the acronym cache."""
-    await _publish_fact(
-        db, child_node, "The DOD standard applies here.", admin_user
-    )
+    await _publish_fact(db, child_node, "The DOD standard applies here.", admin_user)
 
     # Prime the cache
     entries = await mine_acronyms(db)

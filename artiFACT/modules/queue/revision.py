@@ -60,18 +60,24 @@ async def revise_and_publish(
 
         fact.current_published_version_uid = revised.version_uid
 
-    await publish("version.rejected", {
-        "version_uid": str(version.version_uid),
-        "fact_uid": str(version.fact_uid),
-        "actor_uid": str(actor.user_uid),
-        "note": note or "Revised",
-    })
-    await publish("version.published", {
-        "version_uid": str(revised.version_uid),
-        "fact_uid": str(fact.fact_uid),
-        "actor_uid": str(actor.user_uid),
-        "old_state": "proposed",
-        "new_state": "published",
-    })
+    await publish(
+        "version.rejected",
+        {
+            "version_uid": str(version.version_uid),
+            "fact_uid": str(version.fact_uid),
+            "actor_uid": str(actor.user_uid),
+            "note": note or "Revised",
+        },
+    )
+    await publish(
+        "version.published",
+        {
+            "version_uid": str(revised.version_uid),
+            "fact_uid": str(fact.fact_uid),
+            "actor_uid": str(actor.user_uid),
+            "old_state": "proposed",
+            "new_state": "published",
+        },
+    )
 
     return revised

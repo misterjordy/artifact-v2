@@ -2,11 +2,10 @@
 
 import uuid
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
+from artiFACT.kernel.models import FcFact, FcFactVersion
 
 
 async def _get_browse_facts(db: AsyncSession, node_uid: uuid.UUID) -> list[dict]:

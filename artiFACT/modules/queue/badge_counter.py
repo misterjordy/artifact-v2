@@ -2,7 +2,6 @@
 
 import uuid
 
-import redis.asyncio as aioredis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +16,7 @@ def _badge_key(user_uid: uuid.UUID) -> str:
     return f"badge:{user_uid}"
 
 
-async def get_badge_count(
-    db: AsyncSession, user_uid: uuid.UUID, node_uids: list[uuid.UUID]
-) -> int:
+async def get_badge_count(db: AsyncSession, user_uid: uuid.UUID, node_uids: list[uuid.UUID]) -> int:
     """Return cached proposal count, or compute and cache it."""
     r = await get_redis()
     cached = await r.get(_badge_key(user_uid))

@@ -1,10 +1,8 @@
 """Scope enforcement regression tests (v1 Q-SEC-01, Q-SEC-02, Q-AUTH-02)."""
 
 import uuid
-from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.exceptions import Forbidden
@@ -63,9 +61,8 @@ async def test_subapprover_cannot_approve_outside_scope(
     # Create proposal in second_node (outside scope)
     _, version = await _make_proposed_fact(db, second_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock):
-        with pytest.raises(Forbidden, match="outside your approval scope"):
-            await approve_proposal(db, version.version_uid, subapprover)
+    with pytest.raises(Forbidden, match="outside your approval scope"):
+        await approve_proposal(db, version.version_uid, subapprover)
 
 
 async def test_subapprover_cannot_reject_outside_scope(
@@ -93,9 +90,8 @@ async def test_subapprover_cannot_reject_outside_scope(
 
     _, version = await _make_proposed_fact(db, second_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock):
-        with pytest.raises(Forbidden, match="outside your approval scope"):
-            await reject_proposal(db, version.version_uid, subapprover)
+    with pytest.raises(Forbidden, match="outside your approval scope"):
+        await reject_proposal(db, version.version_uid, subapprover)
 
 
 async def test_move_reject_requires_scope_check(
@@ -177,8 +173,6 @@ async def test_contributor_with_node_grant_can_approve(
 
     _, version = await _make_proposed_fact(db, child_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        result = await approve_proposal(db, version.version_uid, user)
+    result = await approve_proposal(db, version.version_uid, user)
 
     assert result.state == "published"

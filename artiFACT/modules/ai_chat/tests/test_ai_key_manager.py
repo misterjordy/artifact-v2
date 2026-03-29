@@ -1,13 +1,9 @@
 """Tests for AI key manager: CRUD, encryption at rest."""
 
-import uuid
-
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.crypto import decrypt, encrypt
-from artiFACT.kernel.models import FcUser, FcUserAiKey
+from artiFACT.kernel.models import FcUser
 from artiFACT.modules.auth_admin.ai_key_manager import (
     InvalidKeyFormat,
     decrypt_key,
@@ -55,9 +51,7 @@ class TestSaveAIKey:
             await save_ai_key(db, admin_user.user_uid, "openai", "bad-key-format")
 
     @pytest.mark.asyncio
-    async def test_invalid_anthropic_key_format(
-        self, db: AsyncSession, admin_user: FcUser
-    ) -> None:
+    async def test_invalid_anthropic_key_format(self, db: AsyncSession, admin_user: FcUser) -> None:
         with pytest.raises(InvalidKeyFormat):
             await save_ai_key(db, admin_user.user_uid, "anthropic", "sk-wrong-prefix")
 

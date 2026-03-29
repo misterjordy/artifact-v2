@@ -3,7 +3,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Cookie, Depends, Request
+from fastapi import APIRouter, Cookie, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
@@ -47,7 +47,9 @@ async def queue_page(
     """Queue view with tabs for proposals, moves, unsigned."""
     approvable = await get_approvable_nodes(db, user)
     badge_total = await get_badge_count(db, user.user_uid, list(approvable.keys()))
-    html = _jinja.get_template("queue.html").render(user=user, badge_total=badge_total, active_nav="queue")
+    html = _jinja.get_template("queue.html").render(
+        user=user, badge_total=badge_total, active_nav="queue"
+    )
     return HTMLResponse(html)
 
 
@@ -95,9 +97,7 @@ async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     return HTMLResponse(html)
 
 
-async def _get_facts_for_node(
-    db: AsyncSession, node_uid: uuid.UUID
-) -> list[dict]:
+async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dict]:
     """Load non-retired facts for a node with their current version info."""
     stmt = (
         select(FcFact)
@@ -131,12 +131,14 @@ async def _get_facts_for_node(
                 sentence = ver.display_sentence
                 state = ver.state
                 classification = ver.classification or "UNCLASSIFIED"
-        items.append({
-            "fact_uid": str(fact.fact_uid),
-            "sentence": sentence,
-            "state": state,
-            "classification": classification,
-        })
+        items.append(
+            {
+                "fact_uid": str(fact.fact_uid),
+                "sentence": sentence,
+                "state": state,
+                "classification": classification,
+            }
+        )
     return items
 
 
@@ -152,7 +154,8 @@ async def browse_node_partial(
         return HTMLResponse('<p class="text-sm text-red-500">Node not found.</p>')
 
     all_nodes_result = await db.execute(
-        select(FcNode).where(FcNode.is_archived.is_(False))
+        select(FcNode)
+        .where(FcNode.is_archived.is_(False))
         .order_by(FcNode.node_depth, FcNode.sort_order, FcNode.title)
     )
     all_nodes = list(all_nodes_result.scalars().all())
@@ -172,15 +175,18 @@ async def browse_node_partial(
     for child in children:
         child_facts = await _get_facts_for_node(db, child.node_uid)
         if child_facts:
-            children_with_facts.append({
-                "node": NodeOut.model_validate(child),
-                "facts": child_facts,
-            })
+            children_with_facts.append(
+                {
+                    "node": NodeOut.model_validate(child),
+                    "facts": child_facts,
+                }
+            )
 
     html = _jinja.get_template("partials/browse_node.html").render(
         node=NodeOut.model_validate(node),
         breadcrumb=[NodeOut.model_validate(n) for n in breadcrumb]
-        if isinstance(breadcrumb[0], FcNode) and breadcrumb else breadcrumb,
+        if isinstance(breadcrumb[0], FcNode) and breadcrumb
+        else breadcrumb,
         facts=facts,
         children_with_facts=children_with_facts,
     )

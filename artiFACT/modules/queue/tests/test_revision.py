@@ -1,12 +1,11 @@
 """Tests for revision.py — atomic reject + create revised + publish."""
 
 import uuid
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.exceptions import Conflict, Forbidden
+from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcNodePermission, FcUser
 from artiFACT.modules.queue.revision import revise_and_publish
 
@@ -43,11 +42,9 @@ async def test_revision_atomic_reject_plus_publish(
     fact, original = await _make_proposed(db, child_node, admin_user)
     revised_text = "Revised sentence with corrected language here."
 
-    with patch("artiFACT.modules.queue.revision.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        revised = await revise_and_publish(
-            db, original.version_uid, revised_text, admin_user, note="Fixed wording"
-        )
+    revised = await revise_and_publish(
+        db, original.version_uid, revised_text, admin_user, note="Fixed wording"
+    )
 
     # Original is rejected
     refreshed_original = await db.get(FcFactVersion, original.version_uid)
@@ -70,11 +67,9 @@ async def test_revision_copies_metadata(
     """Revision should inherit metadata_tags and classification from original."""
     _, original = await _make_proposed(db, child_node, admin_user)
 
-    with patch("artiFACT.modules.queue.revision.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        revised = await revise_and_publish(
-            db, original.version_uid, "Revised sentence with new text here.", admin_user
-        )
+    revised = await revise_and_publish(
+        db, original.version_uid, "Revised sentence with new text here.", admin_user
+    )
 
     assert revised.metadata_tags == original.metadata_tags
     assert revised.classification == original.classification

@@ -1,13 +1,12 @@
 """Tests specifically for undo permission checking."""
 
 import uuid
-from unittest.mock import patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.exceptions import Forbidden
-from artiFACT.kernel.models import FcEventLog, FcFact, FcUser
+from artiFACT.kernel.models import FcEventLog, FcFact
 from artiFACT.modules.audit.undo_engine import undo_event
 
 

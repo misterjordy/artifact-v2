@@ -26,7 +26,6 @@ from artiFACT.modules.facts.service import (
     create_fact,
     edit_fact,
     get_fact_versions,
-    get_facts_by_node,
     retire_fact,
     unretire_fact,
 )
@@ -49,9 +48,7 @@ async def list_facts(
         stmt = stmt.where(FcFact.node_uid == node_uid)
     stmt = stmt.order_by(FcFact.created_at.desc())
 
-    count_result = await db.execute(
-        select(FcFact.fact_uid).where(FcFact.is_retired.is_(False))
-    )
+    count_result = await db.execute(select(FcFact.fact_uid).where(FcFact.is_retired.is_(False)))
     total = len(count_result.all())
 
     stmt = stmt.offset(offset).limit(limit)
@@ -66,13 +63,19 @@ async def list_facts(
             ver = await db.get(FcFactVersion, fact.current_published_version_uid)
             if ver:
                 version_out = VersionOut.model_validate(ver)
-        data.append(FactWithVersionOut(
-            **fout.model_dump(),
-            current_version=version_out,
-        ))
+        data.append(
+            FactWithVersionOut(
+                **fout.model_dump(),
+                current_version=version_out,
+            )
+        )
 
-    return {"data": [d.model_dump(mode="json") for d in data], "total": total,
-            "offset": offset, "limit": limit}
+    return {
+        "data": [d.model_dump(mode="json") for d in data],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 @router.get("/facts/{fact_uid}")

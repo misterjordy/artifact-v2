@@ -39,26 +39,41 @@ class InputCheckResult:
 
 # Injection patterns to detect
 _INJECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("system_override", re.compile(
-        r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|prompts?)",
-        re.IGNORECASE,
-    )),
-    ("role_injection", re.compile(
-        r"(you\s+are\s+now|act\s+as|pretend\s+(to\s+be|you\s+are)|new\s+instructions?)",
-        re.IGNORECASE,
-    )),
-    ("data_exfil", re.compile(
-        r"(list|dump|show|give|output|repeat|print)\s+(all|every|each)\s+(facts?|data|content|information)",
-        re.IGNORECASE,
-    )),
-    ("prompt_leak", re.compile(
-        r"(show|reveal|display|output|repeat)\s+(your\s+)?(system\s+)?(prompt|instructions?|rules?)",
-        re.IGNORECASE,
-    )),
-    ("encoding_bypass", re.compile(
-        r"(base64|hex|rot13|reverse|encode|decode)\s+(the\s+)?(output|response|answer)",
-        re.IGNORECASE,
-    )),
+    (
+        "system_override",
+        re.compile(
+            r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|prompts?)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "role_injection",
+        re.compile(
+            r"(you\s+are\s+now|act\s+as|pretend\s+(to\s+be|you\s+are)|new\s+instructions?)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "data_exfil",
+        re.compile(
+            r"(list|dump|show|give|output|repeat|print)\s+(all|every|each)\s+(facts?|data|content|information)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "prompt_leak",
+        re.compile(
+            r"(show|reveal|display|output|repeat)\s+(your\s+)?(system\s+)?(prompt|instructions?|rules?)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "encoding_bypass",
+        re.compile(
+            r"(base64|hex|rot13|reverse|encode|decode)\s+(the\s+)?(output|response|answer)",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 
 

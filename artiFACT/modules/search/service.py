@@ -8,9 +8,7 @@ from artiFACT.modules.search.schemas import BreadcrumbEntry, SearchResult
 from artiFACT.modules.taxonomy.tree_serializer import get_breadcrumb
 
 
-async def search_facts(
-    db: AsyncSession, query: str, limit: int = 50
-) -> list[SearchResult]:
+async def search_facts(db: AsyncSession, query: str, limit: int = 50) -> list[SearchResult]:
     """Search published/signed facts using PostgreSQL tsvector, breadcrumbs from tree cache."""
     # Load full node tree once (in-memory cache — no N+1 CTEs per result)
     tree_result = await db.execute(

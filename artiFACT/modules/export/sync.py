@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.models import (
@@ -31,9 +31,7 @@ def _serialize_dt(val: object) -> str | None:
     return str(val)
 
 
-async def _load_entity_snapshot(
-    db: AsyncSession, entity_type: str, entity_uid: uuid.UUID
-) -> dict:
+async def _load_entity_snapshot(db: AsyncSession, entity_type: str, entity_uid: uuid.UUID) -> dict:
     """Load current snapshot of an entity for the delta feed."""
     if entity_type == "fact":
         fact = await db.get(FcFact, entity_uid)
@@ -48,12 +46,14 @@ async def _load_entity_snapshot(
         if fact.current_published_version_uid:
             ver = await db.get(FcFactVersion, fact.current_published_version_uid)
             if ver:
-                snapshot.update({
-                    "sentence": ver.display_sentence,
-                    "state": ver.state,
-                    "classification": ver.classification,
-                    "published_at": _serialize_dt(ver.published_at),
-                })
+                snapshot.update(
+                    {
+                        "sentence": ver.display_sentence,
+                        "state": ver.state,
+                        "classification": ver.classification,
+                        "published_at": _serialize_dt(ver.published_at),
+                    }
+                )
         return snapshot
 
     if entity_type == "node":
@@ -96,9 +96,7 @@ async def _load_entity_snapshot(
     return {"entity_uid": str(entity_uid), "entity_type": entity_type}
 
 
-async def get_delta_feed(
-    db: AsyncSession, cursor: int = 0, limit: int = 500
-) -> dict:
+async def get_delta_feed(db: AsyncSession, cursor: int = 0, limit: int = 500) -> dict:
     """Return changes since cursor, ordered by monotonic seq."""
     stmt = (
         select(FcEventLog)
@@ -112,14 +110,16 @@ async def get_delta_feed(
     changes = []
     for event in events:
         snapshot = await _load_entity_snapshot(db, event.entity_type, event.entity_uid)
-        changes.append({
-            "seq": event.seq,
-            "occurred_at": _serialize_dt(event.occurred_at),
-            "change_type": event.event_type,
-            "entity_type": event.entity_type,
-            "entity_uid": _serialize_uuid(event.entity_uid),
-            "snapshot": snapshot,
-        })
+        changes.append(
+            {
+                "seq": event.seq,
+                "occurred_at": _serialize_dt(event.occurred_at),
+                "change_type": event.event_type,
+                "entity_type": event.entity_type,
+                "entity_uid": _serialize_uuid(event.entity_uid),
+                "snapshot": snapshot,
+            }
+        )
 
     max_seq = events[-1].seq if events else cursor
     return {

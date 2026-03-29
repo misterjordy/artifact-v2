@@ -1,7 +1,6 @@
 """Tests for fact version state machine."""
 
 import uuid
-from unittest.mock import patch
 
 import pytest
 
@@ -33,8 +32,7 @@ async def test_proposed_to_published():
     """Valid transition: proposed → published."""
     version = _make_version("proposed")
     actor = _make_actor()
-    with patch("artiFACT.modules.facts.state_machine.publish"):
-        await transition(version, "published", actor)
+    await transition(version, "published", actor)
     assert version.state == "published"
     assert version.published_at is not None
 
@@ -64,8 +62,7 @@ async def test_publish_always_sets_published_at():
     version = _make_version("proposed")
     actor = _make_actor()
     assert version.published_at is None
-    with patch("artiFACT.modules.facts.state_machine.publish"):
-        await transition(version, "published", actor)
+    await transition(version, "published", actor)
     assert version.published_at is not None
 
 
@@ -74,8 +71,7 @@ async def test_sign_sets_signed_at():
     version = _make_version("published")
     actor = _make_actor()
     assert version.signed_at is None
-    with patch("artiFACT.modules.facts.state_machine.publish"):
-        await transition(version, "signed", actor)
+    await transition(version, "signed", actor)
     assert version.state == "signed"
     assert version.signed_at is not None
 
@@ -88,5 +84,6 @@ async def test_all_terminal_states_reject_transitions():
         assert ALLOWED_TRANSITIONS[terminal_state] == []
         for target in ["proposed", "published", "signed"]:
             from artiFACT.kernel.exceptions import Conflict
+
             with pytest.raises(Conflict):
                 await transition(version, target, actor)

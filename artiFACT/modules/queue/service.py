@@ -37,12 +37,15 @@ async def approve_proposal(
         await transition(version, "published", actor)
         fact.current_published_version_uid = version.version_uid
 
-    await publish("version.approved", {
-        "version_uid": str(version.version_uid),
-        "fact_uid": str(version.fact_uid),
-        "actor_uid": str(actor.user_uid),
-        "note": note,
-    })
+    await publish(
+        "version.approved",
+        {
+            "version_uid": str(version.version_uid),
+            "fact_uid": str(version.fact_uid),
+            "actor_uid": str(actor.user_uid),
+            "note": note,
+        },
+    )
 
     return version
 
@@ -72,12 +75,15 @@ async def reject_proposal(
     async with db.begin_nested():
         await transition(version, "rejected", actor)
 
-    await publish("version.rejected", {
-        "version_uid": str(version.version_uid),
-        "fact_uid": str(version.fact_uid),
-        "actor_uid": str(actor.user_uid),
-        "note": note,
-    })
+    await publish(
+        "version.rejected",
+        {
+            "version_uid": str(version.version_uid),
+            "fact_uid": str(version.fact_uid),
+            "actor_uid": str(actor.user_uid),
+            "note": note,
+        },
+    )
 
     return version
 
@@ -113,12 +119,15 @@ async def approve_move(
         fact.node_uid = target_uid
         event.event_type = "fact.move_approved"
 
-    await publish("fact.moved", {
-        "fact_uid": str(fact_uid),
-        "old_node_uid": str(old_node_uid),
-        "new_node_uid": str(target_uid),
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "fact.moved",
+        {
+            "fact_uid": str(fact_uid),
+            "old_node_uid": str(old_node_uid),
+            "new_node_uid": str(target_uid),
+            "actor_uid": str(actor.user_uid),
+        },
+    )
 
     return fact
 

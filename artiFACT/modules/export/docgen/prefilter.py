@@ -2,8 +2,6 @@
 
 import json
 
-from artiFACT.kernel.models import FcUser
-
 
 async def score_facts_for_section(
     ai_call: object,
@@ -18,12 +16,8 @@ async def score_facts_for_section(
     if not facts:
         return {}
 
-    fact_lines = "\n".join(
-        f"  [{i}] {f['sentence']}" for i, f in enumerate(facts)
-    )
-    section_list = "\n".join(
-        f"  - {s['key']}: {s['title']}" for s in all_sections
-    )
+    fact_lines = "\n".join(f"  [{i}] {f['sentence']}" for i, f in enumerate(facts))
+    section_list = "\n".join(f"  - {s['key']}: {s['title']}" for s in all_sections)
 
     prompt = (
         f"You are classifying facts into document sections.\n\n"

@@ -36,6 +36,7 @@ async def handle_upload(
 
     if len(content) > MAX_FILE_SIZE:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=422,
             detail=f"File too large (max {MAX_FILE_SIZE // (1024 * 1024)} MB)",
@@ -45,6 +46,7 @@ async def handle_upload(
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in ALLOWED_EXTENSIONS:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=422,
             detail=f"Unsupported file type: .{ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
@@ -64,6 +66,7 @@ async def handle_upload(
     s3_key = f"imports/{actor.user_uid}/{file_hash}/{filename}"
 
     from artiFACT.kernel.s3 import upload_bytes
+
     upload_bytes(s3_key, content)
 
     session = FcImportSession(

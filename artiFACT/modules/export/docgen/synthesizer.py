@@ -19,12 +19,12 @@ async def synthesize_section(
         Synthesized text for the section.
     """
     if not facts:
-        return f"No facts were assigned to this section."
+        return "No facts were assigned to this section."
 
     fact_lines = "\n".join(f"- {f['sentence']}" for f in facts)
 
     prompt = (
-        f"You are writing section \"{section_title}\" of a formal document.\n\n"
+        f'You are writing section "{section_title}" of a formal document.\n\n'
         f"SECTION GUIDANCE: {section_prompt}\n\n"
         f"SOURCE FACTS:\n{fact_lines}\n\n"
         f"Write a coherent, professional narrative that synthesizes these facts into a "

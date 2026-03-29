@@ -14,15 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.auth.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from artiFACT.kernel.auth.session import create_session
 from artiFACT.kernel.models import (
-    FcFact,
-    FcFactVersion,
     FcImportSession,
     FcNode,
-    FcNodePermission,
     FcUser,
 )
 from artiFACT.main import app
-from artiFACT.modules.import_pipeline.deduplicator import deduplicate, jaccard, tokenize
+from artiFACT.modules.import_pipeline.deduplicator import deduplicate
 
 
 @pytest_asyncio.fixture
@@ -68,12 +65,15 @@ async def no_csrf_client(db: AsyncSession, import_contributor: FcUser):
     app.dependency_overrides.clear()
 
 
-def _make_txt_upload(content: str = "The system operates at 99.9% uptime.", filename: str = "test.txt"):
+def _make_txt_upload(
+    content: str = "The system operates at 99.9% uptime.", filename: str = "test.txt"
+):
     """Create a simple text file upload."""
     return ("file", (filename, io.BytesIO(content.encode()), "text/plain"))
 
 
 # --- v1 I-SEC-01: CSRF required on propose ---
+
 
 @pytest.mark.asyncio
 async def test_csrf_required_on_propose(
@@ -91,6 +91,7 @@ async def test_csrf_required_on_propose(
 
 
 # --- v1 I-SEC-02: CSRF required on upload ---
+
 
 @pytest.mark.asyncio
 async def test_csrf_required_on_upload(
@@ -111,6 +112,7 @@ async def test_csrf_required_on_upload(
 
 
 # --- v1 I-SEC-03: Rate limited on analyze ---
+
 
 @pytest.mark.asyncio
 async def test_rate_limited_on_analyze(
@@ -151,6 +153,7 @@ async def test_rate_limited_on_analyze(
 
 # --- test_analysis_runs_as_background_task_not_blocking ---
 
+
 @pytest.mark.asyncio
 async def test_analysis_runs_as_background_task_not_blocking(
     authed_client: AsyncClient,
@@ -171,9 +174,7 @@ async def test_analysis_runs_as_background_task_not_blocking(
     await db.flush()
 
     # Mock only the Celery .delay() call (external task dispatch)
-    with patch(
-        "artiFACT.modules.import_pipeline.analyzer.analyze_document.delay"
-    ) as mock_delay:
+    with patch("artiFACT.modules.import_pipeline.analyzer.analyze_document.delay") as mock_delay:
         resp = await authed_client.post(
             f"/api/v1/import/analyze/{session.session_uid}",
         )
@@ -186,6 +187,7 @@ async def test_analysis_runs_as_background_task_not_blocking(
 
 # --- test_propose_all_or_nothing_transaction ---
 
+
 @pytest.mark.asyncio
 async def test_propose_all_or_nothing_transaction(
     authed_client: AsyncClient,
@@ -195,12 +197,24 @@ async def test_propose_all_or_nothing_transaction(
 ):
     """Propose creates facts in an all-or-nothing transaction."""
     staged_facts = [
-        {"index": 0, "sentence": "Fact alpha from import test one two three.",
-         "metadata_tags": ["test"], "source_reference": None,
-         "duplicate_of": None, "similarity": None, "accepted": True},
-        {"index": 1, "sentence": "Fact beta from import test four five six.",
-         "metadata_tags": [], "source_reference": None,
-         "duplicate_of": None, "similarity": None, "accepted": True},
+        {
+            "index": 0,
+            "sentence": "Fact alpha from import test one two three.",
+            "metadata_tags": ["test"],
+            "source_reference": None,
+            "duplicate_of": None,
+            "similarity": None,
+            "accepted": True,
+        },
+        {
+            "index": 1,
+            "sentence": "Fact beta from import test four five six.",
+            "metadata_tags": [],
+            "source_reference": None,
+            "duplicate_of": None,
+            "similarity": None,
+            "accepted": True,
+        },
     ]
 
     session = FcImportSession(
@@ -237,6 +251,7 @@ async def test_propose_all_or_nothing_transaction(
 
 # --- test_duplicate_detection_flags_similar ---
 
+
 @pytest.mark.asyncio
 async def test_duplicate_detection_flags_similar():
     """Jaccard deduplicator flags facts above threshold."""
@@ -259,6 +274,7 @@ async def test_duplicate_detection_flags_similar():
 
 
 # --- test_file_size_limit_enforced ---
+
 
 @pytest.mark.asyncio
 async def test_file_size_limit_enforced(
@@ -287,6 +303,7 @@ async def test_file_size_limit_enforced(
 
 
 # --- test_unsupported_file_type_rejected ---
+
 
 @pytest.mark.asyncio
 async def test_unsupported_file_type_rejected(

@@ -1,13 +1,12 @@
 """Taxonomy module unit tests."""
 
-import json
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from artiFACT.kernel.exceptions import Conflict, NotFound
+from artiFACT.kernel.exceptions import Conflict
 from artiFACT.kernel.models import FcNode, FcUser
 from artiFACT.modules.auth_admin.service import hash_password
 from artiFACT.modules.taxonomy.service import (
@@ -58,6 +57,7 @@ def _make_node(
 
 # ── test_create_root_node ──────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 @patch("artiFACT.modules.taxonomy.service.get_redis")
 @patch("artiFACT.modules.taxonomy.service.publish")
@@ -82,6 +82,7 @@ async def test_create_root_node(mock_unique, mock_publish, mock_get_redis) -> No
 
 
 # ── test_create_child_node_sets_depth ──────────────────────────────
+
 
 @pytest.mark.asyncio
 @patch("artiFACT.modules.taxonomy.service.get_redis")
@@ -110,6 +111,7 @@ async def test_create_child_node_sets_depth(mock_unique, mock_publish, mock_get_
 
 
 # ── test_move_node_recomputes_all_descendant_depths ─────────────────
+
 
 @pytest.mark.asyncio
 @patch("artiFACT.modules.taxonomy.service.get_redis")
@@ -154,6 +156,7 @@ async def test_move_node_recomputes_all_descendant_depths(
 
 # ── test_circular_reparent_rejected ────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_circular_reparent_rejected() -> None:
     """Moving a node under its own descendant should raise Conflict (409)."""
@@ -176,6 +179,7 @@ async def test_circular_reparent_rejected() -> None:
 
 # ── test_title_unique_among_siblings ───────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_title_unique_among_siblings() -> None:
     """Creating a node with a duplicate sibling title should raise Conflict."""
@@ -193,6 +197,7 @@ async def test_title_unique_among_siblings() -> None:
 
 # ── test_max_depth_enforced ────────────────────────────────────────
 
+
 def test_max_depth_enforced() -> None:
     """Depth > 5 should raise Conflict."""
     # Depth 5 is OK
@@ -205,13 +210,12 @@ def test_max_depth_enforced() -> None:
 
 # ── test_tree_cache_invalidated_on_create ──────────────────────────
 
+
 @pytest.mark.asyncio
 @patch("artiFACT.modules.taxonomy.service.get_redis")
 @patch("artiFACT.modules.taxonomy.service.publish")
 @patch("artiFACT.modules.taxonomy.service.validate_title_unique")
-async def test_tree_cache_invalidated_on_create(
-    mock_unique, mock_publish, mock_get_redis
-) -> None:
+async def test_tree_cache_invalidated_on_create(mock_unique, mock_publish, mock_get_redis) -> None:
     """Creating a node should call Redis delete on the tree cache key."""
     mock_unique.return_value = None
     mock_publish.return_value = None
@@ -227,6 +231,7 @@ async def test_tree_cache_invalidated_on_create(
 
 
 # ── test_nested_tree_structure_correct ─────────────────────────────
+
 
 def test_nested_tree_structure_correct() -> None:
     """build_nested_tree should produce a correct recursive structure."""
@@ -249,6 +254,7 @@ def test_nested_tree_structure_correct() -> None:
 
 
 # ── test_breadcrumb_path_correct ───────────────────────────────────
+
 
 def test_breadcrumb_path_correct() -> None:
     """get_breadcrumb should return [root, ..., node] path."""

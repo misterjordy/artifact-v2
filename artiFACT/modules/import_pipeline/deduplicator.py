@@ -25,9 +25,7 @@ def deduplicate(
     Each fact dict must have a 'sentence' key.
     Duplicates get 'duplicate_of' and 'similarity' keys added.
     """
-    existing_tokens = [
-        (f, tokenize(f.get("sentence", ""))) for f in existing_facts
-    ]
+    existing_tokens = [(f, tokenize(f.get("sentence", ""))) for f in existing_facts]
     results: list[dict] = []
 
     for new in new_facts:

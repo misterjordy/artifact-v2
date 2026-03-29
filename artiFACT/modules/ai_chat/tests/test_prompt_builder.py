@@ -1,7 +1,5 @@
 """Tests for prompt_builder: token counting, no byte truncation (v1 A-SEC-01)."""
 
-import pytest
-
 from artiFACT.modules.ai_chat.prompt_builder import build_system_prompt, count_tokens
 
 

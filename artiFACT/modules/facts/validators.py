@@ -12,9 +12,17 @@ from artiFACT.kernel.models import FcFactVersion
 MIN_SENTENCE_LENGTH = 10
 MAX_SENTENCE_LENGTH = 2000
 
-PROFANITY_WORDS = frozenset([
-    "fuck", "shit", "damn", "bitch", "ass", "crap", "bastard",
-])
+PROFANITY_WORDS = frozenset(
+    [
+        "fuck",
+        "shit",
+        "damn",
+        "bitch",
+        "ass",
+        "crap",
+        "bastard",
+    ]
+)
 
 JACCARD_THRESHOLD = 0.85
 
@@ -43,9 +51,7 @@ def validate_sentence(text: str) -> None:
         raise Conflict("Content contains inappropriate language", code="PROFANITY_DETECTED")
 
 
-async def validate_duplicate(
-    db: AsyncSession, sentence: str, node_uid: str | object
-) -> None:
+async def validate_duplicate(db: AsyncSession, sentence: str, node_uid: str | object) -> None:
     """Check for near-duplicate sentences within the same node."""
     new_tokens = _tokenize(sentence)
     if not new_tokens:

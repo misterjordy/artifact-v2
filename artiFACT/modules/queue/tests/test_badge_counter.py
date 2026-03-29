@@ -1,16 +1,12 @@
 """Tests for badge_counter — cached count, invalidation."""
 
 import uuid
-from unittest.mock import AsyncMock, patch
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.modules.queue.badge_counter import (
     _compute_count,
-    get_badge_count,
-    invalidate_badge_cache,
 )
 
 

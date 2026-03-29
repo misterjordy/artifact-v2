@@ -10,9 +10,7 @@ from artiFACT.kernel.permissions.hierarchy import role_gte
 from artiFACT.kernel.tree.descendants import get_descendants
 
 
-async def get_approvable_nodes(
-    db: AsyncSession, user: FcUser
-) -> dict[uuid.UUID, str]:
+async def get_approvable_nodes(db: AsyncSession, user: FcUser) -> dict[uuid.UUID, str]:
     """Return {node_uid: role} for every node the user may approve.
 
     Admins get all nodes. Otherwise walk grants ≥ subapprover,
@@ -23,9 +21,7 @@ async def get_approvable_nodes(
 
         from artiFACT.kernel.models import FcNode
 
-        result = await db.execute(
-            select(FcNode.node_uid).where(FcNode.is_archived.is_(False))
-        )
+        result = await db.execute(select(FcNode.node_uid).where(FcNode.is_archived.is_(False)))
         return {row[0]: "admin" for row in result.all()}
 
     grants = await get_active_grants(db, user.user_uid)

@@ -26,12 +26,19 @@ async def list_events(
 ) -> dict:
     """Return audit events with filtering."""
     events, total = await get_all_events(
-        db, entity_type=entity_type, event_type=event_type,
-        offset=offset, limit=limit,
+        db,
+        entity_type=entity_type,
+        event_type=event_type,
+        offset=offset,
+        limit=limit,
     )
     data = [EventOut.model_validate(e) for e in events]
-    return {"data": [d.model_dump(mode="json") for d in data], "total": total,
-            "offset": offset, "limit": limit}
+    return {
+        "data": [d.model_dump(mode="json") for d in data],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 @router.get("/events/{event_uid}")

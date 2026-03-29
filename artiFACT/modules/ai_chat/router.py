@@ -1,7 +1,5 @@
 """AI Chat API endpoints."""
 
-import uuid
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,10 +69,7 @@ async def get_context(
     """Available programs/topics scoped to user's readable nodes."""
     ctx = await get_available_context(db, user)
     programs = [ContextNode.model_validate(p) for p in ctx["programs"]]
-    topics = {
-        k: [ContextNode.model_validate(n) for n in v]
-        for k, v in ctx["topics"].items()
-    }
+    topics = {k: [ContextNode.model_validate(n) for n in v] for k, v in ctx["topics"].items()}
     return ContextOut(programs=programs, topics=topics)
 
 
@@ -92,6 +87,7 @@ async def get_status(
 
 
 # --- AI Key CRUD (settings page) ---
+
 
 @router.post("/keys", response_model=AIKeyOut, status_code=201)
 async def create_key(

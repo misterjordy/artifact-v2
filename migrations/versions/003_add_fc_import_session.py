@@ -52,9 +52,7 @@ def upgrade() -> None:
         ),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("session_uid"),
-        sa.ForeignKeyConstraint(
-            ["program_node_uid"], ["fc_node.node_uid"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["program_node_uid"], ["fc_node.node_uid"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["created_by_uid"], ["fc_user.user_uid"]),
         sa.CheckConstraint(
             "granularity IN ('brief','standard','exhaustive')",

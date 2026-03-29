@@ -4,7 +4,7 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,6 @@ from artiFACT.modules.taxonomy.service import (
     update_node,
 )
 from artiFACT.modules.taxonomy.tree_serializer import (
-    build_flat_tree,
     build_nested_tree,
     get_breadcrumb,
 )

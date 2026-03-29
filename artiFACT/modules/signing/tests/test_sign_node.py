@@ -3,11 +3,10 @@
 import uuid
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.exceptions import Conflict, Forbidden
+from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import (
     FcEventLog,
     FcFact,
@@ -153,10 +152,10 @@ async def test_sign_wrapped_in_transaction(
 
     # signature.created event in fc_event_log
     events = (
-        await db.execute(
-            select(FcEventLog).where(FcEventLog.event_type == "signature.created")
-        )
-    ).scalars().all()
+        (await db.execute(select(FcEventLog).where(FcEventLog.event_type == "signature.created")))
+        .scalars()
+        .all()
+    )
     assert len(events) >= 1
     event = events[-1]
     assert event.payload["node_uid"] == str(child_node.node_uid)

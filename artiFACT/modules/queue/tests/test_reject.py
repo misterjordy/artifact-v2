@@ -1,7 +1,6 @@
 """Tests for reject logic."""
 
 import uuid
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,9 +33,7 @@ async def _make_proposed(
     return fact, version
 
 
-async def test_reject_nonexistent_raises_not_found(
-    db: AsyncSession, admin_user: FcUser
-):
+async def test_reject_nonexistent_raises_not_found(db: AsyncSession, admin_user: FcUser):
     """Rejecting a non-existent version raises NotFound."""
     with pytest.raises(NotFound):
         await reject_proposal(db, uuid.uuid4(), admin_user)
@@ -74,10 +71,6 @@ async def test_reject_with_note(
     """Reject with a note should set version state to rejected."""
     _, version = await _make_proposed(db, child_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        result = await reject_proposal(
-            db, version.version_uid, admin_user, note="Incorrect data"
-        )
+    result = await reject_proposal(db, version.version_uid, admin_user, note="Incorrect data")
 
     assert result.state == "rejected"

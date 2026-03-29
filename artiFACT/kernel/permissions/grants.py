@@ -8,9 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.models import FcNodePermission
 
 
-async def get_active_grants(
-    db: AsyncSession, user_uid: uuid.UUID
-) -> list[FcNodePermission]:
+async def get_active_grants(db: AsyncSession, user_uid: uuid.UUID) -> list[FcNodePermission]:
     """Load all active (non-revoked) grants for a user."""
     result = await db.execute(
         select(FcNodePermission).where(

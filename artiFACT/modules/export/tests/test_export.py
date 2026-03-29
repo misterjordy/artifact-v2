@@ -15,7 +15,6 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.session import create_session
@@ -26,7 +25,6 @@ from artiFACT.kernel.models import (
     FcFact,
     FcFactVersion,
     FcNode,
-    FcNodePermission,
     FcUser,
 )
 from artiFACT.main import app
@@ -88,10 +86,18 @@ async def template(db: AsyncSession, admin_user: FcUser) -> FcDocumentTemplate:
         abbreviation="ConOps",
         description="Test template",
         sections=[
-            {"key": "purpose", "title": "1. Purpose",
-             "prompt": "Describe the purpose", "guidance": "Focus on purpose"},
-            {"key": "overview", "title": "2. Overview",
-             "prompt": "Describe the overview", "guidance": "Focus on overview"},
+            {
+                "key": "purpose",
+                "title": "1. Purpose",
+                "prompt": "Describe the purpose",
+                "guidance": "Focus on purpose",
+            },
+            {
+                "key": "overview",
+                "title": "2. Overview",
+                "prompt": "Describe the overview",
+                "guidance": "Focus on overview",
+            },
         ],
         created_by_uid=admin_user.user_uid,
     )
@@ -284,7 +290,11 @@ class TestExportRequiresAuth:
     async def test_template_create_requires_auth(self, test_client: AsyncClient):
         resp = await test_client.post(
             "/api/v1/export/templates",
-            json={"name": "Test", "abbreviation": "T", "sections": [{"key": "a", "title": "A", "prompt": "p"}]},
+            json={
+                "name": "Test",
+                "abbreviation": "T",
+                "sections": [{"key": "a", "title": "A", "prompt": "p"}],
+            },
             headers={"x-csrf-token": "x", "cookie": "csrf_token=x"},
         )
         assert resp.status_code == 401
@@ -335,7 +345,9 @@ class TestDownloadUrlUserBound:
 
         # Admin can download (mocking S3 presigned URL generation)
         with patch("artiFACT.modules.export.download_manager.get_s3_client") as mock_s3:
-            mock_s3.return_value.generate_presigned_url.return_value = "https://s3.example.com/test.docx"
+            mock_s3.return_value.generate_presigned_url.return_value = (
+                "https://s3.example.com/test.docx"
+            )
             resp = await test_client.get(
                 f"/api/v1/export/document/{session_uid}/download",
                 headers=_csrf_headers(admin_sid),
@@ -446,12 +458,15 @@ class TestDocgenBackgroundTask:
 
 
 class TestAllFourFormatsValid:
-    @pytest.mark.parametrize("fmt,content_type", [
-        ("json", "application/json"),
-        ("txt", "text/plain"),
-        ("ndjson", "application/x-ndjson"),
-        ("csv", "text/csv"),
-    ])
+    @pytest.mark.parametrize(
+        "fmt,content_type",
+        [
+            ("json", "application/json"),
+            ("txt", "text/plain"),
+            ("ndjson", "application/x-ndjson"),
+            ("csv", "text/csv"),
+        ],
+    )
     async def test_all_four_formats_valid(
         self, db, admin_with_session, test_client, facts_with_events, child_node, fmt, content_type
     ):
@@ -471,7 +486,7 @@ class TestAllFourFormatsValid:
             assert isinstance(data, list)
             assert len(data) == 5
         elif fmt == "ndjson":
-            lines = [l for l in body.strip().split("\n") if l]
+            lines = [line for line in body.strip().split("\n") if line]
             assert len(lines) == 5
             for line in lines:
                 json.loads(line)
@@ -479,7 +494,7 @@ class TestAllFourFormatsValid:
             lines = body.strip().split("\n")
             assert len(lines) == 6  # header + 5 rows
         elif fmt == "txt":
-            lines = [l for l in body.strip().split("\n") if l]
+            lines = [line for line in body.strip().split("\n") if line]
             assert len(lines) == 5
 
 
@@ -505,7 +520,9 @@ class TestPresignedUrlExpires:
         )
 
         with patch("artiFACT.modules.export.download_manager.get_s3_client") as mock_s3:
-            mock_s3.return_value.generate_presigned_url.return_value = "https://s3.example.com/test.docx"
+            mock_s3.return_value.generate_presigned_url.return_value = (
+                "https://s3.example.com/test.docx"
+            )
             resp = await test_client.get(
                 f"/api/v1/export/document/{session_uid}/download",
                 headers=_csrf_headers(admin_sid),
@@ -517,7 +534,9 @@ class TestPresignedUrlExpires:
             # Verify S3 was called with ExpiresIn=3600
             mock_s3.return_value.generate_presigned_url.assert_called_once()
             call_kwargs = mock_s3.return_value.generate_presigned_url.call_args
-            assert call_kwargs[1]["ExpiresIn"] == 3600 or call_kwargs.kwargs.get("ExpiresIn") == 3600
+            assert (
+                call_kwargs[1]["ExpiresIn"] == 3600 or call_kwargs.kwargs.get("ExpiresIn") == 3600
+            )
 
         r.delete(f"docgen:meta:{session_uid}")
 
@@ -601,9 +620,7 @@ class TestDeltaFeedIncludesTombstones:
         assert resp.status_code == 200
         data = resp.json()
 
-        retired_changes = [
-            c for c in data["changes"] if c["change_type"] == "fact.retired"
-        ]
+        retired_changes = [c for c in data["changes"] if c["change_type"] == "fact.retired"]
         assert len(retired_changes) >= 1
 
         for rc in retired_changes:
@@ -694,7 +711,12 @@ class TestDocumentTemplateCrud:
                 "abbreviation": "TT",
                 "description": "A test template",
                 "sections": [
-                    {"key": "intro", "title": "1. Introduction", "prompt": "Write intro", "guidance": ""},
+                    {
+                        "key": "intro",
+                        "title": "1. Introduction",
+                        "prompt": "Write intro",
+                        "guidance": "",
+                    },
                     {"key": "body", "title": "2. Body", "prompt": "Write body", "guidance": ""},
                 ],
             },

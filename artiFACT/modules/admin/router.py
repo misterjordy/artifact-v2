@@ -10,7 +10,7 @@ from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.events import publish
 from artiFACT.kernel.exceptions import Forbidden, NotFound
-from artiFACT.kernel.models import FcSystemConfig, FcUser
+from artiFACT.kernel.models import FcUser
 from artiFACT.modules.admin.cache_manager import flush_all, flush_by_pattern, get_cache_stats
 from artiFACT.modules.admin.config_manager import list_config, upsert_config
 from artiFACT.modules.admin.dashboard import get_dashboard
@@ -27,7 +27,6 @@ from artiFACT.modules.admin.schemas import (
     UserListResponse,
 )
 from artiFACT.modules.admin.snapshot_manager import trigger_snapshot
-from artiFACT.modules.admin.system_info import get_app_version, get_deploy_sha, get_env_name
 
 VALID_ROLES = {"admin", "signatory", "approver", "subapprover", "contributor", "viewer"}
 
@@ -70,9 +69,7 @@ async def list_users(
 
     if q:
         pattern = f"%{q}%"
-        stmt = stmt.where(
-            FcUser.display_name.ilike(pattern) | FcUser.cac_dn.ilike(pattern)
-        )
+        stmt = stmt.where(FcUser.display_name.ilike(pattern) | FcUser.cac_dn.ilike(pattern))
         count_stmt = count_stmt.where(
             FcUser.display_name.ilike(pattern) | FcUser.cac_dn.ilike(pattern)
         )
@@ -108,12 +105,15 @@ async def change_user_role(
     target.global_role = body.global_role
     await db.flush()
 
-    await publish("admin.role_changed", {
-        "user_uid": str(user_uid),
-        "old_role": old_role,
-        "new_role": body.global_role,
-        "actor_uid": str(user.user_uid),
-    })
+    await publish(
+        "admin.role_changed",
+        {
+            "user_uid": str(user_uid),
+            "old_role": old_role,
+            "new_role": body.global_role,
+            "actor_uid": str(user.user_uid),
+        },
+    )
 
     return UserListOut.model_validate(target)
 
@@ -132,10 +132,13 @@ async def deactivate_user(
     target.is_active = False
     await db.flush()
 
-    await publish("admin.user_deactivated", {
-        "user_uid": str(user_uid),
-        "actor_uid": str(user.user_uid),
-    })
+    await publish(
+        "admin.user_deactivated",
+        {
+            "user_uid": str(user_uid),
+            "actor_uid": str(user.user_uid),
+        },
+    )
 
     return UserListOut.model_validate(target)
 
@@ -154,10 +157,13 @@ async def reactivate_user(
     target.is_active = True
     await db.flush()
 
-    await publish("admin.user_reactivated", {
-        "user_uid": str(user_uid),
-        "actor_uid": str(user.user_uid),
-    })
+    await publish(
+        "admin.user_reactivated",
+        {
+            "user_uid": str(user_uid),
+            "actor_uid": str(user.user_uid),
+        },
+    )
 
     return UserListOut.model_validate(target)
 
@@ -207,7 +213,7 @@ async def create_snapshot(
     user: FcUser = Depends(get_current_user),
 ) -> SnapshotOut:
     _require_admin(user)
-    result = trigger_snapshot.delay(str(user.user_uid))
+    trigger_snapshot.delay(str(user.user_uid))
     return SnapshotOut(
         filename="pending",
         size=0,
@@ -243,11 +249,14 @@ async def flush_cache(
     else:
         count = await flush_by_pattern(f"{category}:*")
 
-    await publish("admin.cache_flushed", {
-        "category": category or "all",
-        "keys_flushed": count,
-        "actor_uid": str(user.user_uid),
-    })
+    await publish(
+        "admin.cache_flushed",
+        {
+            "category": category or "all",
+            "keys_flushed": count,
+            "actor_uid": str(user.user_uid),
+        },
+    )
 
     return {"flushed": count, "category": category or "all"}
 

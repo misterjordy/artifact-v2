@@ -30,9 +30,7 @@ async def get_current_user(
     if authorization and authorization.startswith("Bearer "):
         token = authorization[7:]
         key_hash = hashlib.sha256(token.encode()).hexdigest()
-        result = await db.execute(
-            select(FcApiKey).where(FcApiKey.key_hash == key_hash)
-        )
+        result = await db.execute(select(FcApiKey).where(FcApiKey.key_hash == key_hash))
         api_key = result.scalar_one_or_none()
         if api_key:
             if api_key.expires_at is not None:
@@ -40,10 +38,10 @@ async def get_current_user(
 
                 if api_key.expires_at < datetime.now(timezone.utc):
                     raise Unauthorized("API key expired")
-            result = await db.execute(
+            user_result = await db.execute(
                 select(FcUser).where(FcUser.user_uid == api_key.user_uid)
             )
-            user = result.scalar_one_or_none()
+            user = user_result.scalar_one_or_none()
             if user and user.is_active:
                 request.state.user = user
                 return user

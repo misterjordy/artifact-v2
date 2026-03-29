@@ -4,7 +4,7 @@ from io import BytesIO
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches, Pt
+from docx.shared import Pt
 
 
 def _add_cui_banners(doc: Document, cui_marking: str) -> None:

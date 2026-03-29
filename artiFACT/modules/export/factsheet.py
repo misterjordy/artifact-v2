@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.kernel.permissions.resolver import can
-from artiFACT.kernel.tree.ancestors import get_ancestors
 
 
 async def _expand_nodes(db: AsyncSession, node_uids: list) -> list:
@@ -31,9 +30,9 @@ async def _get_descendants(db: AsyncSession, node_uid: object) -> list:
         .cte(name="desc", recursive=True)
     )
     cte = cte.union_all(
-        select(FcNode.node_uid).join(cte, FcNode.parent_node_uid == cte.c.node_uid).where(
-            FcNode.is_archived.is_(False)
-        )
+        select(FcNode.node_uid)
+        .join(cte, FcNode.parent_node_uid == cte.c.node_uid)
+        .where(FcNode.is_archived.is_(False))
     )
     result = await db.execute(select(cte.c.node_uid))
     return [row[0] for row in result.all()]
@@ -60,16 +59,18 @@ async def load_facts_for_export(
 
     facts = []
     for idx, (fact, version, node) in enumerate(rows, 1):
-        facts.append({
-            "seq": idx,
-            "node": node.title,
-            "sentence": version.display_sentence,
-            "state": version.state,
-            "classification": version.classification or "UNCLASSIFIED",
-            "effective_date": version.effective_date,
-            "last_verified": version.last_verified_date,
-            "tags": version.metadata_tags or [],
-        })
+        facts.append(
+            {
+                "seq": idx,
+                "node": node.title,
+                "sentence": version.display_sentence,
+                "state": version.state,
+                "classification": version.classification or "UNCLASSIFIED",
+                "effective_date": version.effective_date,
+                "last_verified": version.last_verified_date,
+                "tags": version.metadata_tags or [],
+            }
+        )
     return facts
 
 

@@ -41,11 +41,13 @@ async def preview_assignments(
     facts = await load_facts_for_export(db, node_uids, ["published", "signed"])
 
     if ai_call is None:
+
         async def _default_ai_call(prompt: str) -> str:
             scores = {}
             for i in range(len(facts)):
                 scores[str(i)] = 0.5
             return json.dumps({"scores": scores})
+
         ai_call = _default_ai_call
 
     affinity_scores = {}
@@ -57,11 +59,13 @@ async def preview_assignments(
 
     result_assignments = []
     for section in sections:
-        result_assignments.append({
-            "section_key": section["key"],
-            "section_title": section["title"],
-            "facts": assignments.get(section["key"], []),
-        })
+        result_assignments.append(
+            {
+                "section_key": section["key"],
+                "section_title": section["title"],
+                "facts": assignments.get(section["key"], []),
+            }
+        )
 
     return {
         "template_uid": str(template.template_uid),

@@ -13,7 +13,6 @@ from sqlalchemy import (
     Index,
     Integer,
     MetaData,
-    Sequence,
     SmallInteger,
     String,
     Text,
@@ -52,9 +51,7 @@ class FcUser(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
-    last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -116,9 +113,7 @@ class FcNodePermission(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -157,15 +152,11 @@ class FcApiKey(Base):
     key_prefix: Mapped[str] = mapped_column(String(8), nullable=False)
     label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     scopes: Mapped[dict] = mapped_column(JSONB, default=["read"])
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class FcUserAiKey(Base):
@@ -184,9 +175,7 @@ class FcUserAiKey(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -219,9 +208,7 @@ class FcFact(Base):
     created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
     )
-    retired_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     retired_by_uid: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
     )
@@ -264,12 +251,8 @@ class FcFactVersion(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    signed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     search_vector = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', display_sentence)", persisted=True),
@@ -346,9 +329,7 @@ class FcSignature(Base):
     )
     fact_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("idx_sig_node", "node_uid"),
@@ -369,9 +350,7 @@ class FcImportSession(Base):
     source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     source_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     granularity: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
-    effective_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=False), nullable=False
-    )
+    effective_date: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     staged_facts_s3: Mapped[str | None] = mapped_column(String(500), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -381,9 +360,7 @@ class FcImportSession(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -438,6 +415,4 @@ class FcAiUsage(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    __table_args__ = (
-        Index("idx_ai_usage_user", "user_uid"),
-    )
+    __table_args__ = (Index("idx_ai_usage_user", "user_uid"),)

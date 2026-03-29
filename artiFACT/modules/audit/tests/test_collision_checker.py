@@ -3,11 +3,10 @@
 import uuid
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.exceptions import Conflict, NotFound
-from artiFACT.kernel.models import FcEventLog, FcFact, FcFactVersion
+from artiFACT.kernel.exceptions import Conflict
+from artiFACT.kernel.models import FcEventLog, FcFact
 from artiFACT.modules.audit.collision_checker import check_collision
 
 

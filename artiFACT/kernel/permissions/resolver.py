@@ -46,9 +46,7 @@ async def resolve_role(user: FcUser, node_uid: uuid.UUID, db: AsyncSession) -> s
     return effective
 
 
-async def can(
-    user: FcUser, action: str, node_uid: uuid.UUID, db: AsyncSession
-) -> bool:
+async def can(user: FcUser, action: str, node_uid: uuid.UUID, db: AsyncSession) -> bool:
     """Check if user can perform action on node."""
     required = REQUIRED_ROLES.get(action)
     if required is None:

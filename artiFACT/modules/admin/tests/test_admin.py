@@ -8,13 +8,12 @@ Testing rules:
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.session import create_session
@@ -146,9 +145,7 @@ class TestAdminRequiredOnAllEndpoints:
     """Every admin endpoint must reject unauthenticated requests with 401."""
 
     @pytest.mark.parametrize("endpoint", ADMIN_GET_ENDPOINTS)
-    async def test_unauthenticated_get_returns_401(
-        self, test_client: AsyncClient, endpoint: str
-    ):
+    async def test_unauthenticated_get_returns_401(self, test_client: AsyncClient, endpoint: str):
         resp = await test_client.get(endpoint)
         assert resp.status_code == 401
 
@@ -333,9 +330,7 @@ class TestSnapshotCreatesFileInS3:
         """Trigger snapshot — Celery task is mocked at the task.delay level only."""
         admin_user, sid = admin_with_session
 
-        with patch(
-            "artiFACT.modules.admin.router.trigger_snapshot"
-        ) as mock_task:
+        with patch("artiFACT.modules.admin.router.trigger_snapshot") as mock_task:
             mock_task.delay.return_value = None
             resp = await test_client.post(
                 "/api/v1/admin/snapshot",

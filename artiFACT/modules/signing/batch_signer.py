@@ -31,9 +31,7 @@ async def get_published_versions(
     return list(result.scalars().all())
 
 
-async def batch_sign_versions(
-    db: AsyncSession, versions: list[FcFactVersion]
-) -> None:
+async def batch_sign_versions(db: AsyncSession, versions: list[FcFactVersion]) -> None:
     """Batch UPDATE versions to 'signed' and update facts — one query each."""
     if not versions:
         return
@@ -56,4 +54,3 @@ async def batch_sign_versions(
             .where(FcFact.fact_uid == fact_uid)
             .values(current_signed_version_uid=ver_uid)
         )
-

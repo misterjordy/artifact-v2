@@ -20,7 +20,7 @@ def _get_pg_url() -> str:
 @celery_app.task(name="admin.trigger_snapshot")
 def trigger_snapshot(actor_uid_str: str) -> dict:
     """Run pg_dump and upload result to S3."""
-    actor_uid = uuid.UUID(actor_uid_str)
+    uuid.UUID(actor_uid_str)  # validate format
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"snapshots/artifact_{timestamp}.dump"
 

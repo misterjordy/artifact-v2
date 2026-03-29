@@ -33,9 +33,7 @@ async def _resolve_entity_node(db: AsyncSession, event: FcEventLog) -> UUID:
     raise NotFound("Entity not found for permission check", code="ENTITY_GONE")
 
 
-async def undo_event(
-    db: AsyncSession, event_uid: UUID, actor: FcUser
-) -> FcEventLog:
+async def undo_event(db: AsyncSession, event_uid: UUID, actor: FcUser) -> FcEventLog:
     """Undo a previously recorded event."""
     event = await db.get(FcEventLog, event_uid)
     if not event:
@@ -48,13 +46,13 @@ async def undo_event(
 
     node_uid = await _resolve_entity_node(db, event)
     if not await can(actor, "approve", node_uid, db):
-        raise Forbidden(
-            "You no longer have permission on this entity", code="FORBIDDEN"
-        )
+        raise Forbidden("You no longer have permission on this entity", code="FORBIDDEN")
 
     await check_collision(db, event)
 
     reverse = event.reverse_payload
+    if reverse is None:
+        raise Conflict("Event has no reverse payload", code="NO_REVERSE_PAYLOAD")
     action = reverse["action"]
 
     if action == "unretire":

@@ -3,7 +3,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from artiFACT.kernel.auth.csrf import generate_csrf_token
 from artiFACT.main import app
 
 

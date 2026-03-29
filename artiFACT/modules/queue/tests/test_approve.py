@@ -1,14 +1,12 @@
 """Tests for approve/reject logic (including transaction wrapping)."""
 
 import uuid
-from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.exceptions import Conflict, NotFound
-from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcNodePermission, FcUser
+from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.modules.queue.service import approve_proposal, reject_proposal
 
 
@@ -41,9 +39,7 @@ async def test_approve_wrapped_in_transaction(
     """v1 Q-MAINT-04: Approve must be wrapped in a transaction."""
     fact, version = await _make_proposed(db, child_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        result = await approve_proposal(db, version.version_uid, admin_user)
+    result = await approve_proposal(db, version.version_uid, admin_user)
 
     assert result.state == "published"
     assert result.published_at is not None
@@ -52,9 +48,7 @@ async def test_approve_wrapped_in_transaction(
     assert refreshed_fact.current_published_version_uid == version.version_uid
 
 
-async def test_approve_nonexistent_raises_not_found(
-    db: AsyncSession, admin_user: FcUser
-):
+async def test_approve_nonexistent_raises_not_found(db: AsyncSession, admin_user: FcUser):
     """Approving a non-existent version raises NotFound."""
     with pytest.raises(NotFound):
         await approve_proposal(db, uuid.uuid4(), admin_user)
@@ -66,9 +60,7 @@ async def test_approve_already_published_raises_conflict(
     """Cannot approve a version that is already published."""
     fact, version = await _make_proposed(db, child_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        await approve_proposal(db, version.version_uid, admin_user)
+    await approve_proposal(db, version.version_uid, admin_user)
 
     with pytest.raises(Conflict):
         await approve_proposal(db, version.version_uid, admin_user)
@@ -80,8 +72,6 @@ async def test_reject_sets_state(
     """Reject must transition version to 'rejected'."""
     _, version = await _make_proposed(db, child_node, admin_user)
 
-    with patch("artiFACT.modules.queue.service.publish", new_callable=AsyncMock), \
-         patch("artiFACT.modules.facts.state_machine.publish", new_callable=AsyncMock):
-        result = await reject_proposal(db, version.version_uid, admin_user, note="Bad info")
+    result = await reject_proposal(db, version.version_uid, admin_user, note="Bad info")
 
     assert result.state == "rejected"

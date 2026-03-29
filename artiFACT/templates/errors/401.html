@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}401 — Authentication Required{% endblock %}
+{% block body %}
+<div class="flex items-center justify-center min-h-screen bg-[var(--color-bg)]">
+  <div class="max-w-md w-full px-6 py-12 text-center">
+    <h1 class="text-6xl font-bold text-[var(--color-accent)] mb-4">401</h1>
+    <h2 class="text-xl font-semibold text-slate-800 mb-2">Authentication Required</h2>
+    <p class="text-slate-600 mb-8">You must log in to access this resource. Please authenticate with your CAC or credentials.</p>
+    <a href="/"
+       class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity">
+      Go to Login
+    </a>
+  </div>
+</div>
+{% endblock %}

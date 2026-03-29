@@ -1,7 +1,5 @@
 """Tests for safety/output_filter: bulk dump detection."""
 
-import pytest
-
 from artiFACT.modules.ai_chat.safety.output_filter import check_output
 
 

@@ -35,9 +35,7 @@ async def get_dashboard(db: AsyncSession) -> dict:
 
     # Fact metrics
     total_facts = (
-        await db.execute(
-            select(func.count(FcFact.fact_uid)).where(FcFact.is_retired.is_(False))
-        )
+        await db.execute(select(func.count(FcFact.fact_uid)).where(FcFact.is_retired.is_(False)))
     ).scalar() or 0
 
     state_rows = (
@@ -51,26 +49,20 @@ async def get_dashboard(db: AsyncSession) -> dict:
 
     created_7d = (
         await db.execute(
-            select(func.count(FcFact.fact_uid)).where(
-                FcFact.created_at > now - timedelta(days=7)
-            )
+            select(func.count(FcFact.fact_uid)).where(FcFact.created_at > now - timedelta(days=7))
         )
     ).scalar() or 0
 
     # Queue metrics
     pending_proposals = (
         await db.execute(
-            select(func.count(FcFactVersion.version_uid)).where(
-                FcFactVersion.state == "proposed"
-            )
+            select(func.count(FcFactVersion.version_uid)).where(FcFactVersion.state == "proposed")
         )
     ).scalar() or 0
 
     pending_moves = (
         await db.execute(
-            select(func.count(FcEventLog.event_uid)).where(
-                FcEventLog.event_type == "move_proposed"
-            )
+            select(func.count(FcEventLog.event_uid)).where(FcEventLog.event_type == "move_proposed")
         )
     ).scalar() or 0
 

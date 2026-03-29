@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.session import get_redis
 from artiFACT.kernel.events import publish
-from artiFACT.kernel.exceptions import Conflict, NotFound
+from artiFACT.kernel.exceptions import NotFound
 from artiFACT.kernel.models import FcNode, FcUser
 from artiFACT.kernel.tree.descendants import get_descendants
 from artiFACT.modules.taxonomy.validators import (
@@ -76,11 +76,14 @@ async def create_node(
     db.add(node)
     await db.flush()
     await _invalidate_tree_cache()
-    await publish("node.created", {
-        "node_uid": str(node.node_uid),
-        "title": node.title,
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "node.created",
+        {
+            "node_uid": str(node.node_uid),
+            "title": node.title,
+            "actor_uid": str(actor.user_uid),
+        },
+    )
     return node
 
 
@@ -122,11 +125,14 @@ async def move_node(
 
     await db.flush()
     await _invalidate_tree_cache()
-    await publish("node.moved", {
-        "node_uid": str(node.node_uid),
-        "new_parent_uid": str(new_parent_uid) if new_parent_uid else None,
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "node.moved",
+        {
+            "node_uid": str(node.node_uid),
+            "new_parent_uid": str(new_parent_uid) if new_parent_uid else None,
+            "actor_uid": str(actor.user_uid),
+        },
+    )
     return node
 
 
@@ -167,10 +173,13 @@ async def archive_node(
     node.is_archived = True
     await db.flush()
     await _invalidate_tree_cache()
-    await publish("node.archived", {
-        "node_uid": str(node.node_uid),
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "node.archived",
+        {
+            "node_uid": str(node.node_uid),
+            "actor_uid": str(actor.user_uid),
+        },
+    )
     return node
 
 

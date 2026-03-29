@@ -8,11 +8,13 @@ from datetime import datetime, timezone
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.access_logger import log_data_access
 from artiFACT.kernel.crypto import decrypt
 from artiFACT.kernel.events import publish
-from artiFACT.kernel.exceptions import AppError, RateLimited
+from artiFACT.kernel.exceptions import AppError
 from artiFACT.kernel.models import FcUser, FcUserAiKey
 from artiFACT.kernel.rate_limiter import check_rate
+from artiFACT.modules.admin.anomaly_detector import check_anomaly
 from artiFACT.modules.ai_chat.context_provider import get_facts_for_context
 from artiFACT.modules.ai_chat.prompt_builder import build_system_prompt
 from artiFACT.modules.ai_chat.safety.input_filter import check_input
@@ -62,20 +64,20 @@ async def chat(
     node_title: str | None = None
     if node_uid:
         fact_sentences, facts_total = await get_facts_for_context(db, user, node_uid)
-        from sqlalchemy.ext.asyncio import AsyncSession as _AS
         from artiFACT.kernel.models import FcNode
+
         node = await db.get(FcNode, node_uid)
         if node:
             node_title = node.title
 
     # Build prompt (Layer 2 hardening built into header)
-    system_prompt, facts_loaded, facts_total = build_system_prompt(
-        fact_sentences, max_tokens=6000
-    )
+    system_prompt, facts_loaded, facts_total = build_system_prompt(fact_sentences, max_tokens=6000)
 
     # Add canary if input was flagged
     if not input_check.clean:
-        system_prompt += "\n\n[CANARY: User input was flagged for: " + ", ".join(input_check.flags) + "]"
+        system_prompt += (
+            "\n\n[CANARY: User input was flagged for: " + ", ".join(input_check.flags) + "]"
+        )
 
     # Build messages
     messages = [{"role": "system", "content": system_prompt}]
@@ -84,19 +86,32 @@ async def chat(
     messages.append({"role": "user", "content": input_check.normalized})
 
     # Call AI provider
-    response_text = await _call_provider(
-        key_row, plaintext_key, messages, stream=False
-    )
+    response_text = await _call_provider(key_row, plaintext_key, messages, stream=False)
 
     # Output filter (Layer 3)
     is_safe, filtered = check_output(response_text, fact_sentences[:facts_loaded])
 
-    await publish("ai.chat", {
-        "user_uid": str(user.user_uid),
-        "provider": key_row.provider,
-        "node_uid": str(node_uid) if node_uid else None,
-        "flagged": not input_check.clean,
-    })
+    await publish(
+        "ai.chat",
+        {
+            "user_uid": str(user.user_uid),
+            "provider": key_row.provider,
+            "node_uid": str(node_uid) if node_uid else None,
+            "flagged": not input_check.clean,
+        },
+    )
+
+    # ZT Pillar 5: log data access
+    await log_data_access(
+        db,
+        user.user_uid,
+        "ai_chat",
+        {
+            "topic": node_title,
+            "facts_loaded": facts_loaded,
+        },
+    )
+    await check_anomaly(db, user.user_uid, "ai_chat")
 
     # Update last_used_at
     key_row.last_used_at = datetime.now(timezone.utc)
@@ -135,16 +150,17 @@ async def chat_stream(
     if node_uid:
         fact_sentences, facts_total = await get_facts_for_context(db, user, node_uid)
         from artiFACT.kernel.models import FcNode
+
         node = await db.get(FcNode, node_uid)
         if node:
             node_title = node.title
 
-    system_prompt, facts_loaded, facts_total = build_system_prompt(
-        fact_sentences, max_tokens=6000
-    )
+    system_prompt, facts_loaded, facts_total = build_system_prompt(fact_sentences, max_tokens=6000)
 
     if not input_check.clean:
-        system_prompt += "\n\n[CANARY: User input was flagged for: " + ", ".join(input_check.flags) + "]"
+        system_prompt += (
+            "\n\n[CANARY: User input was flagged for: " + ", ".join(input_check.flags) + "]"
+        )
 
     messages = [{"role": "system", "content": system_prompt}]
     for h in history:
@@ -152,12 +168,14 @@ async def chat_stream(
     messages.append({"role": "user", "content": input_check.normalized})
 
     # Send metadata first
-    meta = json.dumps({
-        "facts_loaded": facts_loaded,
-        "facts_total": facts_total,
-        "node_title": node_title,
-        "flagged": not input_check.clean,
-    })
+    meta = json.dumps(
+        {
+            "facts_loaded": facts_loaded,
+            "facts_total": facts_total,
+            "node_title": node_title,
+            "flagged": not input_check.clean,
+        }
+    )
     yield f"data: {json.dumps({'type': 'meta', 'data': json.loads(meta)})}\n\n"
 
     # Stream response chunks
@@ -177,12 +195,15 @@ async def chat_stream(
     key_row.last_used_at = datetime.now(timezone.utc)
     await db.flush()
 
-    await publish("ai.chat", {
-        "user_uid": str(user.user_uid),
-        "provider": key_row.provider,
-        "node_uid": str(node_uid) if node_uid else None,
-        "flagged": not input_check.clean,
-    })
+    await publish(
+        "ai.chat",
+        {
+            "user_uid": str(user.user_uid),
+            "provider": key_row.provider,
+            "node_uid": str(node_uid) if node_uid else None,
+            "flagged": not input_check.clean,
+        },
+    )
 
 
 async def _call_provider(

@@ -1,7 +1,5 @@
 """Tests for safety/input_filter: NFKC normalization, confusable mapping, injection detection."""
 
-import pytest
-
 from artiFACT.modules.ai_chat.safety.input_filter import check_input, map_confusables
 
 

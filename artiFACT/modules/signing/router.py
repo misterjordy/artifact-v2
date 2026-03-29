@@ -41,9 +41,7 @@ async def sign_pane(
     user: FcUser = Depends(get_current_user),
 ) -> dict:
     """List nodes with unsigned facts scoped to current user."""
-    all_nodes_result = await db.execute(
-        select(FcNode).where(FcNode.is_archived.is_(False))
-    )
+    all_nodes_result = await db.execute(select(FcNode).where(FcNode.is_archived.is_(False)))
     all_nodes = list(all_nodes_result.scalars().all())
 
     items: list[dict] = []

@@ -180,9 +180,7 @@ async def seed() -> None:
     async with async_session() as db:
         async with db.begin():
             # Find or create admin user
-            result = await db.execute(
-                select(FcUser).where(FcUser.global_role == "admin").limit(1)
-            )
+            result = await db.execute(select(FcUser).where(FcUser.global_role == "admin").limit(1))
             admin = result.scalar_one_or_none()
             if not admin:
                 admin = FcUser(

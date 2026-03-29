@@ -66,11 +66,14 @@ async def propose_facts(
 
     await db.flush()
 
-    await publish("import.proposed", {
-        "session_uid": str(session_uid),
-        "created_count": created_count,
-        "actor_uid": str(actor.user_uid),
-        "node_uid": str(session.program_node_uid),
-    })
+    await publish(
+        "import.proposed",
+        {
+            "session_uid": str(session_uid),
+            "created_count": created_count,
+            "actor_uid": str(actor.user_uid),
+            "node_uid": str(session.program_node_uid),
+        },
+    )
 
     return created_count

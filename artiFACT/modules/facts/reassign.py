@@ -30,11 +30,14 @@ async def reassign_fact(
     old_node_uid = fact.node_uid
     fact.node_uid = target_node_uid
 
-    await publish("fact.moved", {
-        "fact_uid": str(fact_uid),
-        "old_node_uid": str(old_node_uid),
-        "new_node_uid": str(target_node_uid),
-        "actor_uid": str(actor.user_uid),
-    })
+    await publish(
+        "fact.moved",
+        {
+            "fact_uid": str(fact_uid),
+            "old_node_uid": str(old_node_uid),
+            "new_node_uid": str(target_node_uid),
+            "actor_uid": str(actor.user_uid),
+        },
+    )
 
     return fact

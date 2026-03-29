@@ -65,6 +65,7 @@ async def trigger_analysis(
         raise NotFound("Import session not found", code="SESSION_NOT_FOUND")
 
     from artiFACT.modules.import_pipeline.analyzer import analyze_document
+
     analyze_document.delay(str(session_uid))
 
     return {"status": "analyzing", "session_uid": str(session_uid)}
@@ -124,6 +125,7 @@ async def get_staged_facts(
         raise NotFound("No staged facts available", code="NO_STAGED_FACTS")
 
     from artiFACT.modules.import_pipeline.stager import load_staged_facts
+
     staged = load_staged_facts(session.staged_facts_s3)
     facts = [StagedFact(**f) for f in staged]
 
