@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.auth.session import validate_session
 from artiFACT.kernel.db import get_db
+from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.kernel.schemas import NodeOut
 from artiFACT.modules.queue.badge_counter import get_badge_count
@@ -75,6 +76,15 @@ async def import_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
 async def export_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """Export and document generation page."""
     html = _jinja.get_template("export.html").render(user=user, active_nav="export")
+    return HTMLResponse(html)
+
+
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+    """Admin dashboard page (admin-only)."""
+    if user.global_role != "admin":
+        raise Forbidden("Admin access required")
+    html = _jinja.get_template("admin.html").render(user=user, active_nav="admin")
     return HTMLResponse(html)
 
 

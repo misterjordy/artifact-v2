@@ -17,6 +17,7 @@ from artiFACT.modules.search.router import partials_router as search_partials_ro
 from artiFACT.modules.search.router import router as search_router
 from artiFACT.modules.ai_chat.router import router as ai_chat_router
 from artiFACT.modules.import_pipeline.router import router as import_router
+from artiFACT.modules.admin.router import router as admin_router
 from artiFACT.modules.export.router import router as export_router
 from artiFACT.modules.export.router import sync_router
 from artiFACT.modules.signing.router import router as signing_router
@@ -44,6 +45,7 @@ app.include_router(ai_chat_router)
 app.include_router(import_router)
 app.include_router(export_router)
 app.include_router(sync_router)
+app.include_router(admin_router)
 app.include_router(pages_router)
 
 register_audit_subscribers()

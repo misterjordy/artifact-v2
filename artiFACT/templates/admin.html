@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - artiFACT{% endblock %}
+
+{% block head_scripts %}
+<script defer>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('adminDashboard', () => ({
+    metrics: null,
+    users: [],
+    userSearch: '',
+    userTotal: 0,
+    configs: [],
+    cacheStats: null,
+    moduleHealth: [],
+    loading: true,
+    tab: 'dashboard',
+
+    async init() {
+      await this.loadDashboard();
+      this.loading = false;
+    },
+
+    headers() {
+      const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='));
+      return {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf ? csrf.split('=')[1] : '',
+      };
+    },
+
+    async loadDashboard() {
+      const resp = await fetch('/api/v1/admin/dashboard');
+      if (resp.ok) this.metrics = await resp.json();
+    },
+
+    async loadUsers() {
+      const q = this.userSearch ? `&q=${encodeURIComponent(this.userSearch)}` : '';
+      const resp = await fetch(`/api/v1/admin/users?limit=50${q}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        this.users = data.data;
+        this.userTotal = data.total;
+      }
+    },
+
+    async changeRole(userUid, newRole) {
+      await fetch(`/api/v1/admin/users/${userUid}/role`, {
+        method: 'PUT',
+        headers: this.headers(),
+        body: JSON.stringify({ global_role: newRole }),
+      });
+      await this.loadUsers();
+    },
+
+    async toggleActive(userUid, isActive) {
+      const action = isActive ? 'deactivate' : 'reactivate';
+      await fetch(`/api/v1/admin/users/${userUid}/${action}`, {
+        method: 'POST',
+        headers: this.headers(),
+      });
+      await this.loadUsers();
+    },
+
+    async loadConfig() {
+      const resp = await fetch('/api/v1/admin/config');
+      if (resp.ok) this.configs = await resp.json();
+    },
+
+    async toggleFlag(key, currentValue) {
+      const newVal = { ...currentValue, enabled: !currentValue.enabled };
+      await fetch(`/api/v1/admin/config/${key}`, {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({ value: newVal }),
+      });
+      await this.loadConfig();
+    },
+
+    async loadCache() {
+      const resp = await fetch('/api/v1/admin/cache/stats');
+      if (resp.ok) this.cacheStats = await resp.json();
+    },
+
+    async flushCache(category) {
+      const url = category ? `/api/v1/admin/cache/flush?category=${category}` : '/api/v1/admin/cache/flush';
+      await fetch(url, { method: 'POST', headers: this.headers() });
+      await this.loadCache();
+    },
+
+    async loadModules() {
+      const resp = await fetch('/api/v1/admin/modules');
+      if (resp.ok) this.moduleHealth = await resp.json();
+    },
+
+    async triggerSnapshot() {
+      await fetch('/api/v1/admin/snapshot', {
+        method: 'POST',
+        headers: this.headers(),
+      });
+      alert('Snapshot queued.');
+    },
+
+    async switchTab(t) {
+      this.tab = t;
+      if (t === 'dashboard') await this.loadDashboard();
+      else if (t === 'users') await this.loadUsers();
+      else if (t === 'config') await this.loadConfig();
+      else if (t === 'cache') await this.loadCache();
+      else if (t === 'health') await this.loadModules();
+    },
+  }));
+});
+</script>
+{% endblock %}
+
+{% block page_heading %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div x-data="adminDashboard">
+  <!-- Tabs -->
+  <div class="flex gap-1 mb-6 border-b border-[var(--color-border)]">
+    <template x-for="t in ['dashboard','users','config','health','cache']">
+      <button
+        @click="switchTab(t)"
+        :class="tab === t ? 'border-b-2 border-[var(--color-accent)] text-[var(--color-accent)] font-medium' : 'text-slate-500 hover:text-slate-700'"
+        class="px-4 py-2 text-sm capitalize transition-colors"
+        x-text="t"
+      ></button>
+    </template>
+  </div>
+
+  <!-- Dashboard Tab -->
+  <div x-show="tab === 'dashboard'" x-cloak>
+    <template x-if="metrics">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500 uppercase tracking-wide">Total Users</p>
+          <p class="text-2xl font-bold mt-1" x-text="metrics.users.total"></p>
+          <p class="text-xs text-slate-400 mt-1">Active 24h: <span x-text="metrics.users.active_24h"></span></p>
+        </div>
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500 uppercase tracking-wide">Total Facts</p>
+          <p class="text-2xl font-bold mt-1" x-text="metrics.facts.total"></p>
+          <p class="text-xs text-slate-400 mt-1">Created 7d: <span x-text="metrics.facts.created_7d"></span></p>
+        </div>
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500 uppercase tracking-wide">Error Rate</p>
+          <p class="text-2xl font-bold mt-1"><span x-text="metrics.system.error_rate"></span>%</p>
+          <p class="text-xs text-slate-400 mt-1">Last 24 hours</p>
+        </div>
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500 uppercase tracking-wide">Active Users (24h)</p>
+          <p class="text-2xl font-bold mt-1" x-text="metrics.users.active_24h"></p>
+          <p class="text-xs text-slate-400 mt-1">Queue pending: <span x-text="metrics.queue.pending_proposals"></span></p>
+        </div>
+      </div>
+    </template>
+
+    <!-- Snapshot button -->
+    <div class="mt-4">
+      <button @click="triggerSnapshot()"
+              class="px-4 py-2 text-sm rounded-md bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity">
+        Trigger DB Snapshot
+      </button>
+    </div>
+  </div>
+
+  <!-- Users Tab -->
+  <div x-show="tab === 'users'" x-cloak>
+    <div class="mb-4">
+      <input type="text" x-model="userSearch" @input.debounce.300ms="loadUsers()"
+             placeholder="Search users..."
+             class="w-full max-w-md px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]">
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--color-border)] text-left text-xs text-slate-500 uppercase">
+            <th class="py-2 px-3">Name</th>
+            <th class="py-2 px-3">CAC DN</th>
+            <th class="py-2 px-3">Role</th>
+            <th class="py-2 px-3">Active</th>
+            <th class="py-2 px-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="u in users" :key="u.user_uid">
+            <tr class="border-b border-[var(--color-border)] hover:bg-slate-50">
+              <td class="py-2 px-3" x-text="u.display_name"></td>
+              <td class="py-2 px-3 text-xs text-slate-500 truncate max-w-[200px]" x-text="u.cac_dn"></td>
+              <td class="py-2 px-3">
+                <select :value="u.global_role" @change="changeRole(u.user_uid, $event.target.value)"
+                        class="text-xs border border-[var(--color-border)] rounded px-1 py-0.5">
+                  <template x-for="r in ['admin','signatory','approver','subapprover','contributor','viewer']">
+                    <option :value="r" :selected="r === u.global_role" x-text="r"></option>
+                  </template>
+                </select>
+              </td>
+              <td class="py-2 px-3">
+                <span :class="u.is_active ? 'text-green-600' : 'text-red-500'" x-text="u.is_active ? 'Yes' : 'No'"></span>
+              </td>
+              <td class="py-2 px-3">
+                <button @click="toggleActive(u.user_uid, u.is_active)"
+                        :class="u.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'"
+                        class="text-xs underline"
+                        x-text="u.is_active ? 'Deactivate' : 'Reactivate'"></button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-xs text-slate-400" x-text="'Showing ' + users.length + ' of ' + userTotal + ' users'"></p>
+  </div>
+
+  <!-- Config / Feature Flags Tab -->
+  <div x-show="tab === 'config'" x-cloak>
+    <div class="space-y-3">
+      <template x-for="c in configs" :key="c.key">
+        <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-white">
+          <div>
+            <p class="text-sm font-medium" x-text="c.key"></p>
+            <p class="text-xs text-slate-400" x-text="JSON.stringify(c.value)"></p>
+          </div>
+          <template x-if="c.value && typeof c.value.enabled === 'boolean'">
+            <button @click="toggleFlag(c.key, c.value)"
+                    :class="c.value.enabled ? 'bg-green-500' : 'bg-slate-300'"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
+              <span :class="c.value.enabled ? 'translate-x-6' : 'translate-x-1'"
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+            </button>
+          </template>
+        </div>
+      </template>
+      <template x-if="configs.length === 0">
+        <p class="text-sm text-slate-400">No feature flags configured.</p>
+      </template>
+    </div>
+  </div>
+
+  <!-- Health Tab -->
+  <div x-show="tab === 'health'" x-cloak>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <template x-for="m in moduleHealth" :key="m.module">
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-sm font-medium mb-2" x-text="m.module"></p>
+          <div class="space-y-1 text-xs">
+            <p>DB: <span :class="m.db ? 'text-green-600' : 'text-red-500'" x-text="m.db ? 'OK' : 'FAIL'"></span></p>
+            <p>Redis: <span :class="m.redis ? 'text-green-600' : 'text-red-500'" x-text="m.redis ? 'OK' : 'FAIL'"></span></p>
+            <p>S3: <span :class="m.s3 ? 'text-green-600' : 'text-red-500'" x-text="m.s3 ? 'OK' : 'FAIL'"></span></p>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Cache Tab -->
+  <div x-show="tab === 'cache'" x-cloak>
+    <template x-if="cacheStats">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500">Memory</p>
+          <p class="text-lg font-bold" x-text="cacheStats.used_memory_human"></p>
+        </div>
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500">Total Keys</p>
+          <p class="text-lg font-bold" x-text="cacheStats.total_keys"></p>
+        </div>
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500">Hits</p>
+          <p class="text-lg font-bold" x-text="cacheStats.keyspace_hits"></p>
+        </div>
+        <div class="rounded-lg border border-[var(--color-border)] bg-white p-4">
+          <p class="text-xs text-slate-500">Misses</p>
+          <p class="text-lg font-bold" x-text="cacheStats.keyspace_misses"></p>
+        </div>
+      </div>
+    </template>
+    <div class="flex gap-2">
+      <button @click="flushCache('all')"
+              class="px-3 py-1.5 text-sm rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors">
+        Flush All
+      </button>
+      <button @click="flushCache('permissions')"
+              class="px-3 py-1.5 text-sm rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+        Flush Permissions
+      </button>
+      <button @click="flushCache('badges')"
+              class="px-3 py-1.5 text-sm rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+        Flush Badges
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
