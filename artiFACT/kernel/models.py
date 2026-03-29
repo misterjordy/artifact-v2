@@ -318,6 +318,33 @@ class FcUserPreference(Base):
     value: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
+class FcSignature(Base):
+    __tablename__ = "fc_signature"
+
+    signature_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    node_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_node.node_uid", ondelete="RESTRICT"), nullable=False
+    )
+    signed_by_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid", ondelete="RESTRICT"), nullable=False
+    )
+    signed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    fact_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("idx_sig_node", "node_uid"),
+        Index("idx_sig_signer", "signed_by_uid"),
+    )
+
+
 class FcAiUsage(Base):
     __tablename__ = "fc_ai_usage"
 

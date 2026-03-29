@@ -181,5 +181,14 @@ async def contributor_permission(
 def _register_audit_subscribers():
     """Register audit subscribers for every test."""
     from artiFACT.kernel.events import _subscribers
+    from artiFACT.modules.audit.recorder import _pending_events
     _subscribers.clear()
+    _pending_events.clear()
     register_subscribers()
+
+
+@pytest.fixture(autouse=True)
+def _reset_redis():
+    """Reset Redis singleton so each test gets a fresh connection on its event loop."""
+    import artiFACT.kernel.auth.session as session_mod
+    session_mod._redis = None

@@ -73,6 +73,20 @@ async def _record_fact_moved(payload: dict) -> None:
     await _record_fact_event(payload_with_type)
 
 
+async def _record_signature_created(payload: dict) -> None:
+    """Record a signature.created event."""
+    event = FcEventLog(
+        entity_type="signature",
+        entity_uid=payload["signature_uid"],
+        event_type="signature.created",
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        reversible=False,
+        reverse_payload=None,
+    )
+    _pending_events.append(event)
+
+
 async def _record_version_event(payload: dict) -> None:
     event_type = f"version.{payload.get('new_state', 'unknown')}"
     reverse = _compute_reverse(event_type, payload)
@@ -98,3 +112,4 @@ def register_subscribers() -> None:
     subscribe("version.published", _record_version_event)
     subscribe("version.rejected", _record_version_event)
     subscribe("version.signed", _record_version_event)
+    subscribe("signature.created", _record_signature_created)
