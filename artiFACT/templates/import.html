@@ -1,116 +1,110 @@
 {% extends "base.html" %}
+
 {% block title %}Import — artiFACT{% endblock %}
+
 {% block head %}
-<script src="/static/import.js" defer></script>
+<script src="/static/js/import.js" defer></script>
 {% endblock %}
-{% block body %}
-<div class="min-h-full flex flex-col" x-data="importApp()">
-  <!-- Top bar -->
-  <header class="bg-[var(--color-bg-topbar)] border-b border-[var(--color-border)] px-6 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <a href="/browse" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">&larr; Back</a>
-      <h1 class="text-lg font-semibold text-[var(--color-text)]">Import Documents</h1>
-    </div>
-    <span class="text-sm text-[var(--color-text-muted)]">{{ user.display_name }}</span>
-  </header>
 
-  <main class="flex-1 p-6 max-w-4xl mx-auto w-full">
-    <!-- Upload Form -->
-    <div x-show="step === 'upload'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
-      <h2 class="text-base font-semibold mb-4">Upload Document</h2>
-      <form id="upload-form" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">File (DOCX, PPTX, PDF, TXT)</label>
-          <input type="file" name="file" accept=".docx,.pptx,.pdf,.txt,.md" required
-                 class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Program Node UID</label>
-          <input type="text" name="program_node_uid" required placeholder="UUID of target node"
-                 class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Effective Date</label>
-          <input type="date" name="effective_date" required
-                 class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Granularity</label>
-          <select name="granularity"
-                  class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
-            <option value="brief">Brief</option>
-            <option value="standard" selected>Standard</option>
-            <option value="exhaustive">Exhaustive</option>
-          </select>
-        </div>
-        <button type="submit" @click.prevent="uploadFile()"
-                class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)]">
-          Upload & Analyze
-        </button>
-        <p x-show="uploadError" x-text="uploadError" class="text-sm text-[var(--color-danger)] mt-2"></p>
-      </form>
-    </div>
+{% block page_heading %}Import Documents{% endblock %}
 
-    <!-- Progress -->
-    <div x-show="step === 'analyzing'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
-      <h2 class="text-base font-semibold mb-4">Analyzing Document</h2>
-      <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
-        <div class="bg-[var(--color-accent)] h-3 rounded-full transition-all duration-300"
-             :style="'width: ' + progress + '%'"></div>
+{% block content %}
+<div class="max-w-4xl" x-data="importApp()">
+  <!-- Upload Form -->
+  <div x-show="step === 'upload'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
+    <h2 class="text-base font-semibold mb-4">Upload Document</h2>
+    <form id="upload-form" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">File (DOCX, PPTX, PDF, TXT)</label>
+        <input type="file" name="file" accept=".docx,.pptx,.pdf,.txt,.md" required
+               class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
       </div>
-      <p class="text-sm text-[var(--color-text-muted)]" x-text="progressMessage"></p>
+      <div>
+        <label class="block text-sm font-medium mb-1">Program Node UID</label>
+        <input type="text" name="program_node_uid" required placeholder="UUID of target node"
+               class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Effective Date</label>
+        <input type="date" name="effective_date" required
+               class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Granularity</label>
+        <select name="granularity"
+                class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)]">
+          <option value="brief">Brief</option>
+          <option value="standard" selected>Standard</option>
+          <option value="exhaustive">Exhaustive</option>
+        </select>
+      </div>
+      <button type="submit" @click.prevent="uploadFile()"
+              class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors">
+        Upload & Analyze
+      </button>
+      <p x-show="uploadError" x-text="uploadError" class="text-sm text-[var(--color-danger)] mt-2"></p>
+    </form>
+  </div>
+
+  <!-- Progress -->
+  <div x-show="step === 'analyzing'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
+    <h2 class="text-base font-semibold mb-4">Analyzing Document</h2>
+    <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+      <div class="bg-[var(--color-accent)] h-3 rounded-full transition-all duration-300"
+           :style="'width: ' + progress + '%'"></div>
     </div>
+    <p class="text-sm text-[var(--color-text-muted)]" x-text="progressMessage"></p>
+  </div>
 
-    <!-- Staged Facts Review -->
-    <div x-show="step === 'review'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
-      <h2 class="text-base font-semibold mb-4">
-        Review Extracted Facts
-        <span class="text-sm font-normal text-[var(--color-text-muted)]" x-text="'(' + stagedFacts.length + ' facts)'"></span>
-      </h2>
+  <!-- Staged Facts Review -->
+  <div x-show="step === 'review'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
+    <h2 class="text-base font-semibold mb-4">
+      Review Extracted Facts
+      <span class="text-sm font-normal text-[var(--color-text-muted)]" x-text="'(' + stagedFacts.length + ' facts)'"></span>
+    </h2>
 
-      <div class="space-y-3 mb-6 max-h-[60vh] overflow-y-auto">
-        <template x-for="fact in stagedFacts" :key="fact.index">
-          <div class="border border-[var(--color-border)] rounded p-3 flex items-start gap-3"
-               :class="fact.duplicate_of ? 'bg-yellow-50' : ''">
-            <input type="checkbox" :checked="fact.accepted" @change="fact.accepted = $event.target.checked"
-                   class="mt-1 rounded border-[var(--color-border-input)]">
-            <div class="flex-1 min-w-0">
-              <p class="text-sm" x-text="fact.sentence"></p>
-              <div x-show="fact.duplicate_of" class="text-xs text-[var(--color-warning)] mt-1">
-                Possible duplicate (similarity: <span x-text="fact.similarity ? (fact.similarity * 100).toFixed(0) + '%' : ''"></span>)
-              </div>
-              <div x-show="fact.metadata_tags && fact.metadata_tags.length" class="flex gap-1 mt-1 flex-wrap">
-                <template x-for="tag in (fact.metadata_tags || [])" :key="tag">
-                  <span class="text-xs bg-[var(--color-accent-light)] text-[var(--color-accent)] px-2 py-0.5 rounded" x-text="tag"></span>
-                </template>
-              </div>
+    <div class="space-y-3 mb-6 max-h-[60vh] overflow-y-auto">
+      <template x-for="fact in stagedFacts" :key="fact.index">
+        <div class="border border-[var(--color-border)] rounded p-3 flex items-start gap-3"
+             :class="fact.duplicate_of ? 'bg-yellow-50' : ''">
+          <input type="checkbox" :checked="fact.accepted" @change="fact.accepted = $event.target.checked"
+                 class="mt-1 rounded border-[var(--color-border-input)]">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm" x-text="fact.sentence"></p>
+            <div x-show="fact.duplicate_of" class="text-xs text-[var(--color-warning)] mt-1">
+              Possible duplicate (similarity: <span x-text="fact.similarity ? (fact.similarity * 100).toFixed(0) + '%' : ''"></span>)
+            </div>
+            <div x-show="fact.metadata_tags && fact.metadata_tags.length" class="flex gap-1 mt-1 flex-wrap">
+              <template x-for="tag in (fact.metadata_tags || [])" :key="tag">
+                <span class="text-xs bg-[var(--color-accent-light)] text-[var(--color-accent)] px-2 py-0.5 rounded" x-text="tag"></span>
+              </template>
             </div>
           </div>
-        </template>
-      </div>
-
-      <div class="flex gap-3">
-        <button @click="proposeFacts()"
-                class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)]">
-          Import Selected Facts
-        </button>
-        <button @click="discardFacts()"
-                class="border border-[var(--color-border)] text-[var(--color-text)] px-4 py-2 rounded text-sm font-medium hover:bg-gray-100">
-          Discard All
-        </button>
-      </div>
-      <p x-show="proposeError" x-text="proposeError" class="text-sm text-[var(--color-danger)] mt-2"></p>
+        </div>
+      </template>
     </div>
 
-    <!-- Done -->
-    <div x-show="step === 'done'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6 text-center">
-      <div class="text-[var(--color-success)] text-2xl mb-2">&#10003;</div>
-      <h2 class="text-base font-semibold mb-2" x-text="doneMessage"></h2>
-      <button @click="resetForm()"
-              class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)]">
-        Import Another
+    <div class="flex gap-3">
+      <button @click="proposeFacts()"
+              class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors">
+        Import Selected Facts
+      </button>
+      <button @click="discardFacts()"
+              class="border border-[var(--color-border)] text-[var(--color-text)] px-4 py-2 rounded text-sm font-medium hover:bg-gray-100 transition-colors">
+        Discard All
       </button>
     </div>
-  </main>
+    <p x-show="proposeError" x-text="proposeError" class="text-sm text-[var(--color-danger)] mt-2"></p>
+  </div>
+
+  <!-- Done -->
+  <div x-show="step === 'done'" class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6 text-center">
+    <div class="text-[var(--color-success)] text-2xl mb-2">&#10003;</div>
+    <h2 class="text-base font-semibold mb-2" x-text="doneMessage"></h2>
+    <button @click="resetForm()"
+            class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors">
+      Import Another
+    </button>
+  </div>
 </div>
 {% endblock %}

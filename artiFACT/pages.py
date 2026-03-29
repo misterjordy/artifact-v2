@@ -34,7 +34,7 @@ async def login_page(
         user = await validate_session(session_id, db)
         if user:
             return RedirectResponse("/browse", status_code=302)
-    html = _jinja.get_template("login.html").render()
+    html = _jinja.get_template("login.html").render(active_nav="")
     return HTMLResponse(html)
 
 
@@ -46,35 +46,35 @@ async def queue_page(
     """Queue view with tabs for proposals, moves, unsigned."""
     approvable = await get_approvable_nodes(db, user)
     badge_total = await get_badge_count(db, user.user_uid, list(approvable.keys()))
-    html = _jinja.get_template("queue.html").render(user=user, badge_total=badge_total)
+    html = _jinja.get_template("queue.html").render(user=user, badge_total=badge_total, active_nav="queue")
     return HTMLResponse(html)
 
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """AI key settings page."""
-    html = _jinja.get_template("settings.html").render(user=user)
+    html = _jinja.get_template("settings.html").render(user=user, active_nav="settings")
     return HTMLResponse(html)
 
 
 @router.get("/chat", response_class=HTMLResponse)
 async def chat_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """AI chat page."""
-    html = _jinja.get_template("chat.html").render(user=user)
+    html = _jinja.get_template("chat.html").render(user=user, active_nav="chat")
     return HTMLResponse(html)
 
 
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """Document import page."""
-    html = _jinja.get_template("import.html").render(user=user)
+    html = _jinja.get_template("import.html").render(user=user, active_nav="import")
     return HTMLResponse(html)
 
 
 @router.get("/browse", response_class=HTMLResponse)
 async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """Main browse view with tree in left pane."""
-    html = _jinja.get_template("browse.html").render(user=user)
+    html = _jinja.get_template("browse.html").render(user=user, active_nav="browse")
     return HTMLResponse(html)
 
 

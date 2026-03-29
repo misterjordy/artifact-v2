@@ -6,60 +6,43 @@
 <script src="/static/js/browse.js" defer></script>
 {% endblock %}
 
-{% block body %}
-<div class="flex h-full">
-  <!-- Sidebar -->
-  <aside class="flex flex-col w-[var(--sidebar-width)] flex-shrink-0 bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)]">
-    <!-- Sidebar header -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
-      <span class="text-sm font-bold tracking-wide text-white">artiFACT</span>
-    </div>
+{% block page_heading %}Browse{% endblock %}
 
-    <!-- Sidebar section label -->
-    <div class="px-4 pt-4 pb-2">
-      <span class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)]">
-        Taxonomy
-      </span>
-    </div>
+{% block header_actions %}
+<form hx-get="/partials/search" hx-target="#center-pane" hx-swap="innerHTML" class="flex items-center gap-2">
+  <input type="text" name="q" placeholder="Search facts..."
+         class="text-sm px-3 py-1.5 border border-[var(--color-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent">
+  <button type="submit"
+          class="text-sm px-3 py-1.5 bg-accent text-white rounded-md hover:bg-accent-hover transition-colors">Search</button>
+</form>
+{% endblock %}
 
-    <!-- Tree container -->
-    <div id="tree-container"
-         class="flex-1 overflow-y-auto px-2 pb-4 sidebar-scroll"
-         hx-get="/partials/tree" hx-trigger="load" hx-swap="innerHTML">
-      <div class="px-2 py-8 text-center text-xs text-slate-500">Loading tree&hellip;</div>
-    </div>
+{% block sidebar_top %}
+<!-- Taxonomy section label -->
+<div class="px-1 pb-2">
+  <span class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)]">
+    Taxonomy
+  </span>
+</div>
 
-    <!-- Sidebar footer -->
-    <div class="border-t border-white/10 px-4 py-3">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-[var(--color-text-sidebar-heading)] truncate">{{ user.display_name }}</span>
-        <a id="logout-link" href="#"
-           class="text-xs text-[var(--color-text-sidebar-heading)] hover:text-white transition-colors">
-          Sign out
-        </a>
-      </div>
-    </div>
-  </aside>
+<!-- Tree container -->
+<div id="tree-container"
+     class="mb-4 -mx-2 px-2"
+     hx-get="/partials/tree" hx-trigger="load" hx-swap="innerHTML">
+  <div class="px-2 py-8 text-center text-xs text-slate-500">Loading tree&hellip;</div>
+</div>
 
-  <!-- Main content area -->
-  <div class="flex flex-col flex-1 min-w-0">
-    <!-- Top bar -->
-    <header class="flex items-center justify-between px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-topbar)]">
-      <h1 class="text-sm font-semibold text-slate-800">Browse</h1>
-      <form hx-get="/partials/search" hx-target="#center-pane" hx-swap="innerHTML" class="flex items-center gap-2">
-        <input type="text" name="q" placeholder="Search facts..."
-               class="text-sm px-3 py-1.5 border border-[var(--color-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent">
-        <button type="submit"
-                class="text-sm px-3 py-1.5 bg-accent text-white rounded-md hover:bg-accent-hover">Search</button>
-      </form>
-    </header>
+<div class="border-t border-white/10 pt-3 mt-1">
+  <span class="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)]">
+    Navigation
+  </span>
+</div>
+{% endblock %}
 
-    <!-- Center pane -->
-    <main id="center-pane" class="flex-1 overflow-y-auto p-6">
-      <div class="flex items-center justify-center h-full">
-        <p class="text-sm text-[var(--color-text-muted)]">Select a node from the tree to get started.</p>
-      </div>
-    </main>
+{% block content %}
+<div id="center-pane">
+  <div class="flex items-center justify-center h-full min-h-[50vh]">
+    <p class="text-sm text-[var(--color-text-muted)]">Select a node from the tree to get started.</p>
   </div>
 </div>
 {% endblock %}
