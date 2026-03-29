@@ -1,0 +1,60 @@
+services:
+  web:
+    build: { context: ., dockerfile: docker/Dockerfile }
+    command: uvicorn artiFACT.main:app --host 0.0.0.0 --port 8000 --reload
+    ports: ["8000:8000"]
+    volumes: [".:/app"]
+    env_file: .env
+    depends_on: [postgres, redis]
+
+  worker:
+    build: { context: ., dockerfile: docker/Dockerfile.worker }
+    command: celery -A artiFACT.kernel.background worker --loglevel=info
+    volumes: [".:/app"]
+    env_file: .env
+    depends_on: [postgres, redis]
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: artifact_db
+      POSTGRES_USER: artifact
+      POSTGRES_PASSWORD: artifact_dev
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  nginx:
+    image: nginx:alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on: [web]
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done'"
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+
+volumes:
+  pgdata:
+  miniodata:
+  certbot-webroot:
+  certbot-certs:
