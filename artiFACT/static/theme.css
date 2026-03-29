@@ -139,6 +139,62 @@ html.eyecare .sidebar-resize-handle::after {
   color: var(--color-accent-gold);
 }
 
+/* Right pane slide animation */
+.right-pane {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  z-index: 40;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+.right-pane.open {
+  transform: translateX(0);
+}
+
+/* Right pane resize handle (mirrored from left sidebar) */
+.right-pane-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.right-pane-resize-handle:hover,
+.right-pane-resize-handle:active {
+  background: var(--color-accent);
+  opacity: 0.3;
+}
+.right-pane-resize-handle::after {
+  content: "⋮";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+html.eyecare .right-pane-resize-handle {
+  width: 12px;
+  background: rgba(212, 168, 67, 0.15);
+}
+html.eyecare .right-pane-resize-handle:hover,
+html.eyecare .right-pane-resize-handle:active {
+  background: var(--color-accent-gold);
+  opacity: 0.4;
+}
+html.eyecare .right-pane-resize-handle::after {
+  font-size: 16px;
+  color: var(--color-accent-gold);
+}
+
 /* Tree hierarchy indent + Reddit-style left line */
 .tree-children {
   margin-left: 0.75rem;

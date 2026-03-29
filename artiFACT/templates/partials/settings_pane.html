@@ -1,0 +1,103 @@
+<div x-data="settingsApp()">
+  <!-- Theme Section -->
+  <section class="mb-6" x-data="themeToggle()">
+    <h3 class="text-sm font-semibold mb-3 text-[var(--color-text)]">Theme</h3>
+    <p class="text-xs text-[var(--color-text-muted)] mb-3">
+      Choose your preferred display mode. Eyecare is optimized for extended reading with WCAG AA contrast.
+    </p>
+    <div class="flex items-center gap-2">
+      <button @click="setTheme('eyecare')"
+              :class="currentTheme === 'eyecare' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] ring-2 ring-[var(--color-accent)]' : 'bg-[var(--color-bg)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        Eyecare
+      </button>
+      <button @click="setTheme('dark')"
+              :class="currentTheme === 'dark' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] ring-2 ring-[var(--color-accent)]' : 'bg-[var(--color-bg)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        Dark
+      </button>
+      <button @click="setTheme('default')"
+              :class="currentTheme === 'default' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] ring-2 ring-[var(--color-accent)]' : 'bg-[var(--color-bg)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        Light
+      </button>
+    </div>
+  </section>
+
+  <!-- AI API Keys Section -->
+  <section class="mb-6">
+    <h3 class="text-sm font-semibold mb-3 text-[var(--color-text)]">AI API Keys</h3>
+    <p class="text-xs text-[var(--color-text-muted)] mb-3">
+      Add your own API key to use the AI Chat feature. Keys are encrypted at rest (AES-256-GCM).
+    </p>
+
+    <!-- Existing keys -->
+    <div class="space-y-2 mb-4">
+      <template x-for="key in keys" :key="key.key_uid">
+        <div class="flex items-center justify-between bg-[var(--color-bg)] border border-[var(--color-border)] rounded px-3 py-2">
+          <div>
+            <span class="text-xs font-medium capitalize" x-text="key.provider"></span>
+            <span class="text-xs text-[var(--color-text-muted)] ml-1" x-text="key.key_prefix"></span>
+            <template x-if="key.model_override">
+              <span class="text-[10px] bg-[var(--color-accent-light)] text-[var(--color-accent)] rounded px-1.5 py-0.5 ml-1" x-text="key.model_override"></span>
+            </template>
+          </div>
+          <button class="text-xs text-[var(--color-danger)] hover:opacity-80 transition-opacity"
+                  @click="deleteKey(key.provider)">Remove</button>
+        </div>
+      </template>
+      <p x-show="keys.length === 0" class="text-xs text-[var(--color-text-muted)] italic">No API keys configured.</p>
+    </div>
+
+    <!-- Add key form -->
+    <form @submit.prevent="saveKey()" class="bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-3 space-y-3">
+      <div>
+        <label class="block text-xs font-medium mb-1">Provider</label>
+        <select x-model="form.provider" class="w-full border border-[var(--color-border-input)] rounded px-2 py-1.5 text-xs bg-[var(--color-bg-input)]">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1">API Key</label>
+        <input type="password" x-model="form.api_key" placeholder="sk-..."
+               class="w-full border border-[var(--color-border-input)] rounded px-2 py-1.5 text-xs font-mono bg-[var(--color-bg-input)]">
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1">Model Override (optional)</label>
+        <input type="text" x-model="form.model_override" placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
+               class="w-full border border-[var(--color-border-input)] rounded px-2 py-1.5 text-xs bg-[var(--color-bg-input)]">
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="submit"
+                class="bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-3 py-1.5 rounded text-xs font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
+                :disabled="!form.api_key">Save Key</button>
+        <span x-show="saveMsg" class="text-xs text-[var(--color-success)]" x-text="saveMsg"></span>
+        <span x-show="saveErr" class="text-xs text-[var(--color-danger)]" x-text="saveErr"></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- Account -->
+  <section class="mb-6">
+    <h3 class="text-sm font-semibold mb-3 text-[var(--color-text)]">Account</h3>
+    <div class="text-xs text-[var(--color-text-muted)] space-y-1">
+      <p><span class="font-medium text-[var(--color-text)]">{{ user.display_name }}</span></p>
+      <p>Role: <span class="capitalize">{{ user.global_role }}</span></p>
+    </div>
+  </section>
+</div>

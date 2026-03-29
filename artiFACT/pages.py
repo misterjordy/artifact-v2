@@ -74,6 +74,15 @@ async def settings_page(
     return HTMLResponse(html)
 
 
+@router.get("/partials/settings", response_class=HTMLResponse)
+async def settings_partial(
+    user: FcUser = Depends(get_current_user),
+) -> HTMLResponse:
+    """HTMX partial: settings for the right slideout pane."""
+    html = _jinja.get_template("partials/settings_pane.html").render(user=user)
+    return HTMLResponse(html)
+
+
 @router.get("/chat", response_class=HTMLResponse)
 async def chat_page(
     user: FcUser = Depends(get_current_user),
