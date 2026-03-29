@@ -1,0 +1,77 @@
+{% if node %}
+<div class="space-y-4">
+  <!-- Node header with breadcrumb -->
+  <div class="mb-4">
+    <nav class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] mb-2">
+      {% for bc in breadcrumb %}
+      <span>{{ bc.title }}</span>
+      {% if not loop.last %}<span class="text-[var(--color-border)]">/</span>{% endif %}
+      {% endfor %}
+    </nav>
+    <h2 class="text-lg font-semibold text-[var(--color-text)]">{{ node.title }}</h2>
+    <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ facts | length }} fact{{ 's' if facts | length != 1 else '' }} in this node</p>
+  </div>
+
+  <!-- Facts list -->
+  {% if facts %}
+  <div class="space-y-2">
+    {% for item in facts %}
+    <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 hover:shadow-sm transition-shadow">
+      <div class="flex items-start justify-between gap-3">
+        <p class="text-sm text-[var(--color-text)] leading-relaxed flex-1">{{ item.sentence }}</p>
+        <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium
+          {% if item.state == 'published' %}bg-green-100 text-green-800
+          {% elif item.state == 'signed' %}bg-blue-100 text-blue-800
+          {% elif item.state == 'proposed' %}bg-yellow-100 text-yellow-800
+          {% elif item.state == 'rejected' %}bg-red-100 text-red-800
+          {% else %}bg-gray-100 text-gray-600
+          {% endif %}">
+          {{ item.state }}
+        </span>
+      </div>
+      {% if item.classification and item.classification != 'UNCLASSIFIED' %}
+      <p class="text-[10px] text-[var(--color-text-muted)] mt-1">{{ item.classification }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-12">
+    <p class="text-sm text-[var(--color-text-muted)]">No facts in this node yet.</p>
+  </div>
+  {% endif %}
+
+  <!-- Child nodes with their facts -->
+  {% if children_with_facts %}
+  {% for child_group in children_with_facts %}
+  <div class="mt-6">
+    <h3 class="text-sm font-semibold text-[var(--color-text)] mb-2 flex items-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"></span>
+      {{ child_group.node.title }}
+      <span class="text-[10px] text-[var(--color-text-muted)] font-normal">{{ child_group.facts | length }}</span>
+    </h3>
+    {% for item in child_group.facts %}
+    <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 ml-4 mb-2 hover:shadow-sm transition-shadow">
+      <div class="flex items-start justify-between gap-3">
+        <p class="text-sm text-[var(--color-text)] leading-relaxed flex-1">{{ item.sentence }}</p>
+        <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium
+          {% if item.state == 'published' %}bg-green-100 text-green-800
+          {% elif item.state == 'signed' %}bg-blue-100 text-blue-800
+          {% elif item.state == 'proposed' %}bg-yellow-100 text-yellow-800
+          {% elif item.state == 'rejected' %}bg-red-100 text-red-800
+          {% else %}bg-gray-100 text-gray-600
+          {% endif %}">
+          {{ item.state }}
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+{% else %}
+<div class="flex items-center justify-center h-full">
+  <p class="text-sm text-[var(--color-text-muted)]">Node not found.</p>
+</div>
+{% endif %}

@@ -2,9 +2,11 @@
 
 import json
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
+from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.middleware import get_current_user
@@ -35,6 +37,9 @@ from artiFACT.modules.taxonomy.tree_serializer import (
     build_nested_tree,
     get_breadcrumb,
 )
+
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
+_jinja = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=True)
 
 router = APIRouter(prefix="/api/v1", tags=["taxonomy"])
 partials_router = APIRouter(tags=["taxonomy-partials"])
@@ -149,52 +154,9 @@ async def archive(
 async def tree_partial(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> str:
+) -> HTMLResponse:
     """HTMX partial: collapsible tree for the left pane."""
     nodes = await get_all_nodes(db)
     nested = build_nested_tree(nodes)
-
-    def render_node(node: dict, level: int = 0) -> str:
-        indent = level * 16
-        uid = node["node_uid"]
-        title = node["title"]
-        children = node.get("children", [])
-        has_children = len(children) > 0
-
-        html = f'<div class="tree-row" style="padding-left:{indent}px" x-data="{{open: true}}">\n'
-        html += '  <div class="tree-row-inner">\n'
-
-        if has_children:
-            html += f'    <button class="tree-toggle" @click="open = !open" aria-label="Toggle">'
-            html += '<span x-text="open ? \'\\u25BE\' : \'\\u25B8\'"></span></button>\n'
-        else:
-            html += '    <span class="tree-toggle-spacer"></span>\n'
-
-        html += f'    <a class="tree-link" hx-get="/partials/browse/{uid}" '
-        html += f'hx-target="#center-pane" hx-swap="innerHTML">{title}</a>\n'
-
-        html += f'    <span class="tree-actions">'
-        html += f'<button class="btn-icon" title="Add node" '
-        html += f'hx-get="/partials/node-form?parent={uid}" '
-        html += f'hx-target="#modal" hx-swap="innerHTML">+node</button> '
-        html += f'<button class="btn-icon" title="Add fact" '
-        html += f'hx-get="/partials/fact-form?node={uid}" '
-        html += f'hx-target="#modal" hx-swap="innerHTML">+fact</button>'
-        html += '</span>\n'
-
-        html += '  </div>\n'
-
-        if has_children:
-            html += f'  <div x-show="open">\n'
-            for child in children:
-                html += render_node(child, level + 1)
-            html += '  </div>\n'
-
-        html += '</div>\n'
-        return html
-
-    body = ""
-    for root in nested:
-        body += render_node(root)
-
-    return body
+    html = _jinja.get_template("partials/tree.html").render(nodes=nested)
+    return HTMLResponse(html)

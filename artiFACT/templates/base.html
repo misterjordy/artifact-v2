@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}artiFACT{% endblock %}</title>
+  <link rel="stylesheet" href="/static/theme.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            sidebar: { DEFAULT: '#1e293b', hover: 'rgba(255,255,255,0.08)', active: 'rgba(255,255,255,0.12)' },
+            accent:  { DEFAULT: '#2563eb', hover: '#1d4ed8', light: '#dbeafe' },
+          },
+        },
+      },
+    }
+  </script>
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="h-full font-sans antialiased bg-[var(--color-bg)] text-[var(--color-text)]">
+  {% block body %}{% endblock %}
+</body>
+</html>

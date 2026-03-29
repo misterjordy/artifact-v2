@@ -192,3 +192,149 @@ class FcUserAiKey(Base):
         ),
         UniqueConstraint("user_uid", "provider", name="uq_ai_key_user_provider"),
     )
+
+
+class FcFact(Base):
+    __tablename__ = "fc_fact"
+
+    fact_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    node_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_node.node_uid", ondelete="RESTRICT"), nullable=False
+    )
+    current_published_version_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    current_signed_version_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    is_retired: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retired_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("idx_fact_node", "node_uid", postgresql_where="NOT is_retired"),
+        Index(
+            "idx_fact_published",
+            "current_published_version_uid",
+            postgresql_where="current_published_version_uid IS NOT NULL",
+        ),
+    )
+
+
+class FcFactVersion(Base):
+    __tablename__ = "fc_fact_version"
+
+    version_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    fact_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_fact.fact_uid", ondelete="RESTRICT"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default="proposed")
+    display_sentence: Mapped[str] = mapped_column(Text, nullable=False)
+    canonical_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    metadata_tags: Mapped[list] = mapped_column(JSONB, default=list)
+    source_reference: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    effective_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    last_verified_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    classification: Mapped[str] = mapped_column(String(64), default="UNCLASSIFIED")
+    applies_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    supersedes_version_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_fact_version.version_uid"), nullable=True
+    )
+    created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    signed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('proposed','challenged','accepted','rejected',"
+            "'published','signed','withdrawn','retired')",
+            name="ck_version_state",
+        ),
+        Index("idx_version_fact", "fact_uid"),
+        Index("idx_version_state", "state"),
+        Index("idx_version_created_by", "created_by_uid"),
+    )
+
+
+class FcEventLog(Base):
+    __tablename__ = "fc_event_log"
+
+    event_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_uid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    actor_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reverse_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index("idx_event_entity", "entity_uid", "entity_type"),
+        Index("idx_event_type", "event_type", "entity_type"),
+        Index("idx_event_actor", "actor_uid"),
+        Index("idx_event_occurred", "occurred_at"),
+    )
+
+
+class FcUserPreference(Base):
+    __tablename__ = "fc_user_preference"
+
+    user_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class FcAiUsage(Base):
+    __tablename__ = "fc_ai_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_cost: Mapped[float] = mapped_column(Integer, nullable=False, default=0)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_ai_usage_user", "user_uid"),
+    )

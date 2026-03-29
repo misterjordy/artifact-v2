@@ -1,0 +1,45 @@
+/* artiFACT design tokens — all theming via CSS variables */
+
+:root {
+  /* Backgrounds */
+  --color-bg:          #f8f9fa;
+  --color-bg-sidebar:  #1e293b;
+  --color-bg-topbar:   #ffffff;
+  --color-bg-card:     #ffffff;
+  --color-bg-input:    #ffffff;
+  --color-bg-hover:    rgba(255, 255, 255, 0.08);
+  --color-bg-active:   rgba(255, 255, 255, 0.12);
+
+  /* Text */
+  --color-text:        #1e293b;
+  --color-text-muted:  #64748b;
+  --color-text-sidebar:#cbd5e1;
+  --color-text-sidebar-heading: #94a3b8;
+
+  /* Accent / brand */
+  --color-accent:      #2563eb;
+  --color-accent-hover:#1d4ed8;
+  --color-accent-light:#dbeafe;
+
+  /* Borders */
+  --color-border:      #e2e8f0;
+  --color-border-input:#cbd5e1;
+
+  /* Status */
+  --color-success:     #16a34a;
+  --color-warning:     #d97706;
+  --color-danger:      #dc2626;
+
+  /* Sidebar dimensions */
+  --sidebar-width:     272px;
+
+  /* Typography */
+  --font-sans:         'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:         'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Scrollbar styling for sidebar */
+.sidebar-scroll::-webkit-scrollbar { width: 4px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }

@@ -1,0 +1,100 @@
+"""Event bus subscriber — records events to fc_event_log."""
+
+from artiFACT.kernel.events import subscribe
+from artiFACT.kernel.models import FcEventLog
+
+_pending_events: list[FcEventLog] = []
+
+
+def get_pending_events() -> list[FcEventLog]:
+    """Return pending events and clear the buffer."""
+    events = list(_pending_events)
+    _pending_events.clear()
+    return events
+
+
+def _compute_reverse(event_type: str, payload: dict) -> dict | None:
+    """Compute reverse_payload for undoable events."""
+    if event_type == "fact.retired":
+        return {"action": "unretire", "fact_uid": payload["fact_uid"]}
+    if event_type == "fact.moved":
+        return {
+            "action": "move",
+            "fact_uid": payload["fact_uid"],
+            "target_node_uid": payload["old_node_uid"],
+        }
+    if event_type in ("version.rejected",):
+        return {
+            "action": "unreject",
+            "version_uid": payload["version_uid"],
+            "restore_state": "proposed",
+        }
+    return None
+
+
+async def _record_fact_event(payload: dict) -> None:
+    """Record a fact-related event."""
+    event_type = payload.get("event_type", "fact.created")
+    reverse = _compute_reverse(event_type, payload)
+    event = FcEventLog(
+        entity_type="fact",
+        entity_uid=payload["fact_uid"],
+        event_type=event_type,
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        reversible=reverse is not None,
+        reverse_payload=reverse,
+    )
+    _pending_events.append(event)
+
+
+async def _record_fact_created(payload: dict) -> None:
+    payload_with_type = {**payload, "event_type": "fact.created"}
+    await _record_fact_event(payload_with_type)
+
+
+async def _record_fact_edited(payload: dict) -> None:
+    payload_with_type = {**payload, "event_type": "fact.edited"}
+    await _record_fact_event(payload_with_type)
+
+
+async def _record_fact_retired(payload: dict) -> None:
+    payload_with_type = {**payload, "event_type": "fact.retired"}
+    await _record_fact_event(payload_with_type)
+
+
+async def _record_fact_unretired(payload: dict) -> None:
+    payload_with_type = {**payload, "event_type": "fact.unretired"}
+    await _record_fact_event(payload_with_type)
+
+
+async def _record_fact_moved(payload: dict) -> None:
+    payload_with_type = {**payload, "event_type": "fact.moved"}
+    await _record_fact_event(payload_with_type)
+
+
+async def _record_version_event(payload: dict) -> None:
+    event_type = f"version.{payload.get('new_state', 'unknown')}"
+    reverse = _compute_reverse(event_type, payload)
+    event = FcEventLog(
+        entity_type="version",
+        entity_uid=payload["version_uid"],
+        event_type=event_type,
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        reversible=reverse is not None,
+        reverse_payload=reverse,
+    )
+    _pending_events.append(event)
+
+
+def register_subscribers() -> None:
+    """Register all audit event subscribers. Call at app startup."""
+    subscribe("fact.created", _record_fact_created)
+    subscribe("fact.edited", _record_fact_edited)
+    subscribe("fact.retired", _record_fact_retired)
+    subscribe("fact.unretired", _record_fact_unretired)
+    subscribe("fact.moved", _record_fact_moved)
+    subscribe("version.published", _record_version_event)
+    subscribe("version.rejected", _record_version_event)
+    subscribe("version.signed", _record_version_event)
