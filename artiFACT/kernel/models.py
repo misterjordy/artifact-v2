@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     Index,
@@ -16,7 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import BYTEA, JSONB, UUID
+from sqlalchemy.dialects.postgresql import BYTEA, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -267,6 +268,10 @@ class FcFactVersion(Base):
     signed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    search_vector = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', display_sentence)", persisted=True),
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -276,6 +281,7 @@ class FcFactVersion(Base):
         ),
         Index("idx_version_fact", "fact_uid"),
         Index("idx_version_state", "state"),
+        Index("idx_version_search", "search_vector", postgresql_using="gin"),
         Index("idx_version_created_by", "created_by_uid"),
     )
 

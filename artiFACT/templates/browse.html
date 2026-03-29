@@ -46,6 +46,12 @@
     <!-- Top bar -->
     <header class="flex items-center justify-between px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-topbar)]">
       <h1 class="text-sm font-semibold text-slate-800">Browse</h1>
+      <form hx-get="/partials/search" hx-target="#center-pane" hx-swap="innerHTML" class="flex items-center gap-2">
+        <input type="text" name="q" placeholder="Search facts..."
+               class="text-sm px-3 py-1.5 border border-[var(--color-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent">
+        <button type="submit"
+                class="text-sm px-3 py-1.5 bg-accent text-white rounded-md hover:bg-accent-hover">Search</button>
+      </form>
     </header>
 
     <!-- Center pane -->

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from artiFACT.kernel.models import Base, FcFact, FcFactVersion, FcNode, FcNodePermission, FcUser
 from artiFACT.modules.audit.recorder import register_subscribers
+from artiFACT.modules.search.acronym_miner import register_subscribers as register_search_subscribers
 
 TEST_DATABASE_URL = "postgresql+asyncpg://artifact:artifact_dev@postgres:5432/artifact_test"
 
@@ -185,6 +186,7 @@ def _register_audit_subscribers():
     _subscribers.clear()
     _pending_events.clear()
     register_subscribers()
+    register_search_subscribers()
 
 
 @pytest.fixture(autouse=True)
