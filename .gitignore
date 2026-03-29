@@ -17,3 +17,4 @@ htmlcov/
 .coverage
 sbom.json
 audit.json
+.claude/
