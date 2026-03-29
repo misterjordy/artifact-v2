@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en" class="h-full eyecare">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}artiFACT{% endblock %}</title>
+  <script>
+    (function(){
+      var t = localStorage.getItem('artifact-theme') || 'eyecare';
+      document.documentElement.className =
+        document.documentElement.className.replace(/eyecare|dark|default/g,'') + ' ' + t;
+    })();
+  </script>
   <link rel="stylesheet" href="/static/theme.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/static/js/tailwind-config.js"></script>
@@ -18,8 +25,8 @@
     <!-- Sidebar -->
     <aside class="flex flex-col w-[var(--sidebar-width)] flex-shrink-0 bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)]">
       <!-- Sidebar header / brand -->
-      <div class="flex items-center px-4 py-4 border-b border-white/10">
-        <a href="/browse" class="text-base font-bold tracking-wide text-white">artiFACT</a>
+      <div class="flex items-center px-4 py-4 border-b border-[var(--color-border)]/10">
+        <a href="/browse" class="text-base font-bold tracking-wide text-[var(--color-text-sidebar-bright)]">artiFACT</a>
       </div>
 
       <!-- Primary nav -->
@@ -27,48 +34,48 @@
         {% block sidebar_top %}{% endblock %}
         <a href="/browse"
            class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                  {% if active_nav == 'browse' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                  {% if active_nav == 'browse' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
           Browse
         </a>
         <a href="/queue"
            class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                  {% if active_nav == 'queue' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                  {% if active_nav == 'queue' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 5h6"/></svg>
           Queue
           {% if badge_total is defined and badge_total %}
-          <span id="nav-badge" class="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-[var(--color-accent)] text-white">{{ badge_total }}</span>
+          <span id="nav-badge" class="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">{{ badge_total }}</span>
           {% endif %}
         </a>
         <a href="/import"
            class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                  {% if active_nav == 'import' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                  {% if active_nav == 'import' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
           Import
         </a>
         <a href="/chat"
            class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                  {% if active_nav == 'chat' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                  {% if active_nav == 'chat' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
           AI Chat
         </a>
         <a href="/export"
            class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                  {% if active_nav == 'export' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                  {% if active_nav == 'export' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Export
         </a>
 
-        <div class="pt-4 mt-4 border-t border-white/10">
+        <div class="pt-4 mt-4 border-t border-[var(--color-border)]/10">
           <a href="/admin"
              class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                    {% if active_nav == 'admin' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                    {% if active_nav == 'admin' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
             Admin
           </a>
           <a href="/settings"
              class="flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors
-                    {% if active_nav == 'settings' %}bg-[var(--color-bg-active)] text-white font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-white{% endif %}">
+                    {% if active_nav == 'settings' %}bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium{% else %}text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"/><circle cx="12" cy="12" r="3"/></svg>
             Settings
           </a>
@@ -76,11 +83,11 @@
       </nav>
 
       <!-- Sidebar footer -->
-      <div class="border-t border-white/10 px-4 py-3">
+      <div class="border-t border-[var(--color-border)]/10 px-4 py-3">
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--color-text-sidebar-heading)] truncate">{% block user_display %}{{ user.display_name if user is defined }}{% endblock %}</span>
           <a id="logout-link" href="#"
-             class="text-xs text-[var(--color-text-sidebar-heading)] hover:text-white transition-colors">
+             class="text-xs text-[var(--color-text-sidebar-heading)] hover:text-[var(--color-text-sidebar-bright)] transition-colors">
             Sign out
           </a>
         </div>
@@ -91,15 +98,18 @@
     <div class="flex flex-col flex-1 min-w-0">
       <!-- Top bar -->
       <header class="flex items-center justify-between px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-topbar)]">
-        <h1 class="text-sm font-semibold text-slate-800">{% block page_heading %}{% endblock %}</h1>
+        <h1 class="text-sm font-semibold text-[var(--color-text)]">{% block page_heading %}{% endblock %}</h1>
         <div class="flex items-center gap-3">
           {% block header_actions %}{% endblock %}
+          <a href="/settings" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title="Settings">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"/><circle cx="12" cy="12" r="3"/></svg>
+          </a>
         </div>
       </header>
 
       <!-- Playground banner -->
       {% if playground_mode %}
-      <div class="flex items-center justify-between px-4 py-2 text-sm font-medium bg-amber-100 border-b border-amber-200 text-slate-800">
+      <div class="flex items-center justify-between px-4 py-2 text-sm font-medium bg-amber-100 border-b border-amber-200 text-[var(--color-text)]">
         <span>&#127917; Playground Mode — You are <strong>{{ user.display_name if user is defined }}</strong></span>
         <div class="flex items-center gap-2">
           <form action="/playground/reset" method="post" class="inline">
@@ -110,7 +120,7 @@
           </form>
           <form action="/playground/exit" method="post" class="inline">
             <button type="submit"
-                    class="px-3 py-1 text-xs font-semibold rounded bg-slate-200 hover:bg-slate-300 transition-colors">
+                    class="px-3 py-1 text-xs font-semibold rounded bg-[var(--color-border)] hover:opacity-80 transition-colors">
               Exit
             </button>
           </form>

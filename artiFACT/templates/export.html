@@ -8,20 +8,20 @@
 <div x-data="exportPage()" class="max-w-5xl mx-auto space-y-8">
 
   <!-- Factsheet Export -->
-  <section class="bg-white rounded-lg border border-[var(--color-border)] p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Factsheet Export</h2>
-    <p class="text-sm text-slate-500 mb-4">Download facts as TXT, JSON, NDJSON, or CSV.</p>
+  <section class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
+    <h2 class="text-lg font-semibold text-[var(--color-text)] mb-4">Factsheet Export</h2>
+    <p class="text-sm text-[var(--color-text-muted)] mb-4">Download facts as TXT, JSON, NDJSON, or CSV.</p>
     <div class="flex flex-wrap gap-4 items-end">
       <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Program Node UID</label>
+        <label class="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Program Node UID</label>
         <input type="text" x-model="factsheetNodeUid"
-               class="w-72 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
+               class="w-72 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg-input)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
                placeholder="Enter node UID">
       </div>
       <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Format</label>
+        <label class="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Format</label>
         <select x-model="factsheetFormat"
-                class="px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white">
+                class="px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg-input)]">
           <option value="json">JSON</option>
           <option value="txt">TXT</option>
           <option value="ndjson">NDJSON</option>
@@ -29,34 +29,34 @@
         </select>
       </div>
       <button @click="downloadFactsheet()"
-              class="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity">
+              class="px-4 py-2 text-sm font-medium text-[var(--color-text-on-accent)] bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity">
         Download
       </button>
     </div>
   </section>
 
   <!-- Document Generation -->
-  <section class="bg-white rounded-lg border border-[var(--color-border)] p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Document Generation</h2>
-    <p class="text-sm text-slate-500 mb-4">Select a template and program to generate a DOCX document.</p>
+  <section class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
+    <h2 class="text-lg font-semibold text-[var(--color-text)] mb-4">Document Generation</h2>
+    <p class="text-sm text-[var(--color-text-muted)] mb-4">Select a template and program to generate a DOCX document.</p>
     <div class="flex flex-wrap gap-4 items-end">
       <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Program Node UID</label>
+        <label class="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Program Node UID</label>
         <input type="text" x-model="docgenNodeUid"
-               class="w-72 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
+               class="w-72 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg-input)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
                placeholder="Enter node UID">
       </div>
       <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Template</label>
+        <label class="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Template</label>
         <select x-model="docgenTemplateUid"
-                class="px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white">
+                class="px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg-input)]">
           <template x-for="t in templates" :key="t.template_uid">
             <option :value="t.template_uid" x-text="t.name + ' (' + t.abbreviation + ')'"></option>
           </template>
         </select>
       </div>
       <button @click="generateDocument()"
-              class="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity"
+              class="px-4 py-2 text-sm font-medium text-[var(--color-text-on-accent)] bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity"
               :disabled="generating">
         <span x-show="!generating">Generate DOCX</span>
         <span x-show="generating">Generating...</span>
@@ -65,40 +65,40 @@
 
     <!-- Progress -->
     <div x-show="generating || docReady" class="mt-4">
-      <div class="w-full bg-slate-200 rounded-full h-2">
+      <div class="w-full bg-[var(--color-border)] rounded-full h-2">
         <div class="bg-[var(--color-accent)] h-2 rounded-full transition-all"
              :style="'width: ' + progress + '%'"></div>
       </div>
-      <p class="text-xs text-slate-500 mt-1" x-text="progressStage"></p>
+      <p class="text-xs text-[var(--color-text-muted)] mt-1" x-text="progressStage"></p>
       <a x-show="downloadUrl" :href="downloadUrl"
-         class="inline-block mt-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors">
+         class="inline-block mt-2 px-4 py-2 text-sm font-medium text-[var(--color-text-on-accent)] bg-[var(--color-success)] rounded-md hover:opacity-90 transition-colors">
         Download Document
       </a>
     </div>
   </section>
 
   <!-- Views (Prefilter Preview) -->
-  <section class="bg-white rounded-lg border border-[var(--color-border)] p-6">
-    <h2 class="text-lg font-semibold text-slate-800 mb-4">Views — Assignment Preview</h2>
-    <p class="text-sm text-slate-500 mb-4">Preview which facts AI would assign to each template section.</p>
+  <section class="bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-6">
+    <h2 class="text-lg font-semibold text-[var(--color-text)] mb-4">Views — Assignment Preview</h2>
+    <p class="text-sm text-[var(--color-text-muted)] mb-4">Preview which facts AI would assign to each template section.</p>
     <div class="flex flex-wrap gap-4 items-end">
       <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Program Node UID</label>
+        <label class="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Program Node UID</label>
         <input type="text" x-model="viewsNodeUid"
-               class="w-72 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
+               class="w-72 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg-input)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
                placeholder="Enter node UID">
       </div>
       <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Template</label>
+        <label class="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Template</label>
         <select x-model="viewsTemplateUid"
-                class="px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-white">
+                class="px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg-input)]">
           <template x-for="t in templates" :key="t.template_uid">
             <option :value="t.template_uid" x-text="t.name + ' (' + t.abbreviation + ')'"></option>
           </template>
         </select>
       </div>
       <button @click="runPreview()"
-              class="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity">
+              class="px-4 py-2 text-sm font-medium text-[var(--color-text-on-accent)] bg-[var(--color-accent)] rounded-md hover:opacity-90 transition-opacity">
         Preview
       </button>
     </div>
@@ -107,11 +107,11 @@
     <div x-show="viewsResult" class="mt-4 space-y-3">
       <template x-for="section in viewsResult?.assignments || []" :key="section.section_key">
         <div class="border border-[var(--color-border)] rounded-md p-3">
-          <h3 class="text-sm font-semibold text-slate-700" x-text="section.section_title"></h3>
-          <p class="text-xs text-slate-400 mb-2" x-text="section.facts.length + ' facts assigned'"></p>
+          <h3 class="text-sm font-semibold text-[var(--color-text)]" x-text="section.section_title"></h3>
+          <p class="text-xs text-[var(--color-text-muted)] mb-2" x-text="section.facts.length + ' facts assigned'"></p>
           <ul class="space-y-1">
             <template x-for="fact in section.facts" :key="fact.seq">
-              <li class="text-xs text-slate-600" x-text="fact.sentence"></li>
+              <li class="text-xs text-[var(--color-text-muted)]" x-text="fact.sentence"></li>
             </template>
           </ul>
         </div>

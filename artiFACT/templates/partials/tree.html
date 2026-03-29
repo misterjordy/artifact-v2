@@ -2,7 +2,7 @@
 <div class="group" x-data="{ open: true }" style="padding-left: {{ level * 16 }}px">
   <div class="flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors">
     {% if node.children %}
-    <button class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-[10px] text-slate-400 hover:text-white"
+    <button class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-[10px] text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]"
             @click="open = !open" aria-label="Toggle">
       <span x-text="open ? '\u25BE' : '\u25B8'"></span>
     </button>
@@ -10,7 +10,7 @@
     <span class="flex-shrink-0 w-4 h-4"></span>
     {% endif %}
 
-    <a class="flex-1 truncate text-[13px] text-[var(--color-text-sidebar)] hover:text-white cursor-pointer transition-colors"
+    <a class="flex-1 truncate text-[13px] text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] cursor-pointer transition-colors"
        hx-get="/partials/browse/{{ node.node_uid }}"
        hx-target="#center-pane"
        hx-swap="innerHTML">{{ node.title }}</a>
@@ -19,14 +19,14 @@
     {% if can_manage_uids and nuid in can_manage_uids or can_contribute_uids and nuid in can_contribute_uids %}
     <span class="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
       {% if can_manage_uids and nuid in can_manage_uids %}
-      <button class="px-1 py-0.5 text-[10px] rounded text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+      <button class="px-1 py-0.5 text-[10px] rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
               title="Add node"
               hx-get="/partials/node-form?parent={{ node.node_uid }}"
               hx-target="#modal"
               hx-swap="innerHTML">+node</button>
       {% endif %}
       {% if can_contribute_uids and nuid in can_contribute_uids %}
-      <button class="px-1 py-0.5 text-[10px] rounded text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+      <button class="px-1 py-0.5 text-[10px] rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
               title="Add fact"
               hx-get="/partials/fact-form?node={{ node.node_uid }}"
               hx-target="#modal"
@@ -51,7 +51,7 @@
 {{ render_node(node) }}
 {% endfor %}
 {% else %}
-<div class="px-2 py-8 text-center text-xs text-slate-500">
+<div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">
   No nodes yet. Create one to get started.
 </div>
 {% endif %}

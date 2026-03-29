@@ -1,41 +1,98 @@
 /* artiFACT design tokens — all theming via CSS variables */
+/* Three modes: eyecare (default, 508-compliant), dark, default */
 
+/* Shared non-color tokens */
 :root {
-  /* Backgrounds */
-  --color-bg:          #f8f9fa;
-  --color-bg-sidebar:  #1e293b;
-  --color-bg-topbar:   #ffffff;
-  --color-bg-card:     #ffffff;
-  --color-bg-input:    #ffffff;
-  --color-bg-hover:    rgba(255, 255, 255, 0.08);
-  --color-bg-active:   rgba(255, 255, 255, 0.12);
-
-  /* Text */
-  --color-text:        #1e293b;
-  --color-text-muted:  #64748b;
-  --color-text-sidebar:#cbd5e1;
-  --color-text-sidebar-heading: #94a3b8;
-
-  /* Accent / brand */
-  --color-accent:      #2563eb;
-  --color-accent-hover:#1d4ed8;
-  --color-accent-light:#dbeafe;
-
-  /* Borders */
-  --color-border:      #e2e8f0;
-  --color-border-input:#cbd5e1;
-
-  /* Status */
-  --color-success:     #16a34a;
-  --color-warning:     #d97706;
-  --color-danger:      #dc2626;
-
-  /* Sidebar dimensions */
   --sidebar-width:     272px;
-
-  /* Typography */
   --font-sans:         'Inter', system-ui, -apple-system, sans-serif;
   --font-mono:         'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── Eyecare (default — WCAG AA 508-compliant) ─────────────── */
+html.eyecare {
+  --color-bg:            #EDE3D1;
+  --color-bg-card:       #F5EDE0;
+  --color-bg-sidebar:    #5C3636;
+  --color-bg-topbar:     #F5EDE0;
+  --color-bg-input:      #F5EDE0;
+  --color-bg-hover:      rgba(255, 255, 255, 0.08);
+  --color-bg-active:     rgba(255, 255, 255, 0.12);
+  --color-text:          #2E2418;
+  --color-text-muted:    #6B5D4F;
+  --color-text-sidebar:  #F0E0C8;
+  --color-text-sidebar-heading: #C8B8A0;
+  --color-text-sidebar-bright: #FFFFFF;
+  --color-text-on-accent: #FFFFFF;
+  --color-accent:        #3A6EA5;
+  --color-accent-hover:  #2D5A8A;
+  --color-accent-light:  #D4E8F5;
+  --color-accent-gold:   #D4A843;
+  --color-success:       #5A8C3A;
+  --color-warning:       #C8943A;
+  --color-danger:        #C84040;
+  --color-info:          #7B5EA7;
+  --color-tag:           #3A8B8B;
+  --color-border:        #D4C8B4;
+  --color-border-input:  #C8B8A0;
+  --color-header-bg:     #2D2D2D;
+}
+
+/* ── Dark ───────────────────────────────────────────────────── */
+html.dark {
+  --color-bg:            #1E1E30;
+  --color-bg-card:       #282840;
+  --color-bg-sidebar:    #161625;
+  --color-bg-topbar:     #282840;
+  --color-bg-input:      #1E1E30;
+  --color-bg-hover:      rgba(255, 255, 255, 0.06);
+  --color-bg-active:     rgba(255, 255, 255, 0.10);
+  --color-text:          #D0D0E0;
+  --color-text-muted:    #8888A0;
+  --color-text-sidebar:  #8A8AA0;
+  --color-text-sidebar-heading: #6A6A80;
+  --color-text-sidebar-bright: #D0D0E0;
+  --color-text-on-accent: #FFFFFF;
+  --color-accent:        #6090D0;
+  --color-accent-hover:  #4A78B8;
+  --color-accent-light:  #2A3A50;
+  --color-accent-gold:   #C0A050;
+  --color-success:       #50A050;
+  --color-warning:       #D09040;
+  --color-danger:        #D06060;
+  --color-info:          #7060A0;
+  --color-tag:           #5090A0;
+  --color-border:        #3A3A50;
+  --color-border-input:  #4A4A60;
+  --color-header-bg:     #141420;
+}
+
+/* ── Default (original v2 theme) ────────────────────────────── */
+html.default {
+  --color-bg:            #f8f9fa;
+  --color-bg-card:       #ffffff;
+  --color-bg-sidebar:    #1e293b;
+  --color-bg-topbar:     #ffffff;
+  --color-bg-input:      #ffffff;
+  --color-bg-hover:      rgba(255, 255, 255, 0.08);
+  --color-bg-active:     rgba(255, 255, 255, 0.12);
+  --color-text:          #1e293b;
+  --color-text-muted:    #64748b;
+  --color-text-sidebar:  #cbd5e1;
+  --color-text-sidebar-heading: #94a3b8;
+  --color-text-sidebar-bright: #ffffff;
+  --color-text-on-accent: #ffffff;
+  --color-accent:        #2563eb;
+  --color-accent-hover:  #1d4ed8;
+  --color-accent-light:  #dbeafe;
+  --color-accent-gold:   #d97706;
+  --color-success:       #16a34a;
+  --color-warning:       #d97706;
+  --color-danger:        #dc2626;
+  --color-info:          #7c3aed;
+  --color-tag:           #0d9488;
+  --color-border:        #e2e8f0;
+  --color-border-input:  #cbd5e1;
+  --color-header-bg:     #1e293b;
 }
 
 /* Scrollbar styling for sidebar */
@@ -43,3 +100,20 @@
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* 508 — Focus indicators for all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(58, 110, 165, 0.25);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

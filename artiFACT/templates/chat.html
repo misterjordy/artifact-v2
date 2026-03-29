@@ -40,7 +40,7 @@
   <div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages">
     <template x-for="(msg, i) in messages" :key="i">
       <div :class="msg.role === 'user'
-        ? 'ml-auto bg-[var(--color-accent)] text-white rounded-lg px-4 py-2 max-w-[70%]'
+        ? 'ml-auto bg-[var(--color-accent)] text-[var(--color-text-on-accent)] rounded-lg px-4 py-2 max-w-[70%]'
         : 'mr-auto bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-2 max-w-[70%]'">
         <div class="text-sm whitespace-pre-wrap" x-text="msg.content"></div>
       </div>
@@ -64,7 +64,7 @@
       >
       <button
         type="submit"
-        class="bg-[var(--color-accent)] text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors"
+        class="bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-6 py-2 rounded-lg text-sm font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors"
         :disabled="!input.trim() || streaming"
       >Send</button>
     </form>

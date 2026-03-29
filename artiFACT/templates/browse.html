@@ -8,15 +8,6 @@
 
 {% block page_heading %}Browse{% endblock %}
 
-{% block header_actions %}
-<form hx-get="/partials/search" hx-target="#center-pane" hx-swap="innerHTML" class="flex items-center gap-2">
-  <input type="text" name="q" placeholder="Search facts..."
-         class="text-sm px-3 py-1.5 border border-[var(--color-border)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent">
-  <button type="submit"
-          class="text-sm px-3 py-1.5 bg-accent text-white rounded-md hover:bg-accent-hover transition-colors">Search</button>
-</form>
-{% endblock %}
-
 {% block sidebar_top %}
 <!-- Taxonomy section label -->
 <div class="px-1 pb-2">
@@ -29,10 +20,10 @@
 <div id="tree-container"
      class="mb-4 -mx-2 px-2"
      hx-get="/partials/tree" hx-trigger="load, refreshTree from:body" hx-swap="innerHTML">
-  <div class="px-2 py-8 text-center text-xs text-slate-500">Loading tree&hellip;</div>
+  <div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">Loading tree&hellip;</div>
 </div>
 
-<div class="border-t border-white/10 pt-3 mt-1">
+<div class="border-t border-[var(--color-border)]/10 pt-3 mt-1">
   <span class="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)]">
     Navigation
   </span>

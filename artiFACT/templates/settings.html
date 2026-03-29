@@ -10,6 +10,53 @@
 
 {% block content %}
 <div class="max-w-3xl" x-data="settingsApp()">
+  <!-- Theme Section -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-4">Theme</h2>
+    <p class="text-sm text-[var(--color-text-muted)] mb-4">
+      Choose your preferred display mode. Eyecare is optimized for extended reading with WCAG AA contrast.
+    </p>
+    <div x-data="themeToggle()" class="flex items-center gap-2">
+      <!-- Eyecare (Sun) -->
+      <button @click="setTheme('eyecare')"
+              :class="currentTheme === 'eyecare' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] ring-2 ring-[var(--color-accent)]' : 'bg-[var(--color-bg-card)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+              class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              title="Eyecare">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        Eyecare
+      </button>
+      <!-- Dark (Moon) -->
+      <button @click="setTheme('dark')"
+              :class="currentTheme === 'dark' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] ring-2 ring-[var(--color-accent)]' : 'bg-[var(--color-bg-card)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+              class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              title="Dark">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          <circle cx="18" cy="5" r="1" fill="currentColor" stroke="none"></circle>
+          <circle cx="20" cy="9" r="0.6" fill="currentColor" stroke="none"></circle>
+        </svg>
+        Dark
+      </button>
+      <!-- Default (Eye) -->
+      <button @click="setTheme('default')"
+              :class="currentTheme === 'default' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] ring-2 ring-[var(--color-accent)]' : 'bg-[var(--color-bg-card)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+              class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              title="Default">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        Default
+      </button>
+    </div>
+  </section>
+
   <!-- AI API Keys Section -->
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-4">AI API Keys</h2>
@@ -67,7 +114,7 @@
       <div class="flex items-center gap-3">
         <button
           type="submit"
-          class="bg-[var(--color-accent)] text-white px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
+          class="bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-4 py-2 rounded text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
           :disabled="!form.api_key"
         >Save Key</button>
         <span x-show="saveMsg" class="text-sm text-[var(--color-success)]" x-text="saveMsg"></span>

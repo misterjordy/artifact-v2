@@ -4,7 +4,7 @@
   <p class="text-xs text-[var(--color-text-muted)] mb-4">{{ results|length }} result{{ 's' if results|length != 1 }} found</p>
   <div class="space-y-4">
     {% for r in results %}
-    <div class="border border-[var(--color-border)] rounded-lg p-4 bg-white">
+    <div class="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-bg-card)]">
       <div class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] mb-2">
         {% for b in r.breadcrumb %}
           {% if not loop.first %}<span class="mx-0.5">/</span>{% endif %}

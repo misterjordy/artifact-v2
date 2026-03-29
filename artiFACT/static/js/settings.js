@@ -1,5 +1,17 @@
 "use strict";
 
+function themeToggle() {
+  return {
+    currentTheme: localStorage.getItem("artifact-theme") || "eyecare",
+    setTheme: function (theme) {
+      this.currentTheme = theme;
+      document.documentElement.classList.remove("eyecare", "dark", "default");
+      document.documentElement.classList.add(theme);
+      localStorage.setItem("artifact-theme", theme);
+    },
+  };
+}
+
 function settingsApp() {
   var csrfToken = document.cookie
     .split("; ")
