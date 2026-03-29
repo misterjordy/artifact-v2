@@ -1,0 +1,151 @@
+"""Queue API endpoints."""
+
+import uuid
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from artiFACT.kernel.auth.middleware import get_current_user
+from artiFACT.kernel.db import get_db
+from artiFACT.kernel.models import FcUser
+from artiFACT.modules.audit.service import flush_pending_events
+from artiFACT.modules.queue.badge_counter import get_badge_count
+from artiFACT.modules.queue.proposal_query import get_move_proposals, get_proposals, get_unsigned
+from artiFACT.modules.queue.revision import revise_and_publish
+from artiFACT.modules.queue.schemas import (
+    ApproveRequest,
+    BadgeCountOut,
+    MoveProposalOut,
+    ProposalOut,
+    RejectRequest,
+    ReviseRequest,
+)
+from artiFACT.modules.queue.scope_resolver import get_approvable_nodes
+from artiFACT.modules.queue.service import approve_move, approve_proposal, reject_move, reject_proposal
+
+router = APIRouter(prefix="/api/v1/queue", tags=["queue"])
+
+
+@router.get("/proposals")
+async def list_proposals(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Pending proposals for current user's scope."""
+    approvable = await get_approvable_nodes(db, user)
+    rows = await get_proposals(db, list(approvable.keys()))
+    data = [ProposalOut(**row).model_dump(mode="json") for row in rows]
+    return {"data": data, "total": len(data)}
+
+
+@router.get("/moves")
+async def list_moves(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Pending move proposals."""
+    approvable = await get_approvable_nodes(db, user)
+    rows = await get_move_proposals(db, list(approvable.keys()))
+    data = [MoveProposalOut(**row).model_dump(mode="json") for row in rows]
+    return {"data": data, "total": len(data)}
+
+
+@router.get("/unsigned")
+async def list_unsigned(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Facts awaiting signature."""
+    approvable = await get_approvable_nodes(db, user)
+    rows = await get_unsigned(db, list(approvable.keys()))
+    data = [ProposalOut(**row).model_dump(mode="json") for row in rows]
+    return {"data": data, "total": len(data)}
+
+
+@router.get("/counts")
+async def badge_counts(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> BadgeCountOut:
+    """Badge counts (cached in Redis)."""
+    approvable = await get_approvable_nodes(db, user)
+    node_uids = list(approvable.keys())
+    proposals_count = await get_badge_count(db, user.user_uid, node_uids)
+    moves = await get_move_proposals(db, node_uids)
+    return BadgeCountOut(
+        proposals=proposals_count,
+        moves=len(moves),
+        total=proposals_count + len(moves),
+    )
+
+
+@router.post("/approve/{version_uid}")
+async def approve(
+    version_uid: uuid.UUID,
+    body: ApproveRequest = ApproveRequest(),
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Approve a proposed version."""
+    version = await approve_proposal(db, version_uid, user, note=body.note)
+    await flush_pending_events(db)
+    await db.commit()
+    return {"status": "approved", "version_uid": str(version.version_uid)}
+
+
+@router.post("/reject/{version_uid}")
+async def reject(
+    version_uid: uuid.UUID,
+    body: RejectRequest = RejectRequest(),
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Reject a proposed version."""
+    version = await reject_proposal(db, version_uid, user, note=body.note)
+    await flush_pending_events(db)
+    await db.commit()
+    return {"status": "rejected", "version_uid": str(version.version_uid)}
+
+
+@router.post("/revise/{version_uid}")
+async def revise(
+    version_uid: uuid.UUID,
+    body: ReviseRequest,
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Revise language: reject original + publish revised (atomic)."""
+    revised = await revise_and_publish(
+        db, version_uid, body.revised_sentence, user, note=body.note
+    )
+    await flush_pending_events(db)
+    await db.commit()
+    return {"status": "revised", "version_uid": str(revised.version_uid)}
+
+
+@router.post("/approve-move/{event_uid}")
+async def approve_move_endpoint(
+    event_uid: uuid.UUID,
+    body: ApproveRequest = ApproveRequest(),
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Approve a move proposal."""
+    fact = await approve_move(db, event_uid, user, note=body.note)
+    await flush_pending_events(db)
+    await db.commit()
+    return {"status": "move_approved", "fact_uid": str(fact.fact_uid)}
+
+
+@router.post("/reject-move/{event_uid}")
+async def reject_move_endpoint(
+    event_uid: uuid.UUID,
+    body: RejectRequest = RejectRequest(),
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict:
+    """Reject a move proposal."""
+    await reject_move(db, event_uid, user, note=body.note)
+    await flush_pending_events(db)
+    await db.commit()
+    return {"status": "move_rejected"}

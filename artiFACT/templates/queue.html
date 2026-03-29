@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}artiFACT — Queue{% endblock %}
+
+{% block head %}
+<script src="/static/js/queue.js" defer></script>
+{% endblock %}
+
+{% block body %}
+<div class="flex h-full">
+  <!-- Sidebar -->
+  <aside class="flex flex-col w-[var(--sidebar-width)] flex-shrink-0 bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)]">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <span class="text-sm font-bold tracking-wide text-white">artiFACT</span>
+    </div>
+
+    <nav class="flex-1 px-2 pt-4 space-y-1">
+      <a href="/browse"
+         class="flex items-center px-3 py-2 text-sm rounded-md text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] transition-colors">
+        Browse
+      </a>
+      <a href="/queue"
+         class="flex items-center px-3 py-2 text-sm rounded-md bg-[var(--color-bg-active)] text-white font-medium">
+        Queue
+        <span id="nav-badge" class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-[var(--color-accent)] text-white">
+          {{ badge_total }}
+        </span>
+      </a>
+    </nav>
+
+    <div class="border-t border-white/10 px-4 py-3">
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-[var(--color-text-sidebar-heading)] truncate">{{ user.display_name }}</span>
+        <a id="logout-link" href="#"
+           class="text-xs text-[var(--color-text-sidebar-heading)] hover:text-white transition-colors">
+          Sign out
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="flex flex-col flex-1 min-w-0">
+    <header class="flex items-center justify-between px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-topbar)]">
+      <h1 class="text-sm font-semibold text-slate-800">Approval Queue</h1>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-6" x-data="queuePage()">
+      <!-- Tab bar -->
+      <div class="flex space-x-1 mb-6 border-b border-[var(--color-border)]">
+        <button @click="tab='proposals'" :class="tab==='proposals' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors">
+          Proposals <span class="ml-1 text-xs" x-text="'('+proposals.length+')'"></span>
+        </button>
+        <button @click="tab='moves'" :class="tab==='moves' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors">
+          Moves <span class="ml-1 text-xs" x-text="'('+moves.length+')'"></span>
+        </button>
+        <button @click="tab='unsigned'" :class="tab==='unsigned' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'"
+                class="px-4 py-2 text-sm font-medium border-b-2 transition-colors">
+          Unsigned <span class="ml-1 text-xs" x-text="'('+unsigned.length+')'"></span>
+        </button>
+      </div>
+
+      <!-- Proposals pane -->
+      <div x-show="tab==='proposals'" class="space-y-3">
+        <template x-if="proposals.length === 0">
+          <p class="text-sm text-[var(--color-text-muted)]">No pending proposals.</p>
+        </template>
+        <template x-for="p in proposals" :key="p.version_uid">
+          <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg p-4">
+            <div class="flex items-start justify-between">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-[var(--color-text)]" x-text="p.display_sentence"></p>
+                <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+                  <span x-text="p.node_title"></span> &middot;
+                  <span x-text="p.created_by_name || 'Unknown'"></span> &middot;
+                  <span x-text="new Date(p.created_at).toLocaleDateString()"></span>
+                </p>
+              </div>
+              <span class="ml-2 inline-block px-2 py-0.5 text-xs rounded"
+                    :class="p.classification === 'UNCLASSIFIED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
+                    x-text="p.classification"></span>
+            </div>
+            <div class="mt-3 flex items-center space-x-2">
+              <button @click="approveVersion(p.version_uid)"
+                      class="px-3 py-1.5 text-xs font-medium text-white bg-[var(--color-success)] rounded hover:opacity-90 transition-opacity">
+                Approve
+              </button>
+              <button @click="rejectVersion(p.version_uid)"
+                      class="px-3 py-1.5 text-xs font-medium text-white bg-[var(--color-danger)] rounded hover:opacity-90 transition-opacity">
+                Reject
+              </button>
+              <button @click="openRevise(p)"
+                      class="px-3 py-1.5 text-xs font-medium text-[var(--color-accent)] border border-[var(--color-accent)] rounded hover:bg-[var(--color-accent-light)] transition-colors">
+                Revise Language
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Moves pane -->
+      <div x-show="tab==='moves'" class="space-y-3">
+        <template x-if="moves.length === 0">
+          <p class="text-sm text-[var(--color-text-muted)]">No pending move proposals.</p>
+        </template>
+        <template x-for="m in moves" :key="m.event_uid">
+          <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg p-4">
+            <p class="text-sm font-medium text-[var(--color-text)]" x-text="m.display_sentence"></p>
+            <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+              Move from <span class="font-medium" x-text="m.source_node_title"></span>
+              to <span class="font-medium" x-text="m.target_node_title"></span>
+              &middot; <span x-text="m.actor_name || 'Unknown'"></span>
+            </p>
+            <div class="mt-3 flex items-center space-x-2">
+              <button @click="approveMove(m.event_uid)"
+                      class="px-3 py-1.5 text-xs font-medium text-white bg-[var(--color-success)] rounded hover:opacity-90 transition-opacity">
+                Approve Move
+              </button>
+              <button @click="rejectMove(m.event_uid)"
+                      class="px-3 py-1.5 text-xs font-medium text-white bg-[var(--color-danger)] rounded hover:opacity-90 transition-opacity">
+                Reject Move
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Unsigned pane -->
+      <div x-show="tab==='unsigned'" class="space-y-3">
+        <template x-if="unsigned.length === 0">
+          <p class="text-sm text-[var(--color-text-muted)]">No unsigned facts.</p>
+        </template>
+        <template x-for="u in unsigned" :key="u.version_uid">
+          <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg p-4">
+            <p class="text-sm font-medium text-[var(--color-text)]" x-text="u.display_sentence"></p>
+            <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+              <span x-text="u.node_title"></span> &middot;
+              <span x-text="u.created_by_name || 'Unknown'"></span>
+            </p>
+          </div>
+        </template>
+      </div>
+
+      <!-- Revise modal -->
+      <div x-show="revising" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="revising=false">
+        <div class="bg-[var(--color-bg-card)] rounded-lg shadow-xl p-6 w-full max-w-lg">
+          <h2 class="text-sm font-semibold mb-3">Revise Language</h2>
+          <p class="text-xs text-[var(--color-text-muted)] mb-2">Original:</p>
+          <p class="text-sm mb-4 p-2 bg-gray-50 rounded" x-text="reviseOriginal"></p>
+          <textarea x-model="reviseSentence" rows="3"
+                    class="w-full border border-[var(--color-border-input)] rounded px-3 py-2 text-sm bg-[var(--color-bg-input)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                    placeholder="Enter revised sentence..."></textarea>
+          <textarea x-model="reviseNote" rows="2"
+                    class="w-full mt-2 border border-[var(--color-border-input)] rounded px-3 py-2 text-sm bg-[var(--color-bg-input)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                    placeholder="Note (optional)"></textarea>
+          <div class="mt-4 flex justify-end space-x-2">
+            <button @click="revising=false"
+                    class="px-4 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+              Cancel
+            </button>
+            <button @click="submitRevise()"
+                    class="px-4 py-2 text-xs font-medium text-white bg-[var(--color-accent)] rounded hover:bg-[var(--color-accent-hover)] transition-colors">
+              Submit Revision
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+{% endblock %}

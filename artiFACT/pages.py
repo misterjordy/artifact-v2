@@ -14,6 +14,8 @@ from artiFACT.kernel.auth.session import validate_session
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.kernel.schemas import NodeOut
+from artiFACT.modules.queue.badge_counter import get_badge_count
+from artiFACT.modules.queue.scope_resolver import get_approvable_nodes
 from artiFACT.modules.taxonomy.tree_serializer import get_breadcrumb
 
 router = APIRouter(tags=["pages"])
@@ -33,6 +35,18 @@ async def login_page(
         if user:
             return RedirectResponse("/browse", status_code=302)
     html = _jinja.get_template("login.html").render()
+    return HTMLResponse(html)
+
+
+@router.get("/queue", response_class=HTMLResponse)
+async def queue_page(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> HTMLResponse:
+    """Queue view with tabs for proposals, moves, unsigned."""
+    approvable = await get_approvable_nodes(db, user)
+    badge_total = await get_badge_count(db, user.user_uid, list(approvable.keys()))
+    html = _jinja.get_template("queue.html").render(user=user, badge_total=badge_total)
     return HTMLResponse(html)
 
 
