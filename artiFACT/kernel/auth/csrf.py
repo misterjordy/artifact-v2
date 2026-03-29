@@ -14,7 +14,15 @@ from artiFACT.kernel.config import settings
 
 CSRF_COOKIE_NAME = "csrf_token"
 CSRF_HEADER_NAME = "x-csrf-token"
-EXEMPT_PATHS = {"/api/v1/auth/login", "/api/v1/health", "/playground/enter", "/playground/reset", "/playground/exit"}
+EXEMPT_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/health",
+    "/playground/enter",
+    "/playground/reset",
+    "/playground/exit",
+    "/partials/fact-form",
+    "/partials/node-form",
+}
 STATE_CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 

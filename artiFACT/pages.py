@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -312,6 +313,8 @@ async def fact_form_get(
     user: FcUser = Depends(get_current_user),
 ) -> HTMLResponse:
     """Render the add-fact form partial."""
+    if not await can(user, "contribute", node, db):
+        raise Forbidden("You do not have permission to add facts here.")
     node_obj = await db.get(FcNode, node)
     node_title = node_obj.title if node_obj else "Unknown"
     html = _jinja.get_template("partials/fact_form.html").render(
@@ -319,7 +322,7 @@ async def fact_form_get(
         node_title=node_title,
         error=None,
         sentence_value="",
-        effective_date_value="",
+        effective_date_value=date.today().isoformat(),
         classification_value="UNCLASSIFIED",
     )
     return HTMLResponse(html)
@@ -336,7 +339,7 @@ async def fact_form_post(
 ) -> HTMLResponse:
     """Handle add-fact form submission."""
     sentence = sentence.strip()
-    effective_date = effective_date.strip() or None
+    effective_date = effective_date.strip() or date.today().isoformat()
     nuid = uuid.UUID(node_uid)
 
     if not sentence or len(sentence) < 10:
