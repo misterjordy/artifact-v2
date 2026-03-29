@@ -16,6 +16,7 @@ from artiFACT.modules.search.acronym_miner import register_subscribers as regist
 from artiFACT.modules.search.router import partials_router as search_partials_router
 from artiFACT.modules.search.router import router as search_router
 from artiFACT.modules.ai_chat.router import router as ai_chat_router
+from artiFACT.modules.import_pipeline.router import router as import_router
 from artiFACT.modules.signing.router import router as signing_router
 from artiFACT.modules.taxonomy.router import partials_router as taxonomy_partials_router
 from artiFACT.modules.taxonomy.router import router as taxonomy_router
@@ -38,6 +39,7 @@ app.include_router(search_router)
 app.include_router(search_partials_router)
 app.include_router(signing_router)
 app.include_router(ai_chat_router)
+app.include_router(import_router)
 app.include_router(pages_router)
 
 register_audit_subscribers()

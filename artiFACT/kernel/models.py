@@ -351,6 +351,49 @@ class FcSignature(Base):
     )
 
 
+class FcImportSession(Base):
+    __tablename__ = "fc_import_session"
+
+    session_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    program_node_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_node.node_uid", ondelete="RESTRICT"), nullable=False
+    )
+    source_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    granularity: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
+    effective_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    staged_facts_s3: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "granularity IN ('brief','standard','exhaustive')",
+            name="ck_import_granularity",
+        ),
+        CheckConstraint(
+            "status IN ('pending','analyzing','staged','proposed','approved','rejected','failed')",
+            name="ck_import_status",
+        ),
+        Index("idx_import_program", "program_node_uid"),
+        Index("idx_import_hash", "source_hash"),
+    )
+
+
 class FcAiUsage(Base):
     __tablename__ = "fc_ai_usage"
 

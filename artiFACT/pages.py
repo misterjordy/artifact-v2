@@ -64,6 +64,13 @@ async def chat_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     return HTMLResponse(html)
 
 
+@router.get("/import", response_class=HTMLResponse)
+async def import_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+    """Document import page."""
+    html = _jinja.get_template("import.html").render(user=user)
+    return HTMLResponse(html)
+
+
 @router.get("/browse", response_class=HTMLResponse)
 async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """Main browse view with tree in left pane."""
