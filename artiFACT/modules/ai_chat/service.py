@@ -4,6 +4,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from typing import Any, Literal, overload
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,8 +44,8 @@ async def chat(
     user: FcUser,
     message: str,
     node_uid: uuid.UUID | None,
-    history: list[dict],
-) -> dict:
+    history: list[dict[str, str]],
+) -> dict[str, Any]:
     """Non-streaming chat: returns full response dict."""
     await check_rate(str(user.user_uid), "api_write")
 
@@ -131,7 +132,7 @@ async def chat_stream(
     user: FcUser,
     message: str,
     node_uid: uuid.UUID | None,
-    history: list[dict],
+    history: list[dict[str, str]],
 ) -> AsyncIterator[str]:
     """Streaming chat: yields SSE-formatted chunks."""
     await check_rate(str(user.user_uid), "api_write")
@@ -206,10 +207,34 @@ async def chat_stream(
     )
 
 
+@overload
 async def _call_provider(
     key_row: FcUserAiKey,
     plaintext_key: str,
-    messages: list[dict],
+    messages: list[dict[str, str]],
+    *,
+    stream: Literal[False] = ...,
+    timeout: int = ...,
+    max_tokens: int = ...,
+) -> str: ...
+
+
+@overload
+async def _call_provider(
+    key_row: FcUserAiKey,
+    plaintext_key: str,
+    messages: list[dict[str, str]],
+    *,
+    stream: Literal[True],
+    timeout: int = ...,
+    max_tokens: int = ...,
+) -> AsyncIterator[str]: ...
+
+
+async def _call_provider(
+    key_row: FcUserAiKey,
+    plaintext_key: str,
+    messages: list[dict[str, str]],
     *,
     stream: bool = False,
     timeout: int = 120,
@@ -229,7 +254,7 @@ async def _call_provider(
 
 async def _call_openai(
     api_key: str,
-    messages: list[dict],
+    messages: list[dict[str, str]],
     model: str,
     stream: bool,
     timeout: int,
@@ -255,12 +280,12 @@ async def _call_openai(
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        return str(data["choices"][0]["message"]["content"])
 
 
 async def _stream_openai(
-    headers: dict,
-    body: dict,
+    headers: dict[str, str],
+    body: dict[str, Any],
     timeout: int,
 ) -> AsyncIterator[str]:
     """Stream OpenAI response chunks."""
@@ -286,7 +311,7 @@ async def _stream_openai(
 
 async def _call_anthropic(
     api_key: str,
-    messages: list[dict],
+    messages: list[dict[str, str]],
     model: str,
     stream: bool,
     timeout: int,
@@ -326,12 +351,12 @@ async def _call_anthropic(
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["content"][0]["text"]
+        return str(data["content"][0]["text"])
 
 
 async def _stream_anthropic(
-    headers: dict,
-    body: dict,
+    headers: dict[str, str],
+    body: dict[str, Any],
     timeout: int,
 ) -> AsyncIterator[str]:
     """Stream Anthropic response chunks."""

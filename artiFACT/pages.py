@@ -2,6 +2,7 @@
 
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -97,7 +98,7 @@ async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     return HTMLResponse(html)
 
 
-async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dict]:
+async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dict[str, Any]]:
     """Load non-retired facts for a node with their current version info."""
     stmt = (
         select(FcFact)

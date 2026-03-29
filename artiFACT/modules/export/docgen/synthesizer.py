@@ -1,9 +1,12 @@
 """AI text synthesis per section — streaming via AI provider."""
 
+from collections.abc import Awaitable, Callable
+from typing import Any
+
 
 async def synthesize_section(
-    ai_call: object,
-    facts: list[dict],
+    ai_call: Callable[[str], Awaitable[str]],
+    facts: list[dict[str, Any]],
     section_prompt: str,
     section_title: str,
 ) -> str:

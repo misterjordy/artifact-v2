@@ -1,6 +1,6 @@
 """Tests for fact creation."""
 
-from unittest.mock import AsyncMock, patch
+import uuid
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,30 +11,27 @@ from artiFACT.modules.facts.service import create_fact
 
 async def test_create_sets_created_by(db: AsyncSession, admin_user, child_node):
     """Regression test for v1 F-DATA-01: created_by_uid must always be set."""
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, version = await create_fact(
-            db, child_node.node_uid, "This is a test fact sentence.", admin_user
-        )
+    fact, version = await create_fact(
+        db, child_node.node_uid, f"Test fact created_by check {uuid.uuid4().hex[:8]}.", admin_user
+    )
     assert fact.created_by_uid == admin_user.user_uid
     assert version.created_by_uid == admin_user.user_uid
 
 
 async def test_contributor_creates_proposed(db: AsyncSession, contributor_user, child_node):
     """A contributor should create facts in 'proposed' state."""
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, version = await create_fact(
-            db, child_node.node_uid, "Contributor creates proposed fact.", contributor_user
-        )
+    fact, version = await create_fact(
+        db, child_node.node_uid, f"Contributor creates proposed fact {uuid.uuid4().hex[:8]}.", contributor_user
+    )
     assert version.state == "proposed"
     assert version.published_at is None
 
 
 async def test_approver_creates_published(db: AsyncSession, approver_user, child_node):
     """An approver should auto-publish facts they create."""
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, version = await create_fact(
-            db, child_node.node_uid, "Approver creates published fact.", approver_user
-        )
+    fact, version = await create_fact(
+        db, child_node.node_uid, f"Approver creates published fact {uuid.uuid4().hex[:8]}.", approver_user
+    )
     assert version.state == "published"
     assert version.published_at is not None
     assert fact.current_published_version_uid == version.version_uid

@@ -3,14 +3,16 @@
 import uuid
 from datetime import datetime
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
 class DashboardMetrics(BaseModel):
-    users: dict
-    facts: dict
-    queue: dict
-    system: dict
+    users: dict[str, Any]
+    facts: dict[str, Any]
+    queue: dict[str, Any]
+    system: dict[str, Any]
 
 
 class UserListOut(BaseModel):
@@ -39,7 +41,7 @@ class RoleUpdate(BaseModel):
 
 class ConfigOut(BaseModel):
     key: str
-    value: dict
+    value: dict[str, Any]
     updated_at: datetime
     updated_by_uid: uuid.UUID | None = None
 
@@ -47,7 +49,7 @@ class ConfigOut(BaseModel):
 
 
 class ConfigUpdate(BaseModel):
-    value: dict
+    value: dict[str, Any]
 
 
 class ModuleHealthOut(BaseModel):

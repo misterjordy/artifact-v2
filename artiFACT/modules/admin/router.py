@@ -1,6 +1,7 @@
 """Admin-only API endpoints: dashboard, user management, config, health, cache, snapshots."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -175,7 +176,7 @@ async def reactivate_user(
 async def modules_health(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     _require_admin(user)
     return await get_module_health(db)
 
@@ -237,7 +238,7 @@ async def cache_stats(
 async def flush_cache(
     user: FcUser = Depends(get_current_user),
     category: str | None = Query(None, description="Flush pattern: permissions, badges, or all"),
-) -> dict:
+) -> dict[str, Any]:
     _require_admin(user)
 
     if category == "permissions":

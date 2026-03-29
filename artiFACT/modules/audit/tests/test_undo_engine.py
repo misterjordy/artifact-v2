@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.exceptions import Conflict, Forbidden
 from artiFACT.kernel.models import FcEventLog
+from artiFACT.modules.facts.service import create_fact, retire_fact
 
 
 def _mock_can_contributor():
@@ -31,13 +32,10 @@ async def test_undo_checks_current_permission(
     can no longer approve. Undo should fail based on CURRENT permission, not
     the permission at event time.
     """
-    from artiFACT.modules.facts.service import create_fact, retire_fact
-
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, _ = await create_fact(
-            db, child_node.node_uid, "Fact for undo permission test here.", approver_user
-        )
-        await db.flush()
+    fact, _ = await create_fact(
+        db, child_node.node_uid, f"Fact for undo permission test {uuid.uuid4().hex[:8]}.", approver_user
+    )
+    await db.flush()
 
     await retire_fact(db, fact.fact_uid, approver_user)
     await db.flush()
@@ -90,13 +88,10 @@ def test_no_public_undo_record_endpoint():
 
 async def test_collision_detected_on_stale_undo(db: AsyncSession, admin_user, child_node):
     """Undo should fail if entity state has changed since the event."""
-    from artiFACT.modules.facts.service import create_fact, retire_fact
-
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, _ = await create_fact(
-            db, child_node.node_uid, "Fact for collision test in audit.", admin_user
-        )
-        await db.flush()
+    fact, _ = await create_fact(
+        db, child_node.node_uid, f"Fact for collision test in audit {uuid.uuid4().hex[:8]}.", admin_user
+    )
+    await db.flush()
 
     await retire_fact(db, fact.fact_uid, admin_user)
     await db.flush()

@@ -3,6 +3,8 @@
 import uuid
 from datetime import datetime
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -39,7 +41,7 @@ class TemplateOut(BaseModel):
     name: str
     abbreviation: str
     description: str | None
-    sections: list[dict]
+    sections: list[dict[str, Any]]
     is_active: bool
     created_by_uid: uuid.UUID | None
     created_at: datetime
@@ -78,7 +80,7 @@ class ViewsRequest(BaseModel):
 class SectionAssignment(BaseModel):
     section_key: str
     section_title: str
-    facts: list[dict]
+    facts: list[dict[str, Any]]
 
 
 class ViewsOut(BaseModel):
@@ -93,7 +95,7 @@ class SyncChangeOut(BaseModel):
     change_type: str
     entity_type: str
     entity_uid: uuid.UUID
-    snapshot: dict
+    snapshot: dict[str, Any]
 
 
 class DeltaFeedOut(BaseModel):
@@ -105,11 +107,11 @@ class DeltaFeedOut(BaseModel):
 class FullDumpOut(BaseModel):
     exported_at: datetime
     schema_version: str = "2.0"
-    nodes: list[dict]
-    facts: list[dict]
-    versions: list[dict]
-    signatures: list[dict]
-    users: list[dict]
-    templates: list[dict]
-    events: list[dict]
+    nodes: list[dict[str, Any]]
+    facts: list[dict[str, Any]]
+    versions: list[dict[str, Any]]
+    signatures: list[dict[str, Any]]
+    users: list[dict[str, Any]]
+    templates: list[dict[str, Any]]
+    events: list[dict[str, Any]]
     cursor: int

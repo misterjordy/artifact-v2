@@ -1,6 +1,7 @@
 """Facts API endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -41,7 +42,7 @@ async def list_facts(
     state: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-) -> dict:
+) -> dict[str, Any]:
     """List facts, optionally filtered by node and/or state."""
     stmt = select(FcFact).where(FcFact.is_retired.is_(False))
     if node_uid:
@@ -108,7 +109,7 @@ async def list_versions(
     fact_uid: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Return version history for a fact."""
     versions = await get_fact_versions(db, fact_uid)
     data = [VersionOut.model_validate(v) for v in versions]
@@ -218,7 +219,7 @@ async def bulk_retire_endpoint(
     body: BulkRetireRequest,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Retire multiple facts. All-or-nothing."""
     retired = await bulk_retire(db, body.fact_uids, user)
     await flush_pending_events(db)
@@ -231,7 +232,7 @@ async def bulk_move_endpoint(
     body: BulkMoveRequest,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Move multiple facts. All-or-nothing."""
     moved = await bulk_move(db, body.fact_uids, body.target_node_uid, user)
     await flush_pending_events(db)

@@ -3,6 +3,8 @@
 from datetime import date, datetime
 from uuid import UUID
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -31,7 +33,7 @@ class StagedFact(BaseModel):
     index: int
     sentence: str
     metadata_tags: list[str] = []
-    source_reference: dict | None = None
+    source_reference: dict[str, Any] | None = None
     duplicate_of: str | None = None
     similarity: float | None = None
     accepted: bool = True
@@ -58,4 +60,4 @@ class RecommendLocationRequest(BaseModel):
 
 
 class RecommendLocationOut(BaseModel):
-    recommendations: list[dict]
+    recommendations: list[dict[str, Any]]

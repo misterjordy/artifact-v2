@@ -2,6 +2,8 @@
 
 import uuid
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +32,7 @@ async def create_template(
     db: AsyncSession,
     name: str,
     abbreviation: str,
-    sections: list[dict],
+    sections: list[dict[str, Any]],
     actor: FcUser,
     description: str | None = None,
 ) -> FcDocumentTemplate:
@@ -50,7 +52,7 @@ async def create_template(
 async def update_template(
     db: AsyncSession,
     template_uid: uuid.UUID,
-    updates: dict,
+    updates: dict[str, Any],
 ) -> FcDocumentTemplate:
     """Update an existing template."""
     tpl = await get_template(db, template_uid)

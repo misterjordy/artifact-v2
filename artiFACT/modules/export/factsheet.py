@@ -4,6 +4,7 @@ import csv
 import io
 import json
 from collections.abc import AsyncIterator
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.kernel.permissions.resolver import can
 
 
-async def _expand_nodes(db: AsyncSession, node_uids: list) -> list:
+async def _expand_nodes(db: AsyncSession, node_uids: list[Any]) -> list[Any]:
     """Expand node UIDs to include all descendants."""
     all_uids = set(node_uids)
     for uid in node_uids:
@@ -22,7 +23,7 @@ async def _expand_nodes(db: AsyncSession, node_uids: list) -> list:
     return list(all_uids)
 
 
-async def _get_descendants(db: AsyncSession, node_uid: object) -> list:
+async def _get_descendants(db: AsyncSession, node_uid: object) -> list[Any]:
     """Get all descendant node UIDs recursively."""
     cte = (
         select(FcNode.node_uid)
@@ -39,8 +40,8 @@ async def _get_descendants(db: AsyncSession, node_uid: object) -> list:
 
 
 async def load_facts_for_export(
-    db: AsyncSession, node_uids: list, state_filter: list[str]
-) -> list[dict]:
+    db: AsyncSession, node_uids: list[Any], state_filter: list[str]
+) -> list[dict[str, Any]]:
     """Load facts with their current published version, filtered by node and state."""
     expanded = await _expand_nodes(db, node_uids)
     stmt = (
@@ -74,24 +75,24 @@ async def load_facts_for_export(
     return facts
 
 
-async def stream_txt(facts: list[dict]) -> AsyncIterator[str]:
+async def stream_txt(facts: list[dict[str, Any]]) -> AsyncIterator[str]:
     """Stream facts as plain text."""
     for f in facts:
         yield f"[{f['seq']}] [{f['node']}] {f['sentence']}\n"
 
 
-async def stream_json(facts: list[dict]) -> AsyncIterator[str]:
+async def stream_json(facts: list[dict[str, Any]]) -> AsyncIterator[str]:
     """Stream facts as JSON array."""
     yield json.dumps(facts, default=str, indent=2)
 
 
-async def stream_ndjson(facts: list[dict]) -> AsyncIterator[str]:
+async def stream_ndjson(facts: list[dict[str, Any]]) -> AsyncIterator[str]:
     """Stream facts as newline-delimited JSON."""
     for f in facts:
         yield json.dumps(f, default=str) + "\n"
 
 
-async def stream_csv(facts: list[dict]) -> AsyncIterator[str]:
+async def stream_csv(facts: list[dict[str, Any]]) -> AsyncIterator[str]:
     """Stream facts as CSV."""
     if not facts:
         return
@@ -111,7 +112,7 @@ async def stream_csv(facts: list[dict]) -> AsyncIterator[str]:
 async def export_facts(
     db: AsyncSession,
     fmt: str,
-    node_uids: list,
+    node_uids: list[Any],
     state_filter: list[str],
     actor: FcUser,
 ) -> AsyncIterator[str]:

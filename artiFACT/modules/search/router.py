@@ -1,6 +1,7 @@
 """Search API endpoints and HTMX partial."""
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
@@ -27,7 +28,7 @@ async def search(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
-) -> dict:
+) -> dict[str, Any]:
     """Full-text search across published/signed facts."""
     results = await search_facts(db, q, limit=limit)
     return {
@@ -40,7 +41,7 @@ async def search(
 async def acronyms(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Return extracted acronyms from the fact corpus."""
     entries = await mine_acronyms(db)
     return {"data": entries, "total": len(entries)}

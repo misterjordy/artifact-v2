@@ -52,9 +52,7 @@ omit = [
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
-warn_return_any = false
-warn_unused_configs = true
-disallow_any_generics = false
+strict = true
 exclude = [
     "tests/",
     "migrations/",
@@ -74,14 +72,3 @@ module = [
     "docx.*",
 ]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = [
-    "artiFACT.modules.export.docgen.*",
-    "artiFACT.modules.import_pipeline.analyzer",
-    "artiFACT.modules.import_pipeline.location_recommender",
-    "artiFACT.modules.queue.scope_resolver",
-    "artiFACT.modules.search.acronym_miner",
-    "artiFACT.modules.ai_chat.service",
-]
-ignore_errors = true

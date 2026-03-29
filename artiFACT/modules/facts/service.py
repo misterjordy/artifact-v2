@@ -1,6 +1,7 @@
 """Core business logic for fact CRUD operations."""
 
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -28,8 +29,8 @@ async def create_fact(
     sentence: str,
     actor: FcUser,
     *,
-    metadata_tags: list | None = None,
-    source_reference: dict | None = None,
+    metadata_tags: list[str] | None = None,
+    source_reference: dict[str, Any] | None = None,
     effective_date: str | None = None,
     classification: str = "UNCLASSIFIED",
 ) -> tuple[FcFact, FcFactVersion]:
@@ -85,8 +86,8 @@ async def edit_fact(
     sentence: str,
     actor: FcUser,
     *,
-    metadata_tags: list | None = None,
-    source_reference: dict | None = None,
+    metadata_tags: list[str] | None = None,
+    source_reference: dict[str, Any] | None = None,
     effective_date: str | None = None,
     classification: str = "UNCLASSIFIED",
     change_summary: str | None = None,

@@ -2,6 +2,8 @@
 
 import uuid
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from artiFACT.kernel.schemas import NodeOut
@@ -29,4 +31,4 @@ class NodeDetail(NodeOut):
 
 class TreeOut(BaseModel):
     flat: list[NodeOut]
-    nested: list[dict]
+    nested: list[dict[str, Any]]

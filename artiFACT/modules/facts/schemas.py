@@ -1,6 +1,7 @@
 """Pydantic input/output models for facts."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -10,7 +11,7 @@ class FactCreate(BaseModel):
     node_uid: UUID
     sentence: str = Field(min_length=10, max_length=2000)
     metadata_tags: list[str] = []
-    source_reference: dict | None = None
+    source_reference: dict[str, Any] | None = None
     effective_date: str | None = None
     classification: str = "UNCLASSIFIED"
 
@@ -18,7 +19,7 @@ class FactCreate(BaseModel):
 class FactUpdate(BaseModel):
     sentence: str = Field(min_length=10, max_length=2000)
     metadata_tags: list[str] = []
-    source_reference: dict | None = None
+    source_reference: dict[str, Any] | None = None
     effective_date: str | None = None
     classification: str = "UNCLASSIFIED"
     change_summary: str | None = None
@@ -29,8 +30,8 @@ class VersionOut(BaseModel):
     fact_uid: UUID
     state: str
     display_sentence: str
-    metadata_tags: list = []
-    source_reference: dict | None = None
+    metadata_tags: list[str] = []
+    source_reference: dict[str, Any] | None = None
     effective_date: str | None = None
     classification: str = "UNCLASSIFIED"
     change_summary: str | None = None

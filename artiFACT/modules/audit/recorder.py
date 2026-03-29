@@ -1,5 +1,7 @@
 """Event bus subscriber — records events to fc_event_log."""
 
+from typing import Any
+
 from artiFACT.kernel.events import subscribe
 from artiFACT.kernel.models import FcEventLog
 
@@ -13,7 +15,7 @@ def get_pending_events() -> list[FcEventLog]:
     return events
 
 
-def _compute_reverse(event_type: str, payload: dict) -> dict | None:
+def _compute_reverse(event_type: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     """Compute reverse_payload for undoable events."""
     if event_type == "fact.retired":
         return {"action": "unretire", "fact_uid": payload["fact_uid"]}
@@ -32,7 +34,7 @@ def _compute_reverse(event_type: str, payload: dict) -> dict | None:
     return None
 
 
-async def _record_fact_event(payload: dict) -> None:
+async def _record_fact_event(payload: dict[str, Any]) -> None:
     """Record a fact-related event."""
     event_type = payload.get("event_type", "fact.created")
     reverse = _compute_reverse(event_type, payload)
@@ -48,32 +50,32 @@ async def _record_fact_event(payload: dict) -> None:
     _pending_events.append(event)
 
 
-async def _record_fact_created(payload: dict) -> None:
+async def _record_fact_created(payload: dict[str, Any]) -> None:
     payload_with_type = {**payload, "event_type": "fact.created"}
     await _record_fact_event(payload_with_type)
 
 
-async def _record_fact_edited(payload: dict) -> None:
+async def _record_fact_edited(payload: dict[str, Any]) -> None:
     payload_with_type = {**payload, "event_type": "fact.edited"}
     await _record_fact_event(payload_with_type)
 
 
-async def _record_fact_retired(payload: dict) -> None:
+async def _record_fact_retired(payload: dict[str, Any]) -> None:
     payload_with_type = {**payload, "event_type": "fact.retired"}
     await _record_fact_event(payload_with_type)
 
 
-async def _record_fact_unretired(payload: dict) -> None:
+async def _record_fact_unretired(payload: dict[str, Any]) -> None:
     payload_with_type = {**payload, "event_type": "fact.unretired"}
     await _record_fact_event(payload_with_type)
 
 
-async def _record_fact_moved(payload: dict) -> None:
+async def _record_fact_moved(payload: dict[str, Any]) -> None:
     payload_with_type = {**payload, "event_type": "fact.moved"}
     await _record_fact_event(payload_with_type)
 
 
-async def _record_signature_created(payload: dict) -> None:
+async def _record_signature_created(payload: dict[str, Any]) -> None:
     """Record a signature.created event."""
     event = FcEventLog(
         entity_type="signature",
@@ -87,7 +89,7 @@ async def _record_signature_created(payload: dict) -> None:
     _pending_events.append(event)
 
 
-async def _record_version_event(payload: dict) -> None:
+async def _record_version_event(payload: dict[str, Any]) -> None:
     event_type = f"version.{payload.get('new_state', 'unknown')}"
     reverse = _compute_reverse(event_type, payload)
     event = FcEventLog(

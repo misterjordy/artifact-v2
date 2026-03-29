@@ -2,6 +2,8 @@
 
 import json
 import uuid
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,8 +23,8 @@ async def preview_assignments(
     node_uids: list[uuid.UUID],
     template_uid: uuid.UUID,
     actor: FcUser,
-    ai_call: object | None = None,
-) -> dict:
+    ai_call: Callable[[str], Awaitable[str]] | None = None,
+) -> dict[str, Any]:
     """Run prefilter only (no synthesis) to show which facts would go where.
 
     Returns template info + section assignments.

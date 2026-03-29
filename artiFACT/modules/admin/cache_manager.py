@@ -1,13 +1,15 @@
 """Redis cache operations: stats, selective flush."""
 
+from typing import Any
+
 import redis.asyncio as aioredis
 
 from artiFACT.kernel.config import settings
 
 
-async def get_cache_stats() -> dict:
+async def get_cache_stats() -> dict[str, Any]:
     """Return Redis memory, client, and hit/miss stats."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)  # type: ignore[no-untyped-call]  # redis stub gap
     try:
         info = await r.info("memory", "clients", "stats", "keyspace")
         db_info = info.get("db0", {})
@@ -26,9 +28,9 @@ async def get_cache_stats() -> dict:
 
 async def flush_all() -> int:
     """Flush all Redis keys. Returns count of flushed keys."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)  # type: ignore[no-untyped-call]  # redis stub gap
     try:
-        count = await r.dbsize()
+        count: int = await r.dbsize()
         await r.flushdb()
         return count
     finally:
@@ -37,7 +39,7 @@ async def flush_all() -> int:
 
 async def flush_by_pattern(pattern: str) -> int:
     """Flush keys matching a glob pattern (e.g. 'permissions:*')."""
-    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)  # type: ignore[no-untyped-call]  # redis stub gap
     try:
         count = 0
         async for key in r.scan_iter(match=pattern):

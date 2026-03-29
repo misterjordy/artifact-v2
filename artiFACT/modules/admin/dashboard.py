@@ -3,6 +3,8 @@
 import time
 from datetime import datetime, timedelta, timezone
 
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +14,7 @@ from artiFACT.modules.admin.system_info import get_app_version, get_deploy_sha, 
 _START_TIME = time.monotonic()
 
 
-async def get_dashboard(db: AsyncSession) -> dict:
+async def get_dashboard(db: AsyncSession) -> dict[str, Any]:
     """Return aggregate dashboard metrics."""
     now = datetime.now(timezone.utc)
 

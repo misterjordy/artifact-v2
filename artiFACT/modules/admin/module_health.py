@@ -1,5 +1,7 @@
 """Per-module health checks: DB, Redis, S3 connectivity."""
 
+from typing import Any
+
 import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +22,7 @@ async def check_db(db: AsyncSession) -> bool:
 async def check_redis() -> bool:
     """Verify Redis connectivity."""
     try:
-        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)  # type: ignore[no-untyped-call]  # redis stub gap
         await r.ping()
         await r.aclose()
         return True
@@ -38,7 +40,7 @@ def check_s3() -> bool:
         return False
 
 
-async def get_module_health(db: AsyncSession) -> list[dict]:
+async def get_module_health(db: AsyncSession) -> list[dict[str, Any]]:
     """Return health status for each module's dependencies."""
     db_ok = await check_db(db)
     redis_ok = await check_redis()

@@ -1,7 +1,9 @@
 """Import pipeline API endpoints."""
 
 import json
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -56,7 +58,7 @@ async def trigger_analysis(
     session_uid: UUID,
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Trigger AI extraction as a background Celery task."""
     await check_rate(str(user.user_uid), "api_write")
 
@@ -93,8 +95,8 @@ async def stream_progress(
     import redis.asyncio as aioredis
     from artiFACT.kernel.config import settings
 
-    async def event_stream():
-        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    async def event_stream() -> AsyncIterator[str]:
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)  # type: ignore[no-untyped-call]  # redis stub gap
         pubsub = r.pubsub()
         await pubsub.subscribe(f"import:{session_uid}")
         try:
@@ -156,7 +158,7 @@ async def discard_staged(
     session_uid: UUID,
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Discard staged facts."""
     session = await db.get(FcImportSession, session_uid)
     if not session:

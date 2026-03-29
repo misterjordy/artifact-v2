@@ -3,6 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -11,7 +13,7 @@ class EventOut(BaseModel):
     entity_type: str
     entity_uid: UUID
     event_type: str
-    payload: dict | None = None
+    payload: dict[str, Any] | None = None
     actor_uid: UUID | None = None
     note: str | None = None
     occurred_at: datetime

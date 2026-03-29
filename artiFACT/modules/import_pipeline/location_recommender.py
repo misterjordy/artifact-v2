@@ -1,6 +1,7 @@
 """AI-powered node placement recommendation (ONE copy — regression: v1 I-LOW-04)."""
 
 import json
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -26,7 +27,7 @@ async def recommend_locations(
     sentences: list[str],
     program_node_uid: UUID,
     actor: FcUser,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Use AI to recommend node placements for extracted facts."""
     nodes_result = await db.execute(
         select(FcNode).where(FcNode.is_archived.is_(False)).order_by(FcNode.node_depth)
@@ -65,8 +66,9 @@ async def recommend_locations(
     response_text = await _call_provider(ai_key, plaintext_key, messages, stream=False)
 
     try:
+        assert isinstance(response_text, str)
         data = json.loads(response_text)
-        return data.get("recommendations", [])
+        return data.get("recommendations", [])  # type: ignore[no-any-return]  # JSON parsed data
     except (json.JSONDecodeError, TypeError):
         return [
             {

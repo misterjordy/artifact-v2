@@ -1,5 +1,7 @@
 """Jaccard similarity deduplication (ONE copy — regression: v1 I-ARCH-03)."""
 
+from typing import Any
+
 
 def tokenize(text: str) -> set[str]:
     """Split text into lowercase word tokens."""
@@ -16,17 +18,17 @@ def jaccard(set_a: set[str], set_b: set[str]) -> float:
 
 
 def deduplicate(
-    new_facts: list[dict],
-    existing_facts: list[dict],
+    new_facts: list[dict[str, Any]],
+    existing_facts: list[dict[str, Any]],
     threshold: float = 0.85,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Compare new facts against existing corpus, flag duplicates.
 
     Each fact dict must have a 'sentence' key.
     Duplicates get 'duplicate_of' and 'similarity' keys added.
     """
     existing_tokens = [(f, tokenize(f.get("sentence", ""))) for f in existing_facts]
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
 
     for new in new_facts:
         new_tokens = tokenize(new.get("sentence", ""))

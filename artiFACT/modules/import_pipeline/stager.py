@@ -1,12 +1,13 @@
 """Stage extracted facts for user review — write staged JSON to S3."""
 
 import json
+from typing import Any, cast
 from uuid import UUID
 
 from artiFACT.kernel.s3 import download_json, upload_json
 
 
-def stage_facts(session_uid: UUID, facts: list[dict]) -> str:
+def stage_facts(session_uid: UUID, facts: list[dict[str, Any]]) -> str:
     """Write staged facts JSON to S3 and return the S3 key."""
     staged_key = f"imports/{session_uid}/staged.json"
     staged = [
@@ -25,6 +26,6 @@ def stage_facts(session_uid: UUID, facts: list[dict]) -> str:
     return staged_key
 
 
-def load_staged_facts(s3_key: str) -> list[dict]:
+def load_staged_facts(s3_key: str) -> list[dict[str, Any]]:
     """Load staged facts from S3."""
-    return json.loads(download_json(s3_key))
+    return cast(list[dict[str, Any]], json.loads(download_json(s3_key)))

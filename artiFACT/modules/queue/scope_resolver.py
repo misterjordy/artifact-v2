@@ -25,14 +25,14 @@ async def get_approvable_nodes(db: AsyncSession, user: FcUser) -> dict[uuid.UUID
         return {row[0]: "admin" for row in result.all()}
 
     grants = await get_active_grants(db, user.user_uid)
-    result: dict[uuid.UUID, str] = {}
+    node_roles: dict[uuid.UUID, str] = {}
 
     for grant in grants:
         if not role_gte(grant.role, "subapprover"):
             continue
         descendants = await get_descendants(db, grant.node_uid)
         for desc_uid in descendants:
-            if desc_uid not in result or role_gte(grant.role, result[desc_uid]):
-                result[desc_uid] = grant.role
+            if desc_uid not in node_roles or role_gte(grant.role, node_roles[desc_uid]):
+                node_roles[desc_uid] = grant.role
 
-    return result
+    return node_roles

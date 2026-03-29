@@ -3,6 +3,7 @@
 import subprocess
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from artiFACT.kernel.background import app as celery_app
 from artiFACT.kernel.config import settings
@@ -17,8 +18,8 @@ def _get_pg_url() -> str:
     return url
 
 
-@celery_app.task(name="admin.trigger_snapshot")
-def trigger_snapshot(actor_uid_str: str) -> dict:
+@celery_app.task(name="admin.trigger_snapshot")  # type: ignore[misc]  # Celery task decorator is untyped
+def trigger_snapshot(actor_uid_str: str) -> dict[str, Any]:
     """Run pg_dump and upload result to S3."""
     uuid.UUID(actor_uid_str)  # validate format
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")

@@ -1,6 +1,7 @@
 """Queue API endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/api/v1/queue", tags=["queue"])
 async def list_proposals(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Pending proposals for current user's scope."""
     approvable = await get_approvable_nodes(db, user)
     rows = await get_proposals(db, list(approvable.keys()))
@@ -47,7 +48,7 @@ async def list_proposals(
 async def list_moves(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Pending move proposals."""
     approvable = await get_approvable_nodes(db, user)
     rows = await get_move_proposals(db, list(approvable.keys()))
@@ -59,7 +60,7 @@ async def list_moves(
 async def list_unsigned(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Facts awaiting signature."""
     approvable = await get_approvable_nodes(db, user)
     rows = await get_unsigned(db, list(approvable.keys()))
@@ -90,7 +91,7 @@ async def approve(
     body: ApproveRequest = ApproveRequest(),
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Approve a proposed version."""
     version = await approve_proposal(db, version_uid, user, note=body.note)
     await flush_pending_events(db)
@@ -104,7 +105,7 @@ async def reject(
     body: RejectRequest = RejectRequest(),
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Reject a proposed version."""
     version = await reject_proposal(db, version_uid, user, note=body.note)
     await flush_pending_events(db)
@@ -118,7 +119,7 @@ async def revise(
     body: ReviseRequest,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Revise language: reject original + publish revised (atomic)."""
     revised = await revise_and_publish(db, version_uid, body.revised_sentence, user, note=body.note)
     await flush_pending_events(db)
@@ -132,7 +133,7 @@ async def approve_move_endpoint(
     body: ApproveRequest = ApproveRequest(),
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Approve a move proposal."""
     fact = await approve_move(db, event_uid, user, note=body.note)
     await flush_pending_events(db)
@@ -146,7 +147,7 @@ async def reject_move_endpoint(
     body: RejectRequest = RejectRequest(),
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Reject a move proposal."""
     await reject_move(db, event_uid, user, note=body.note)
     await flush_pending_events(db)

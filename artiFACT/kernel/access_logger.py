@@ -2,6 +2,8 @@
 
 import uuid
 
+from typing import Any
+
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +16,7 @@ async def log_data_access(
     db: AsyncSession,
     user_uid: uuid.UUID,
     action: str,
-    detail: dict,
+    detail: dict[str, Any],
 ) -> None:
     """Log data-exfiltration-relevant access events. Non-blocking best-effort.
 

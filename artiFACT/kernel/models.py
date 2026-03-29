@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -130,7 +131,7 @@ class FcSystemConfig(Base):
     __tablename__ = "fc_system_config"
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
-    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -151,7 +152,7 @@ class FcApiKey(Base):
     key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     key_prefix: Mapped[str] = mapped_column(String(8), nullable=False)
     label: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    scopes: Mapped[dict] = mapped_column(JSONB, default=["read"])
+    scopes: Mapped[dict[str, Any]] = mapped_column(JSONB, default=["read"])
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -234,9 +235,9 @@ class FcFactVersion(Base):
     )
     state: Mapped[str] = mapped_column(String(20), nullable=False, default="proposed")
     display_sentence: Mapped[str] = mapped_column(Text, nullable=False)
-    canonical_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    metadata_tags: Mapped[list] = mapped_column(JSONB, default=list)
-    source_reference: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    canonical_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    metadata_tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    source_reference: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     effective_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     last_verified_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     classification: Mapped[str] = mapped_column(String(64), default="UNCLASSIFIED")
@@ -283,7 +284,7 @@ class FcEventLog(Base):
     entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
     entity_uid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     actor_uid: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
     )
@@ -292,7 +293,7 @@ class FcEventLog(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    reverse_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    reverse_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index("idx_event_entity", "entity_uid", "entity_type"),
@@ -309,7 +310,7 @@ class FcUserPreference(Base):
         UUID(as_uuid=True), ForeignKey("fc_user.user_uid", ondelete="CASCADE"), primary_key=True
     )
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
-    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
 class FcSignature(Base):
@@ -385,7 +386,7 @@ class FcDocumentTemplate(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     abbreviation: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    sections: Mapped[list] = mapped_column(JSONB, nullable=False)
+    sections: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True

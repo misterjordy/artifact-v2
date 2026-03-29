@@ -2,8 +2,11 @@
 
 import json
 import uuid
+from typing import Any
 
 import redis
+
+from sqlalchemy.engine import Engine
 
 from artiFACT.kernel.background import app as celery_app
 from artiFACT.kernel.config import settings
@@ -23,7 +26,7 @@ def _publish_progress(
     download_url: str | None = None,
 ) -> None:
     """Publish progress to Redis for SSE consumption."""
-    r = redis.from_url(settings.REDIS_URL)
+    r = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]  # redis stub gap
     data = {
         "session_uid": session_uid,
         "stage": stage,
@@ -34,7 +37,7 @@ def _publish_progress(
     r.set(f"docgen:status:{session_uid}", json.dumps(data), ex=3600)
 
 
-def _get_sync_engine():
+def _get_sync_engine() -> Engine:
     """Get synchronous DB engine for use in Celery tasks."""
     from sqlalchemy import create_engine
 
@@ -42,14 +45,14 @@ def _get_sync_engine():
     return create_engine(sync_url)
 
 
-@celery_app.task(name="export.generate_document")
+@celery_app.task(name="export.generate_document")  # type: ignore[misc]  # Celery task decorator is untyped
 def generate_document(
     session_uid: str,
     node_uids: list[str],
     template_uid: str,
     actor_uid: str,
-    ai_provider_config: dict | None = None,
-) -> dict:
+    ai_provider_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Generate a DOCX document as a background Celery task.
 
     Steps:
@@ -176,7 +179,7 @@ def generate_document(
     _publish_progress(session_uid, "Document ready", 100, download_url=download_url)
 
     # Store metadata for download_manager verification
-    r = redis.from_url(settings.REDIS_URL)
+    r = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]  # redis stub gap
     r.set(
         f"docgen:meta:{session_uid}",
         json.dumps({"actor_uid": actor_uid, "s3_key": s3_key}),

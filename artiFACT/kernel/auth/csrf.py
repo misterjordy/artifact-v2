@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import secrets
 
+from typing import Any
+
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -73,7 +75,7 @@ class CSRFMiddleware:
         await self.app(scope, receive, send)
 
 
-def _json_response(status_code: int, body: dict) -> Response:
+def _json_response(status_code: int, body: dict[str, Any]) -> Response:
     """Build a Starlette JSON response."""
     from starlette.responses import JSONResponse
 

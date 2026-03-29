@@ -1,6 +1,6 @@
 """Tests for audit event recorder."""
 
-from unittest.mock import AsyncMock, patch
+import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,10 +14,9 @@ async def test_event_recorded_on_create(db: AsyncSession, admin_user, child_node
 
     _pending_events.clear()
 
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, version = await create_fact(
-            db, child_node.node_uid, "A recorded fact for testing audit.", admin_user
-        )
+    fact, version = await create_fact(
+        db, child_node.node_uid, f"A recorded fact for testing audit {uuid.uuid4().hex[:8]}.", admin_user
+    )
 
     events = get_pending_events()
     assert len(events) >= 1
@@ -33,11 +32,10 @@ async def test_event_recorded_on_retire(db: AsyncSession, admin_user, child_node
 
     _pending_events.clear()
 
-    with patch("artiFACT.modules.facts.service.validate_duplicate", new_callable=AsyncMock):
-        fact, _ = await create_fact(
-            db, child_node.node_uid, "A fact to retire for audit test.", admin_user
-        )
-        await db.flush()
+    fact, _ = await create_fact(
+        db, child_node.node_uid, f"A fact to retire for audit test {uuid.uuid4().hex[:8]}.", admin_user
+    )
+    await db.flush()
 
     _pending_events.clear()
 

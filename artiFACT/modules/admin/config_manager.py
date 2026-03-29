@@ -3,6 +3,8 @@
 import uuid
 from datetime import datetime, timezone
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +24,7 @@ async def get_config(db: AsyncSession, key: str) -> FcSystemConfig | None:
 
 
 async def upsert_config(
-    db: AsyncSession, key: str, value: dict, actor_uid: uuid.UUID
+    db: AsyncSession, key: str, value: dict[str, Any], actor_uid: uuid.UUID
 ) -> FcSystemConfig:
     """Create or update a config entry and publish audit event."""
     existing = await db.get(FcSystemConfig, key)

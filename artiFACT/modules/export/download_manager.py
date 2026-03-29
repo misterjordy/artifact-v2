@@ -1,6 +1,7 @@
 """S3 presigned URL generation with user-bound verification."""
 
 import json
+from typing import Any
 
 import redis
 
@@ -10,13 +11,13 @@ from artiFACT.kernel.models import FcUser
 from artiFACT.kernel.s3 import get_s3_client
 
 
-def get_download_url(session_uid: str, actor: FcUser) -> dict:
+def get_download_url(session_uid: str, actor: FcUser) -> dict[str, Any]:
     """Generate a presigned URL for a completed document.
 
     Verifies that the requesting user is the one who generated the document.
     URLs expire in 1 hour (3600s).
     """
-    r = redis.from_url(settings.REDIS_URL)
+    r = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]  # redis stub gap
     meta_raw = r.get(f"docgen:meta:{session_uid}")
     if not meta_raw:
         raise NotFound("Document not found or expired", code="DOCUMENT_NOT_FOUND")
@@ -35,10 +36,10 @@ def get_download_url(session_uid: str, actor: FcUser) -> dict:
     return {"url": url, "expires_in": 3600}
 
 
-def get_progress(session_uid: str) -> dict | None:
+def get_progress(session_uid: str) -> dict[str, Any] | None:
     """Get current progress for a document generation session."""
-    r = redis.from_url(settings.REDIS_URL)
+    r = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]  # redis stub gap
     data = r.get(f"docgen:status:{session_uid}")
     if data:
-        return json.loads(data)
+        return json.loads(data)  # type: ignore[no-any-return]  # JSON parsed data
     return None

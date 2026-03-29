@@ -2,6 +2,8 @@
 
 import uuid
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +14,7 @@ from artiFACT.kernel.permissions.resolver import can
 async def get_available_context(
     db: AsyncSession,
     user: FcUser,
-) -> dict:
+) -> dict[str, Any]:
     """Return node tree filtered to only nodes the user can read."""
     result = await db.execute(
         select(FcNode)

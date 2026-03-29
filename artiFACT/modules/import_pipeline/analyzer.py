@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Any
 
 import httpx
 import redis as sync_redis
@@ -32,7 +33,7 @@ _SYNC_DB_URL = os.getenv(
 _sync_engine = create_engine(_SYNC_DB_URL, pool_pre_ping=True)
 
 _redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
-_redis_client = sync_redis.from_url(_redis_url, decode_responses=True)
+_redis_client = sync_redis.from_url(_redis_url, decode_responses=True)  # type: ignore[no-untyped-call]  # redis stub gap
 
 
 def _publish_progress(session_uid: str, message: str, percent: float) -> None:
@@ -57,7 +58,7 @@ def _chunk_text(text: str, max_chars: int = 3000) -> list[str]:
     return chunks or [text]
 
 
-def _call_ai(api_key: str, provider: str, model: str, messages: list[dict]) -> str:
+def _call_ai(api_key: str, provider: str, model: str, messages: list[dict[str, Any]]) -> str:
     """Synchronous AI provider call."""
     if provider in ("openai", "azure_openai"):
         resp = httpx.post(
@@ -72,7 +73,7 @@ def _call_ai(api_key: str, provider: str, model: str, messages: list[dict]) -> s
             timeout=120,
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        return str(resp.json()["choices"][0]["message"]["content"])
     elif provider == "anthropic":
         system_content = ""
         api_messages = []
@@ -97,7 +98,7 @@ def _call_ai(api_key: str, provider: str, model: str, messages: list[dict]) -> s
             timeout=120,
         )
         resp.raise_for_status()
-        return resp.json()["content"][0]["text"]
+        return str(resp.json()["content"][0]["text"])
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 
@@ -105,16 +106,16 @@ def _call_ai(api_key: str, provider: str, model: str, messages: list[dict]) -> s
 DEFAULT_MODELS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-20250514"}
 
 
-def _parse_extracted_facts(response_text: str) -> list[dict]:
+def _parse_extracted_facts(response_text: str) -> list[dict[str, Any]]:
     """Parse AI response into list of fact dicts."""
     try:
         data = json.loads(response_text)
-        return data.get("facts", [])
+        return data.get("facts", [])  # type: ignore[no-any-return]  # JSON parsed data
     except json.JSONDecodeError:
         return []
 
 
-@celery_app.task(name="import_pipeline.analyze_document")
+@celery_app.task(name="import_pipeline.analyze_document")  # type: ignore[misc]  # Celery task decorator is untyped
 def analyze_document(session_uid_str: str) -> None:
     """Celery task: extract text, call AI, deduplicate, stage."""
     with Session(_sync_engine) as db:
@@ -126,6 +127,8 @@ def analyze_document(session_uid_str: str) -> None:
         db.commit()
 
         try:
+            if not session.source_s3_key:
+                raise RuntimeError("No source S3 key")
             content = download_bytes(session.source_s3_key)
 
             extractor = get_extractor(session.source_filename)
@@ -146,7 +149,7 @@ def analyze_document(session_uid_str: str) -> None:
             plaintext_key = decrypt(ai_key.encrypted_key)
             model = ai_key.model_override or DEFAULT_MODELS.get(ai_key.provider, "gpt-4o")
 
-            all_facts: list[dict] = []
+            all_facts: list[dict[str, Any]] = []
             for i, chunk in enumerate(chunks):
                 response = _call_ai(
                     plaintext_key,
@@ -170,7 +173,7 @@ def analyze_document(session_uid_str: str) -> None:
                     FcImportSession,
                     FcFactVersion.fact_uid == FcImportSession.program_node_uid,
                 )
-                .where(False)
+                .where(False)  # type: ignore[arg-type]
             ).scalars().all()
 
             from sqlalchemy import text as sa_text

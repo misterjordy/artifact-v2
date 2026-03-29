@@ -1,13 +1,15 @@
 """Two-pass AI affinity scoring: score all sections simultaneously, then assign."""
 
 import json
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 
 async def score_facts_for_section(
-    ai_call: object,
-    facts: list[dict],
-    section: dict,
-    all_sections: list[dict],
+    ai_call: Callable[[str], Awaitable[str]],
+    facts: list[dict[str, Any]],
+    section: dict[str, Any],
+    all_sections: list[dict[str, Any]],
 ) -> dict[str, float]:
     """Score each fact's affinity for a given section using AI.
 
@@ -41,16 +43,16 @@ async def score_facts_for_section(
 
 def assign_facts_to_sections(
     affinity_scores: dict[str, dict[str, float]],
-    facts: list[dict],
+    facts: list[dict[str, Any]],
     threshold: float = 0.3,
-) -> dict[str, list[dict]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Global assignment: each fact goes to highest-scoring section.
 
     Two-pass approach fixes v1's first-section-gets-first-pick bias:
     1. Collect all scores across all sections
     2. For each fact, assign to highest-scoring section (above threshold)
     """
-    assignments: dict[str, list[dict]] = {key: [] for key in affinity_scores}
+    assignments: dict[str, list[dict[str, Any]]] = {key: [] for key in affinity_scores}
 
     for fact_idx in range(len(facts)):
         idx_str = str(fact_idx)

@@ -16,7 +16,7 @@ async def get_cached_role(user_uid: uuid.UUID, node_uid: uuid.UUID) -> str | Non
     """Read cached permission role from Redis."""
     r = await get_redis()
     val = await r.get(_perm_key(user_uid, node_uid))
-    return val
+    return val  # type: ignore[no-any-return]  # redis returns str when decode_responses=True
 
 
 async def set_cached_role(user_uid: uuid.UUID, node_uid: uuid.UUID, role: str) -> None:

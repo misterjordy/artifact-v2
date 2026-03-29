@@ -2,6 +2,8 @@
 
 import json
 import uuid
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -127,8 +129,8 @@ async def document_progress(
 
     from artiFACT.kernel.config import settings
 
-    async def event_stream():
-        r = redis_lib.from_url(settings.REDIS_URL)
+    async def event_stream() -> AsyncIterator[str]:
+        r = redis_lib.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]  # redis stub gap
         pubsub = r.pubsub()
         pubsub.subscribe(f"docgen:{session_uid}")
 
@@ -284,7 +286,7 @@ async def delta_feed(
 async def full_dump(
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Full dump of all entities for emergency export."""
     result = await get_full_dump(db)
 

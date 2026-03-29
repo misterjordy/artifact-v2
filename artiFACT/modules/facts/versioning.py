@@ -1,6 +1,7 @@
 """Version creation logic."""
 
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +19,8 @@ async def create_version(
     sentence: str,
     actor: FcUser,
     *,
-    metadata_tags: list | None = None,
-    source_reference: dict | None = None,
+    metadata_tags: list[str] | None = None,
+    source_reference: dict[str, Any] | None = None,
     effective_date: str | None = None,
     classification: str = "UNCLASSIFIED",
     change_summary: str | None = None,

@@ -1,6 +1,7 @@
 """Query builders for the three queue panes."""
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.models import FcEventLog, FcFact, FcFactVersion, FcNode, FcUser
 
 
-async def get_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict]:
+async def get_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict[str, Any]]:
     """Pending proposed versions scoped to node_uids. One query with JOINs."""
     if not node_uids:
         return []
@@ -40,7 +41,7 @@ async def get_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[di
     return [row._asdict() for row in result.all()]
 
 
-async def get_move_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict]:
+async def get_move_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict[str, Any]]:
     """Pending move proposals from fc_event_log where target is in scope."""
     if not node_uids:
         return []
@@ -57,7 +58,7 @@ async def get_move_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> li
     events = result.scalars().all()
 
     node_uid_set = set(node_uids)
-    moves: list[dict] = []
+    moves: list[dict[str, Any]] = []
     for event in events:
         payload = event.payload or {}
         target_uid_str = payload.get("target_node_uid")
@@ -100,7 +101,7 @@ async def get_move_proposals(db: AsyncSession, node_uids: list[uuid.UUID]) -> li
     return moves
 
 
-async def get_unsigned(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict]:
+async def get_unsigned(db: AsyncSession, node_uids: list[uuid.UUID]) -> list[dict[str, Any]]:
     """Published but not yet signed versions in scope."""
     if not node_uids:
         return []

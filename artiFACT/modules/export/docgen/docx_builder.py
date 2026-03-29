@@ -1,13 +1,14 @@
 """Build DOCX from section outputs using python-docx."""
 
 from io import BytesIO
+from typing import Any
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 
 
-def _add_cui_banners(doc: Document, cui_marking: str) -> None:
+def _add_cui_banners(doc: Any, cui_marking: str) -> None:
     """Add CUI header/footer to every section in the document."""
     for section in doc.sections:
         header = section.header
@@ -25,7 +26,7 @@ def _add_cui_banners(doc: Document, cui_marking: str) -> None:
 
 def build_docx(
     section_outputs: dict[str, str],
-    sections: list[dict],
+    sections: list[dict[str, Any]],
     template_name: str,
     classification: str = "UNCLASSIFIED",
 ) -> bytes:
@@ -62,7 +63,7 @@ def build_docx(
         mrun.bold = True
         mrun.font.size = Pt(14)
 
-    doc.add_page_break()
+    doc.add_page_break()  # type: ignore[no-untyped-call]  # python-docx has no type stubs
 
     for section_def in sections:
         key = section_def["key"]

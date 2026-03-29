@@ -22,7 +22,7 @@ async def mine_acronyms(db: AsyncSession) -> list[dict[str, str | int]]:
     r = await get_redis()
     cached = await r.get(ACRONYM_CACHE_KEY)
     if cached:
-        return json.loads(cached)
+        return json.loads(cached)  # type: ignore[no-any-return]  # cached JSON data
 
     stmt = select(FcFactVersion.display_sentence).where(
         FcFactVersion.state.in_(["published", "signed"])
@@ -37,7 +37,7 @@ async def mine_acronyms(db: AsyncSession) -> list[dict[str, str | int]]:
 
     entries = [{"acronym": k, "count": v} for k, v in sorted(counts.items())]
     await r.setex(ACRONYM_CACHE_KEY, ACRONYM_TTL, json.dumps(entries))
-    return entries
+    return entries  # type: ignore[return-value]  # dict values are str | int at runtime
 
 
 async def invalidate_acronym_cache(_payload: dict[str, Any]) -> None:

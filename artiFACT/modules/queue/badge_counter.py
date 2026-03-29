@@ -2,6 +2,8 @@
 
 import uuid
 
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +48,7 @@ async def _compute_count(db: AsyncSession, node_uids: list[uuid.UUID]) -> int:
     return result.scalar_one()
 
 
-async def invalidate_badge_cache(payload: dict) -> None:
+async def invalidate_badge_cache(payload: dict[str, Any]) -> None:
     """Event handler: flush badge cache for the acting user."""
     actor_uid = payload.get("actor_uid")
     if not actor_uid:

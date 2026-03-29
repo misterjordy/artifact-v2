@@ -1,12 +1,15 @@
 """S3/MinIO client utility."""
 
+from typing import Any
+
 import boto3
+from botocore.client import BaseClient
 from botocore.config import Config as BotoConfig
 
 from artiFACT.kernel.config import settings
 
 
-def get_s3_client():
+def get_s3_client() -> BaseClient:
     """Create a boto3 S3 client configured for MinIO."""
     return boto3.client(
         "s3",
@@ -33,7 +36,7 @@ def download_bytes(key: str) -> bytes:
     """Download bytes from S3."""
     client = get_s3_client()
     response = client.get_object(Bucket=settings.S3_BUCKET, Key=key)
-    return response["Body"].read()
+    return response["Body"].read()  # type: ignore[no-any-return]  # boto3 response body
 
 
 def upload_json(key: str, data: str) -> None:

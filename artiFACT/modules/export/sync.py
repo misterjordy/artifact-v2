@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,13 +32,13 @@ def _serialize_dt(val: object) -> str | None:
     return str(val)
 
 
-async def _load_entity_snapshot(db: AsyncSession, entity_type: str, entity_uid: uuid.UUID) -> dict:
+async def _load_entity_snapshot(db: AsyncSession, entity_type: str, entity_uid: uuid.UUID) -> dict[str, Any]:
     """Load current snapshot of an entity for the delta feed."""
     if entity_type == "fact":
         fact = await db.get(FcFact, entity_uid)
         if not fact:
             return {"entity_uid": str(entity_uid), "deleted": True}
-        snapshot: dict = {
+        snapshot: dict[str, Any] = {
             "fact_uid": _serialize_uuid(fact.fact_uid),
             "node_uid": _serialize_uuid(fact.node_uid),
             "is_retired": fact.is_retired,
@@ -96,7 +97,7 @@ async def _load_entity_snapshot(db: AsyncSession, entity_type: str, entity_uid: 
     return {"entity_uid": str(entity_uid), "entity_type": entity_type}
 
 
-async def get_delta_feed(db: AsyncSession, cursor: int = 0, limit: int = 500) -> dict:
+async def get_delta_feed(db: AsyncSession, cursor: int = 0, limit: int = 500) -> dict[str, Any]:
     """Return changes since cursor, ordered by monotonic seq."""
     stmt = (
         select(FcEventLog)
@@ -129,7 +130,7 @@ async def get_delta_feed(db: AsyncSession, cursor: int = 0, limit: int = 500) ->
     }
 
 
-async def get_full_dump(db: AsyncSession) -> dict:
+async def get_full_dump(db: AsyncSession) -> dict[str, Any]:
     """Return complete data dump of all entities."""
     now = datetime.now(timezone.utc)
 

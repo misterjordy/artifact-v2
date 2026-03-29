@@ -1,6 +1,7 @@
 """Audit API endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +24,7 @@ async def list_events(
     event_type: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-) -> dict:
+) -> dict[str, Any]:
     """Return audit events with filtering."""
     events, total = await get_all_events(
         db,
@@ -62,7 +63,7 @@ async def entity_history(
     entity_uid: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Return full timeline for an entity."""
     events = await get_events_for_entity(db, str(entity_uid))
     data = [EventOut.model_validate(e) for e in events]

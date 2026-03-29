@@ -1,6 +1,7 @@
 """Signing API endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -24,7 +25,7 @@ async def sign_node_endpoint(
     body: SignRequest = SignRequest(),
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Sign all published facts under a node."""
     sig = await sign_node(db, node_uid, user, note=body.note, expires_at=body.expires_at)
     await flush_pending_events(db)
@@ -39,12 +40,12 @@ async def sign_node_endpoint(
 async def sign_pane(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """List nodes with unsigned facts scoped to current user."""
     all_nodes_result = await db.execute(select(FcNode).where(FcNode.is_archived.is_(False)))
     all_nodes = list(all_nodes_result.scalars().all())
 
-    items: list[dict] = []
+    items: list[dict[str, Any]] = []
     for node in all_nodes:
         if not await can(user, "sign", node.node_uid, db):
             continue
