@@ -50,6 +50,20 @@ async def queue_page(
     return HTMLResponse(html)
 
 
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+    """AI key settings page."""
+    html = _jinja.get_template("settings.html").render(user=user)
+    return HTMLResponse(html)
+
+
+@router.get("/chat", response_class=HTMLResponse)
+async def chat_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+    """AI chat page."""
+    html = _jinja.get_template("chat.html").render(user=user)
+    return HTMLResponse(html)
+
+
 @router.get("/browse", response_class=HTMLResponse)
 async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """Main browse view with tree in left pane."""

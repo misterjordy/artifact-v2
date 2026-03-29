@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Settings — artiFACT{% endblock %}
+{% block body %}
+<div class="min-h-full flex" x-data="settingsApp()">
+  <!-- Main content -->
+  <main class="flex-1 p-8 max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Settings</h1>
+
+    <!-- AI API Keys Section -->
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold mb-4">AI API Keys</h2>
+      <p class="text-sm text-gray-500 mb-4">
+        Add your own API key to use the AI Chat feature. Keys are encrypted at rest (AES-256-GCM).
+      </p>
+
+      <!-- Existing keys -->
+      <div class="space-y-3 mb-6">
+        <template x-for="key in keys" :key="key.key_uid">
+          <div class="flex items-center justify-between bg-white border rounded-lg px-4 py-3">
+            <div>
+              <span class="font-medium capitalize" x-text="key.provider"></span>
+              <span class="text-sm text-gray-400 ml-2" x-text="key.key_prefix"></span>
+              <template x-if="key.model_override">
+                <span class="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5 ml-2" x-text="key.model_override"></span>
+              </template>
+            </div>
+            <button
+              class="text-sm text-red-600 hover:text-red-800"
+              @click="deleteKey(key.provider)"
+            >Remove</button>
+          </div>
+        </template>
+        <p x-show="keys.length === 0" class="text-sm text-gray-400 italic">No API keys configured.</p>
+      </div>
+
+      <!-- Add key form -->
+      <form @submit.prevent="saveKey()" class="bg-gray-50 border rounded-lg p-4 space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Provider</label>
+          <select x-model="form.provider" class="w-full border rounded px-3 py-2 text-sm">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">API Key</label>
+          <input
+            type="password"
+            x-model="form.api_key"
+            placeholder="sk-..."
+            class="w-full border rounded px-3 py-2 text-sm font-mono"
+          >
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Model Override (optional)</label>
+          <input
+            type="text"
+            x-model="form.model_override"
+            placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
+            class="w-full border rounded px-3 py-2 text-sm"
+          >
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            type="submit"
+            class="bg-accent text-white px-4 py-2 rounded text-sm hover:bg-accent-hover"
+            :disabled="!form.api_key"
+          >Save Key</button>
+          <span x-show="saveMsg" class="text-sm text-green-600" x-text="saveMsg"></span>
+          <span x-show="saveErr" class="text-sm text-red-600" x-text="saveErr"></span>
+        </div>
+      </form>
+    </section>
+
+    <a href="/browse" class="text-sm text-accent hover:underline">&larr; Back to Browse</a>
+  </main>
+</div>
+
+<script defer>
+function settingsApp() {
+  const csrfToken = document.cookie.split('; ')
+    .find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
+  return {
+    keys: [],
+    form: { provider: 'openai', api_key: '', model_override: '' },
+    saveMsg: '',
+    saveErr: '',
+    async init() { await this.loadKeys(); },
+    async loadKeys() {
+      const r = await fetch('/api/v1/ai/keys', { credentials: 'same-origin' });
+      if (r.ok) this.keys = await r.json();
+    },
+    async saveKey() {
+      this.saveMsg = ''; this.saveErr = '';
+      const body = {
+        provider: this.form.provider,
+        api_key: this.form.api_key,
+      };
+      if (this.form.model_override) body.model_override = this.form.model_override;
+      const r = await fetch('/api/v1/ai/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        this.saveMsg = 'Key saved!';
+        this.form.api_key = '';
+        this.form.model_override = '';
+        await this.loadKeys();
+      } else {
+        const d = await r.json();
+        this.saveErr = d.detail || 'Failed to save';
+      }
+    },
+    async deleteKey(provider) {
+      const r = await fetch('/api/v1/ai/keys/' + provider, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': csrfToken },
+        credentials: 'same-origin',
+      });
+      if (r.ok || r.status === 204) await this.loadKeys();
+    },
+  };
+}
+</script>
+{% endblock %}
