@@ -1,0 +1,37 @@
+{% if programs and programs|length > 1 %}
+<div class="flex flex-wrap gap-1 px-1 pb-2">
+  {% for prog in programs %}
+  <button class="search-program-filter px-2 py-0.5 text-[10px] rounded-full border border-[var(--color-border)]/30 text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)] transition-colors"
+          data-uid="{{ prog.node_uid }}"
+          onclick="this.classList.toggle('active'); this.classList.toggle('bg-[var(--color-bg-active)]'); document.getElementById('sidebar-search-input').dispatchEvent(new Event('input'));">
+    {{ prog.title }}
+  </button>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if results %}
+<p class="px-2 pb-2 text-[10px] text-[var(--color-text-sidebar-heading)]">{{ results|length }} result{{ 's' if results|length != 1 }}</p>
+{% set ns = namespace(current_group="") %}
+{% for r in results %}
+  {% set group_path = r.breadcrumb | join(" > ") if r.breadcrumb is iterable and r.breadcrumb is not string else "" %}
+  {% if group_path != ns.current_group %}
+    {% set ns.current_group = group_path %}
+    <div class="px-2 pt-2 pb-0.5 text-[10px] text-[var(--color-text-sidebar-heading)] truncate">
+      {{ group_path }}
+    </div>
+  {% endif %}
+  <a class="block px-2 py-1 rounded hover:bg-[var(--color-bg-hover)] cursor-pointer transition-colors"
+     data-search-result
+     hx-get="/partials/browse/{{ r.node_uid }}"
+     hx-target="#center-pane"
+     hx-swap="innerHTML">
+    <span class="block truncate text-[12px] text-[var(--color-text-sidebar)]">{{ r.display_sentence }}</span>
+    <span class="block truncate text-[10px] text-[var(--color-text-sidebar-heading)]">{{ r.state }}</span>
+  </a>
+{% endfor %}
+{% else %}
+<div class="px-2 py-4 text-center text-xs text-[var(--color-text-sidebar-heading)]">
+  No results found for &ldquo;{{ query }}&rdquo;
+</div>
+{% endif %}

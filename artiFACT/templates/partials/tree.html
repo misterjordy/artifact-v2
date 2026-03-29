@@ -1,4 +1,5 @@
-{% macro render_node(node, level=0) %}
+{% macro render_node(node, level=0, breadcrumb_path="") %}
+{% set current_breadcrumb = (breadcrumb_path + " > " + node.title) if breadcrumb_path else node.title %}
 <div class="group" x-data="{ open: true }" style="padding-left: {{ level * 16 }}px">
   <div class="flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors">
     {% if node.children %}
@@ -14,6 +15,13 @@
        hx-get="/partials/browse/{{ node.node_uid }}"
        hx-target="#center-pane"
        hx-swap="innerHTML">{{ node.title }}</a>
+
+    <button class="flex-shrink-0 text-[12px] transition-colors star-toggle"
+            :class="$store.favorites.isFavorite('{{ node.node_uid }}') ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-sidebar)] opacity-0 group-hover:opacity-100'"
+            @click="$store.favorites.toggle('{{ node.node_uid }}', '{{ node.title | e }}', '{{ breadcrumb_path | e }}')"
+            title="Toggle favorite">
+      <span x-text="$store.favorites.isFavorite('{{ node.node_uid }}') ? '★' : '☆'"></span>
+    </button>
 
     {% set nuid = node.node_uid | string %}
     {% if can_manage_uids and nuid in can_manage_uids or can_contribute_uids and nuid in can_contribute_uids %}
@@ -39,7 +47,7 @@
   {% if node.children %}
   <div x-show="open" x-collapse>
     {% for child in node.children %}
-    {{ render_node(child, level + 1) }}
+    {{ render_node(child, level + 1, current_breadcrumb) }}
     {% endfor %}
   </div>
   {% endif %}

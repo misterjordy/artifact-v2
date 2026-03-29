@@ -95,6 +95,50 @@ html.default {
   --color-header-bg:     #1e293b;
 }
 
+/* Sidebar resize handle */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--color-accent);
+  opacity: 0.3;
+}
+.sidebar-resize-handle::after {
+  content: "⋮";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  font-size: 14px;
+  color: var(--color-text-sidebar);
+  pointer-events: none;
+}
+
+/* Eyecare: wider resize handle for accessibility */
+html.eyecare .sidebar-resize-handle {
+  width: 12px;
+  background: rgba(212, 168, 67, 0.15);
+}
+html.eyecare .sidebar-resize-handle:hover,
+html.eyecare .sidebar-resize-handle:active {
+  background: var(--color-accent-gold);
+  opacity: 0.4;
+}
+html.eyecare .sidebar-resize-handle::after {
+  font-size: 16px;
+  color: var(--color-accent-gold);
+}
+
 /* Scrollbar styling for sidebar */
 .sidebar-scroll::-webkit-scrollbar { width: 4px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
