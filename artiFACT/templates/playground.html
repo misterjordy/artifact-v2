@@ -2,45 +2,6 @@
 
 {% block title %}artiFACT — Playground{% endblock %}
 
-{% block head_scripts %}
-<script defer>
-  function enterPlayground(role) {
-    const csrfToken = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('csrf_token='))
-      ?.split('=')[1] || '';
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/playground/enter';
-
-    const roleInput = document.createElement('input');
-    roleInput.type = 'hidden';
-    roleInput.name = 'role';
-    roleInput.value = role;
-    form.appendChild(roleInput);
-
-    document.body.appendChild(form);
-
-    // Override fetch to add CSRF header, then submit via fetch
-    fetch('/playground/enter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRF-Token': csrfToken,
-      },
-      body: 'role=' + encodeURIComponent(role),
-      redirect: 'follow',
-    }).then(resp => {
-      window.location.href = resp.url || '/browse';
-    }).catch(() => {
-      // Fallback: submit form directly
-      form.submit();
-    });
-  }
-</script>
-{% endblock %}
-
 {% block body %}
 <div class="flex min-h-full items-center justify-center px-4 py-12 bg-[var(--color-bg)]">
   <div class="w-full max-w-3xl">
@@ -58,73 +19,73 @@
     <!-- Role cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <!-- Signatory -->
-      <button onclick="enterPlayground('signatory')"
-              class="group rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 shadow-sm
-                     hover:border-[var(--color-accent)] hover:shadow-md transition-all text-left cursor-pointer">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-700">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-            </svg>
+      <form action="/playground/enter" method="post">
+        <button type="submit"
+                class="group w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 shadow-sm
+                       hover:border-[var(--color-accent)] hover:shadow-md transition-all text-left cursor-pointer">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-700">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-slate-800 group-hover:text-[var(--color-accent)]">Signatory</h3>
+              <p class="text-xs text-[var(--color-text-muted)]">David Wallace</p>
+            </div>
           </div>
-          <div>
-            <h3 class="text-sm font-semibold text-slate-800 group-hover:text-[var(--color-accent)]">Signatory</h3>
-            <p class="text-xs text-[var(--color-text-muted)]">David Wallace</p>
-          </div>
-        </div>
-        <p class="text-sm text-slate-600">
-          Review and sign published facts. You're the final authority.
-        </p>
-        <form action="/playground/enter" method="post" class="hidden">
+          <p class="text-sm text-slate-600">
+            Review and sign published facts. You're the final authority.
+          </p>
           <input type="hidden" name="role" value="signatory">
-        </form>
-      </button>
+        </button>
+      </form>
 
       <!-- Approver -->
-      <button onclick="enterPlayground('approver')"
-              class="group rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 shadow-sm
-                     hover:border-[var(--color-accent)] hover:shadow-md transition-all text-left cursor-pointer">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+      <form action="/playground/enter" method="post">
+        <button type="submit"
+                class="group w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 shadow-sm
+                       hover:border-[var(--color-accent)] hover:shadow-md transition-all text-left cursor-pointer">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-slate-800 group-hover:text-[var(--color-accent)]">Approver</h3>
+              <p class="text-xs text-[var(--color-text-muted)]">Oscar Martinez</p>
+            </div>
           </div>
-          <div>
-            <h3 class="text-sm font-semibold text-slate-800 group-hover:text-[var(--color-accent)]">Approver</h3>
-            <p class="text-xs text-[var(--color-text-muted)]">Oscar Martinez</p>
-          </div>
-        </div>
-        <p class="text-sm text-slate-600">
-          Review proposed facts. Approve or reject with feedback.
-        </p>
-        <form action="/playground/enter" method="post" class="hidden">
+          <p class="text-sm text-slate-600">
+            Review proposed facts. Approve or reject with feedback.
+          </p>
           <input type="hidden" name="role" value="approver">
-        </form>
-      </button>
+        </button>
+      </form>
 
       <!-- Contributor -->
-      <button onclick="enterPlayground('contributor')"
-              class="group rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 shadow-sm
-                     hover:border-[var(--color-accent)] hover:shadow-md transition-all text-left cursor-pointer">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-            </svg>
+      <form action="/playground/enter" method="post">
+        <button type="submit"
+                class="group w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 shadow-sm
+                       hover:border-[var(--color-accent)] hover:shadow-md transition-all text-left cursor-pointer">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-slate-800 group-hover:text-[var(--color-accent)]">Contributor</h3>
+              <p class="text-xs text-[var(--color-text-muted)]">Pam Beesly</p>
+            </div>
           </div>
-          <div>
-            <h3 class="text-sm font-semibold text-slate-800 group-hover:text-[var(--color-accent)]">Contributor</h3>
-            <p class="text-xs text-[var(--color-text-muted)]">Pam Beesly</p>
-          </div>
-        </div>
-        <p class="text-sm text-slate-600">
-          Propose new facts, edit drafts, and respond to feedback.
-        </p>
-        <form action="/playground/enter" method="post" class="hidden">
+          <p class="text-sm text-slate-600">
+            Propose new facts, edit drafts, and respond to feedback.
+          </p>
           <input type="hidden" name="role" value="contributor">
-        </form>
-      </button>
+        </button>
+      </form>
     </div>
 
     <!-- Footer -->

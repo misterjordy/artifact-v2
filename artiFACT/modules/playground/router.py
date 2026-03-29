@@ -51,6 +51,7 @@ async def playground_enter(
     response: Response,
     role: str = Form(...),
     db: AsyncSession = Depends(get_db),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> RedirectResponse:
     """Create a session for the selected playground user."""
     if role not in VALID_ROLES:
@@ -64,14 +65,21 @@ async def playground_enter(
         log.error("playground_user_not_found", username=username)
         return HTMLResponse("Playground user not found. Run seed script first.", status_code=500)
 
+    # Destroy any pre-existing session (real login or previous playground role)
+    if session_id:
+        try:
+            await destroy_session(session_id)
+        except Exception:
+            log.warning("playground_enter_old_session_destroy_failed")
+
     # TODO: Playground entry bypasses password auth intentionally for demo.
     # Gate behind a feature flag in production.
-    session_id = await create_session(user)
+    new_session_id = await create_session(user)
 
     redirect = RedirectResponse("/browse", status_code=303)
     redirect.set_cookie(
         key="session_id",
-        value=session_id,
+        value=new_session_id,
         httponly=True,
         samesite="strict",
         secure=(settings.APP_ENV != "development"),
@@ -119,17 +127,41 @@ async def playground_reset(
     return RedirectResponse("/browse", status_code=303)
 
 
-@router.post("/playground/exit")
-async def playground_exit(
-    session_id: str | None = Cookie(None, alias="session_id"),
-    playground_mode: str | None = Cookie(None, alias="playground_mode"),
-) -> RedirectResponse:
-    """Destroy the playground session and return to landing."""
+async def _do_playground_exit(session_id: str | None) -> RedirectResponse:
+    """Destroy the playground session and return to landing.
+
+    Wrapped in try/except so this always succeeds as an escape hatch,
+    even if Redis is down or the session is already invalid.
+    """
     if session_id:
-        await destroy_session(session_id)
+        try:
+            await destroy_session(session_id)
+        except Exception:
+            log.warning("playground_exit_session_destroy_failed", session_id=session_id)
 
     redirect = RedirectResponse("/playground", status_code=303)
     redirect.delete_cookie("session_id", path="/")
     redirect.delete_cookie("playground_mode", path="/")
     redirect.delete_cookie("csrf_token", path="/")
     return redirect
+
+
+@router.post("/playground/exit")
+async def playground_exit_post(
+    session_id: str | None = Cookie(None, alias="session_id"),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> RedirectResponse:
+    """Destroy the playground session and return to landing (POST)."""
+    return await _do_playground_exit(session_id)
+
+
+@router.get("/playground/exit")
+async def playground_exit_get(
+    session_id: str | None = Cookie(None, alias="session_id"),
+) -> RedirectResponse:
+    """Destroy the playground session and return to landing (GET).
+
+    Allows users to escape a broken session by visiting this URL directly.
+    Skipping CSRF is acceptable because session destruction is not dangerous.
+    """
+    return await _do_playground_exit(session_id)

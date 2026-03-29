@@ -45,7 +45,8 @@ async def reset_to_golden(db: AsyncSession) -> None:
     snapshot_sql = GOLDEN_SNAPSHOT_PATH.read_text(encoding="utf-8")
 
     # Execute valid SQL lines from pg_dump output
-    # Skip: comments (--), psql meta-commands (\), SET statements
+    # Skip: comments (--), psql meta-commands (\), SET statements,
+    # and pg_catalog.set_config which corrupts the connection's search_path
     executed = 0
     for line in snapshot_sql.split("\n"):
         line = line.strip()
@@ -53,11 +54,20 @@ async def reset_to_golden(db: AsyncSession) -> None:
             continue
 
         upper = line.upper()
+
+        # pg_dump emits set_config('search_path', '', false) which blanks the
+        # search_path on the pooled connection, breaking all later queries.
+        if "SET_CONFIG" in upper.replace(" ", "_") and "SEARCH_PATH" in upper:
+            continue
+
         if any(upper.startswith(prefix) for prefix in EXECUTABLE_PREFIXES):
             await db.execute(text(line))
             executed += 1
         elif upper.startswith("SET SESSION AUTHORIZATION"):
             await db.execute(text(line))
             executed += 1
+
+    # Restore search_path in case any SET statement changed it
+    await db.execute(text("SET search_path = public"))
 
     log.info("playground_reset_complete", statements_executed=executed)

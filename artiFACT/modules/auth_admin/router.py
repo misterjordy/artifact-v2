@@ -1,6 +1,6 @@
 """Auth endpoints: login, logout, current user profile."""
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Cookie, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.csrf import generate_csrf_token, set_csrf_cookie
@@ -21,19 +21,28 @@ async def login(
     body: LoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> LoginResponse:
     user = await authenticate_dev(db, body.username, body.password)
-    session_id = await create_session(user)
+
+    # Destroy any pre-existing session (e.g. a playground session)
+    if session_id:
+        await destroy_session(session_id)
+
+    new_session_id = await create_session(user)
 
     response.set_cookie(
         key="session_id",
-        value=session_id,
+        value=new_session_id,
         httponly=True,
         samesite="strict",
         secure=(settings.APP_ENV != "development"),
         path="/",
         max_age=8 * 60 * 60,
     )
+
+    # Clear playground cookie so the banner doesn't bleed into a real login
+    response.delete_cookie("playground_mode", path="/")
 
     csrf_token = generate_csrf_token()
     set_csrf_cookie(response, csrf_token)
