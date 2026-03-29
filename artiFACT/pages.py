@@ -1,10 +1,11 @@
 """Server-rendered HTML pages: login and browse."""
 
+import json
 import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Cookie, Depends
+from fastapi import APIRouter, Cookie, Depends, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
@@ -15,9 +16,13 @@ from artiFACT.kernel.auth.session import validate_session
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
+from artiFACT.kernel.permissions.resolver import can
 from artiFACT.kernel.schemas import NodeOut
+from artiFACT.modules.audit.service import flush_pending_events
+from artiFACT.modules.facts.service import create_fact
 from artiFACT.modules.queue.badge_counter import get_badge_count
 from artiFACT.modules.queue.scope_resolver import get_approvable_nodes
+from artiFACT.modules.taxonomy.service import create_node
 from artiFACT.modules.taxonomy.tree_serializer import get_breadcrumb
 
 router = APIRouter(tags=["pages"])
@@ -215,6 +220,9 @@ async def browse_node_partial(
                 }
             )
 
+    can_contribute = await can(user, "contribute", node_uid, db)
+    can_manage = await can(user, "manage_node", node_uid, db)
+
     html = _jinja.get_template("partials/browse_node.html").render(
         node=NodeOut.model_validate(node),
         breadcrumb=[NodeOut.model_validate(n) for n in breadcrumb]
@@ -222,5 +230,152 @@ async def browse_node_partial(
         else breadcrumb,
         facts=facts,
         children_with_facts=children_with_facts,
+        can_contribute=can_contribute,
+        can_manage=can_manage,
     )
     return HTMLResponse(html)
+
+
+# ---------------------------------------------------------------------------
+# Form partials: GET (render form) + POST (handle submission)
+# ---------------------------------------------------------------------------
+
+@router.get("/partials/node-form", response_class=HTMLResponse)
+async def node_form_get(
+    parent: uuid.UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> HTMLResponse:
+    """Render the add-node form partial."""
+    node = await db.get(FcNode, parent)
+    parent_title = node.title if node else "Unknown"
+    html = _jinja.get_template("partials/node_form.html").render(
+        parent_node_uid=str(parent),
+        parent_title=parent_title,
+        error=None,
+        title_value="",
+    )
+    return HTMLResponse(html)
+
+
+@router.post("/partials/node-form", response_class=HTMLResponse)
+async def node_form_post(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+    title: str = Form(""),
+    parent_node_uid: str = Form(""),
+) -> HTMLResponse:
+    """Handle add-node form submission."""
+    title = title.strip()
+    parent_uid = uuid.UUID(parent_node_uid) if parent_node_uid else None
+
+    if not title:
+        parent_node = await db.get(FcNode, parent_uid) if parent_uid else None
+        html = _jinja.get_template("partials/node_form.html").render(
+            parent_node_uid=parent_node_uid,
+            parent_title=parent_node.title if parent_node else "",
+            error="Title is required.",
+            title_value=title,
+        )
+        return HTMLResponse(html)
+
+    try:
+        if parent_uid is not None:
+            if not await can(user, "manage_node", parent_uid, db):
+                raise Forbidden("You do not have permission to add nodes here.")
+        else:
+            if user.global_role != "admin":
+                raise Forbidden("Only admins can create root nodes.")
+
+        await create_node(db, title, parent_uid, 0, user)
+        await db.commit()
+    except Exception as exc:
+        parent_node = await db.get(FcNode, parent_uid) if parent_uid else None
+        html = _jinja.get_template("partials/node_form.html").render(
+            parent_node_uid=parent_node_uid,
+            parent_title=parent_node.title if parent_node else "",
+            error=str(exc),
+            title_value=title,
+        )
+        return HTMLResponse(html)
+
+    # Success: clear modal, refresh tree
+    resp = HTMLResponse("")
+    resp.headers["HX-Trigger"] = json.dumps({"closeModal": True, "refreshTree": True})
+    return resp
+
+
+@router.get("/partials/fact-form", response_class=HTMLResponse)
+async def fact_form_get(
+    node: uuid.UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> HTMLResponse:
+    """Render the add-fact form partial."""
+    node_obj = await db.get(FcNode, node)
+    node_title = node_obj.title if node_obj else "Unknown"
+    html = _jinja.get_template("partials/fact_form.html").render(
+        node_uid=str(node),
+        node_title=node_title,
+        error=None,
+        sentence_value="",
+        effective_date_value="",
+        classification_value="UNCLASSIFIED",
+    )
+    return HTMLResponse(html)
+
+
+@router.post("/partials/fact-form", response_class=HTMLResponse)
+async def fact_form_post(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+    node_uid: str = Form(""),
+    sentence: str = Form(""),
+    effective_date: str = Form(""),
+    classification: str = Form("UNCLASSIFIED"),
+) -> HTMLResponse:
+    """Handle add-fact form submission."""
+    sentence = sentence.strip()
+    effective_date = effective_date.strip() or None
+    nuid = uuid.UUID(node_uid)
+
+    if not sentence or len(sentence) < 10:
+        node_obj = await db.get(FcNode, nuid)
+        html = _jinja.get_template("partials/fact_form.html").render(
+            node_uid=node_uid,
+            node_title=node_obj.title if node_obj else "",
+            error="Sentence is required (minimum 10 characters).",
+            sentence_value=sentence,
+            effective_date_value=effective_date or "",
+            classification_value=classification,
+        )
+        return HTMLResponse(html)
+
+    try:
+        fact, version = await create_fact(
+            db, nuid, sentence, user,
+            effective_date=effective_date,
+            classification=classification,
+        )
+        await flush_pending_events(db)
+        await db.commit()
+    except Exception as exc:
+        node_obj = await db.get(FcNode, nuid)
+        html = _jinja.get_template("partials/fact_form.html").render(
+            node_uid=node_uid,
+            node_title=node_obj.title if node_obj else "",
+            error=str(exc),
+            sentence_value=sentence,
+            effective_date_value=effective_date or "",
+            classification_value=classification,
+        )
+        return HTMLResponse(html)
+
+    # Success: clear modal, refresh center pane
+    resp = HTMLResponse("")
+    resp.headers["HX-Trigger"] = json.dumps({
+        "closeModal": True,
+        "refreshTree": True,
+        "refreshNode": {"nodeUid": node_uid},
+    })
+    return resp

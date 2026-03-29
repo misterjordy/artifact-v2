@@ -1,0 +1,60 @@
+<div x-data="{ open: true }"
+     x-show="open" x-transition.opacity
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     @keydown.escape.window="open = false; $el.parentElement.innerHTML = ''">
+  <div class="bg-[var(--color-bg)] rounded-lg shadow-xl w-full max-w-lg mx-4 p-6"
+       @click.outside="open = false; document.getElementById('modal').innerHTML = ''">
+    <h3 class="text-lg font-semibold text-[var(--color-text)] mb-1">Add Fact</h3>
+    {% if node_title %}
+    <p class="text-xs text-[var(--color-text-muted)] mb-4">Node: {{ node_title }}</p>
+    {% endif %}
+
+    {% if error %}
+    <div class="mb-3 px-3 py-2 text-sm rounded bg-red-100 text-red-800 border border-red-200">{{ error }}</div>
+    {% endif %}
+
+    <form hx-post="/partials/fact-form" hx-target="#modal" hx-swap="innerHTML">
+      <input type="hidden" name="node_uid" value="{{ node_uid }}">
+
+      <div class="mb-4">
+        <label for="fact-sentence" class="block text-sm font-medium text-[var(--color-text)] mb-1">Sentence</label>
+        <textarea id="fact-sentence" name="sentence" required minlength="10" maxlength="2000" rows="3"
+                  class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] resize-y"
+                  placeholder="Enter the fact sentence (min 10 characters)"
+                  autofocus>{{ sentence_value }}</textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label for="fact-effective-date" class="block text-sm font-medium text-[var(--color-text)] mb-1">Effective Date</label>
+          <input id="fact-effective-date" type="date" name="effective_date"
+                 value="{{ effective_date_value }}"
+                 class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]">
+        </div>
+        <div>
+          <label for="fact-classification" class="block text-sm font-medium text-[var(--color-text)] mb-1">Classification</label>
+          <select id="fact-classification" name="classification"
+                  class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]">
+            <option value="UNCLASSIFIED" {% if classification_value == 'UNCLASSIFIED' %}selected{% endif %}>UNCLASSIFIED</option>
+            <option value="CUI" {% if classification_value == 'CUI' %}selected{% endif %}>CUI</option>
+            <option value="CONFIDENTIAL" {% if classification_value == 'CONFIDENTIAL' %}selected{% endif %}>CONFIDENTIAL</option>
+            <option value="SECRET" {% if classification_value == 'SECRET' %}selected{% endif %}>SECRET</option>
+            <option value="TOP SECRET" {% if classification_value == 'TOP SECRET' %}selected{% endif %}>TOP SECRET</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button"
+                @click="open = false; document.getElementById('modal').innerHTML = ''"
+                class="px-4 py-2 text-sm rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] transition-colors">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 text-sm rounded-md bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity">
+          Create Fact
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

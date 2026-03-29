@@ -157,5 +157,67 @@ async def tree_partial(
     """HTMX partial: collapsible tree for the left pane."""
     nodes = await get_all_nodes(db)
     nested = build_nested_tree(nodes)
-    html = _jinja.get_template("partials/tree.html").render(nodes=nested)
+
+    # Pre-compute per-node permission sets for button visibility
+    can_contribute_uids, can_manage_uids = await _compute_tree_permissions(
+        user, nodes, db,
+    )
+
+    html = _jinja.get_template("partials/tree.html").render(
+        nodes=nested,
+        can_contribute_uids=can_contribute_uids,
+        can_manage_uids=can_manage_uids,
+    )
     return HTMLResponse(html)
+
+
+async def _compute_tree_permissions(
+    user: FcUser,
+    all_nodes: list,
+    db: AsyncSession,
+) -> tuple[set[str], set[str]]:
+    """Return (can_contribute_uids, can_manage_uids) as sets of str UUIDs."""
+    from artiFACT.kernel.permissions.grants import get_active_grants
+    from artiFACT.kernel.permissions.hierarchy import REQUIRED_ROLES, role_gte
+
+    all_uid_strs = {str(n.node_uid) for n in all_nodes}
+    can_contribute: set[str] = set()
+    can_manage: set[str] = set()
+
+    # Global role covers all nodes
+    if role_gte(user.global_role, REQUIRED_ROLES["contribute"]):
+        can_contribute = set(all_uid_strs)
+    if role_gte(user.global_role, REQUIRED_ROLES["manage_node"]):
+        can_manage = set(all_uid_strs)
+
+    if len(can_contribute) == len(all_uid_strs) and len(can_manage) == len(all_uid_strs):
+        return can_contribute, can_manage
+
+    # Build parent→children map for descendant expansion
+    children_map: dict[str, list[str]] = {}
+    for n in all_nodes:
+        if n.parent_node_uid:
+            children_map.setdefault(str(n.parent_node_uid), []).append(str(n.node_uid))
+
+    def _descendants(uid_str: str) -> set[str]:
+        result: set[str] = set()
+        stack = [uid_str]
+        while stack:
+            current = stack.pop()
+            for child in children_map.get(current, []):
+                result.add(child)
+                stack.append(child)
+        return result
+
+    grants = await get_active_grants(db, user.user_uid)
+    for grant in grants:
+        guid = str(grant.node_uid)
+        if guid not in all_uid_strs:
+            continue
+        desc = {guid} | _descendants(guid)
+        if role_gte(grant.role, REQUIRED_ROLES["contribute"]):
+            can_contribute |= desc
+        if role_gte(grant.role, REQUIRED_ROLES["manage_node"]):
+            can_manage |= desc
+
+    return can_contribute, can_manage

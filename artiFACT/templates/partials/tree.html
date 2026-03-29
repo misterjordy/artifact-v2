@@ -15,18 +15,25 @@
        hx-target="#center-pane"
        hx-swap="innerHTML">{{ node.title }}</a>
 
+    {% set nuid = node.node_uid | string %}
+    {% if can_manage_uids and nuid in can_manage_uids or can_contribute_uids and nuid in can_contribute_uids %}
     <span class="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+      {% if can_manage_uids and nuid in can_manage_uids %}
       <button class="px-1 py-0.5 text-[10px] rounded text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
               title="Add node"
               hx-get="/partials/node-form?parent={{ node.node_uid }}"
               hx-target="#modal"
               hx-swap="innerHTML">+node</button>
+      {% endif %}
+      {% if can_contribute_uids and nuid in can_contribute_uids %}
       <button class="px-1 py-0.5 text-[10px] rounded text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
               title="Add fact"
               hx-get="/partials/fact-form?node={{ node.node_uid }}"
               hx-target="#modal"
               hx-swap="innerHTML">+fact</button>
+      {% endif %}
     </span>
+    {% endif %}
   </div>
 
   {% if node.children %}

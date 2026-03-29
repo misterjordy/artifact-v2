@@ -8,8 +8,26 @@
       {% if not loop.last %}<span class="text-[var(--color-border)]">/</span>{% endif %}
       {% endfor %}
     </nav>
-    <h2 class="text-lg font-semibold text-[var(--color-text)]">{{ node.title }}</h2>
-    <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ facts | length }} fact{{ 's' if facts | length != 1 else '' }} in this node</p>
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-[var(--color-text)]">{{ node.title }}</h2>
+        <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ facts | length }} fact{{ 's' if facts | length != 1 else '' }} in this node</p>
+      </div>
+      <div class="flex items-center gap-2">
+        {% if can_manage %}
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] transition-colors"
+                hx-get="/partials/node-form?parent={{ node.node_uid }}"
+                hx-target="#modal"
+                hx-swap="innerHTML">+ Node</button>
+        {% endif %}
+        {% if can_contribute %}
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
+                hx-get="/partials/fact-form?node={{ node.node_uid }}"
+                hx-target="#modal"
+                hx-swap="innerHTML">+ Fact</button>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
   <!-- Facts list -->
