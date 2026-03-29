@@ -121,6 +121,171 @@ Pydantic models: PascalCase + suffix (FactCreate, FactOut, FactUpdate)
 - No inline <script> blocks — all JS in .js files loaded with defer
 ```
 
+### 2.3.1 UX Consistency
+
+**Layout**
+
+```
+- Three-pane structure: sidebar (fixed left), content (scrollable center), optional detail
+- Sidebar: fixed width (--sidebar-width: 272px), dark background (--color-bg-sidebar)
+  - Brand link top-left: "artiFACT" linking to /browse
+  - Collapsible taxonomy tree loaded via HTMX (hx-get="/partials/tree")
+  - Search lives in sidebar taxonomy pane, NOT in the header
+  - Primary nav below tree: Browse, Queue, Import, AI Chat, Export
+  - Divider, then: Admin, Settings
+  - Footer: username + sign-out link
+- Header (top bar): page heading left, settings gear icon top-right linking to /settings
+  - No search bar in header — removed to keep header minimal
+- Content area: bg-[var(--color-bg)], card surfaces use bg-[var(--color-bg-card)]
+```
+
+**Theming**
+
+```
+Three modes, selected via class on <html>:
+  html.eyecare   — warm sepia, 508-compliant (DEFAULT)
+  html.dark      — dark purple/blue
+  html.default   — original light gray/white (labeled "Light" in UI)
+
+Default: eyecare — chosen for WCAG AA 508 compliance out of the box
+
+14 core CSS variables (must exist in each mode block in theme.css):
+  --color-bg            Page background
+  --color-bg-card       Card / panel surfaces
+  --color-bg-sidebar    Sidebar background
+  --color-text          Primary text
+  --color-text-muted    Secondary / helper text
+  --color-text-sidebar  Sidebar link text
+  --color-accent        Links, primary buttons, active indicators
+  --color-accent-gold   Gold highlights
+  --color-success       Approve, positive states
+  --color-danger        Reject, destructive actions
+  --color-info          Informational highlights
+  --color-tag           Tag / label color
+  --color-border        Borders, dividers
+  --color-header-bg     Header background token
+
+Additional variables used in templates:
+  --color-bg-topbar, --color-bg-input, --color-bg-hover, --color-bg-active,
+  --color-text-sidebar-heading, --color-text-sidebar-bright, --color-text-on-accent,
+  --color-accent-hover, --color-accent-light, --color-border-input, --color-warning
+
+Reference in templates via Tailwind arbitrary values:
+  bg-[var(--color-bg)]  text-[var(--color-text)]  border-[var(--color-border)]
+
+NO hardcoded Tailwind color classes (bg-white, text-slate-800, etc.):
+  These break when theme changes — the variable-based class updates, the hardcoded one doesn't.
+  Semantic colors (bg-green-100, bg-red-100) for state badges are allowed.
+
+Theme toggle: /settings page, three buttons with SVG icons (eye, moon, sun)
+  - Alpine.js x-data="themeToggle()" defined in settings.js
+  - Saves to localStorage key: "artifact-theme"
+  - classList.remove/add on document.documentElement
+
+FOUC prevention: inline <script> in <head> BEFORE theme.css link
+  - ONE exception to "no inline scripts" rule
+  - Reads localStorage, sets html class before first paint
+  - Defaults to 'eyecare' when localStorage is empty
+  - <html> tag includes class="eyecare" as server-side fallback
+
+508 compliance (eyecare mode):
+  - Normal text contrast: >= 4.5:1 (WCAG AA)
+  - Large text contrast:  >= 3.0:1 (WCAG AA)
+  - :focus-visible on all interactive elements: 2px solid outline + box-shadow
+  - No color-only information — always include text labels
+```
+
+**CSP (Content Security Policy)**
+
+```
+Defined in: artiFACT/kernel/security_headers.py
+
+script-src 'self' 'unsafe-eval' 'unsafe-inline'
+  https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://unpkg.com
+style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net
+
+- 'unsafe-eval': required by Alpine.js (expression evaluation via new Function)
+- 'unsafe-inline': required by FOUC prevention script in <head>
+- Tailwind CDN, unpkg (Alpine, HTMX) are allowlisted sources
+```
+
+**State Badges**
+
+```
+Fact states map to semantic Tailwind colors (these are the allowed exceptions):
+  published  → bg-green-100 text-green-800
+  signed     → bg-blue-100  text-blue-800
+  proposed   → bg-yellow-100 text-yellow-800
+  rejected   → bg-red-100   text-red-800
+  (other)    → bg-[var(--color-border)] text-[var(--color-text-muted)]
+
+Badge format: pill shape (rounded, px-2 py-0.5, text-[10px] font-medium)
+Always include text label — never color alone (508)
+```
+
+**Interactive Elements**
+
+```
+Buttons:
+  Primary:  bg-[var(--color-accent)] text-[var(--color-text-on-accent)] hover:opacity-90
+  Success:  bg-[var(--color-success)] text-[var(--color-text-on-accent)]
+  Danger:   bg-[var(--color-danger)] text-[var(--color-text-on-accent)]
+  Ghost:    text-[var(--color-text-muted)] hover:text-[var(--color-text)]
+  Outline:  border border-[var(--color-accent)] text-[var(--color-accent)]
+  Disabled: :disabled with opacity-50 cursor-not-allowed
+
+Forms:
+  - Alpine x-data for local state, HTMX hx-post for submission
+  - Inputs: border-[var(--color-border-input)] bg-[var(--color-bg-input)]
+  - Focus: focus:ring-2 focus:ring-[var(--color-accent)]
+
+Modals:
+  - Loaded into #modal div via HTMX (hx-target="#modal" hx-swap="innerHTML")
+  - Backdrop: fixed inset-0 bg-black/50
+  - Close via: $dispatch('closeModal') event, Escape key, click-outside
+  - Cancel buttons must call $dispatch('closeModal')
+  - browse.js listens for closeModal event and clears #modal innerHTML
+
+Errors:
+  - Inline display near the form, not alert()
+  - Color: text-[var(--color-danger)]
+  - Alpine x-show with error message variable
+```
+
+**Navigation**
+
+```
+Sidebar nav order: Browse, Queue, Import, AI Chat, Export | Admin, Settings
+Active page: active_nav template variable, highlights with:
+  bg-[var(--color-bg-active)] text-[var(--color-text-sidebar-bright)] font-medium
+Inactive: text-[var(--color-text-sidebar)] hover:bg-[var(--color-bg-hover)]
+
+Queue badge: span#nav-badge with badge_total count, bg-[var(--color-accent)]
+Breadcrumbs: nav element, items separated by "/" span
+Page title format: "Section | artiFACT" (pipe separator, not em dash)
+```
+
+**Permission-Aware UI**
+
+```
+- Hide buttons the user cannot use — do not show then return 403
+- Tree sidebar: +node / +fact buttons only shown when can_manage_uids / can_contribute_uids
+- Browse node view: "+ Node" button gated by can_manage, "+ Fact" by can_contribute
+- These are computed server-side via kernel.permissions and passed to templates
+- Never check global_role directly in templates (exception: admin nav visibility)
+```
+
+**JS Patterns**
+
+```
+- All JS in artiFACT/static/js/*.js, loaded via {% block head_scripts %} with defer
+- Alpine.js x-data functions defined in module .js files (settingsApp, queuePage, etc.)
+  Exception: simple boolean toggles (x-data="{ open: true }") may be inline
+- HTMX CSRF injection: htmx:configRequest listener in browse.js injects X-CSRF-Token header
+- Custom events: refreshTree, refreshNode, closeModal dispatched on document.body
+- No innerHTML with user data — use textContent or Jinja2 autoescape
+```
+
 ### 2.4 Git
 
 ```
