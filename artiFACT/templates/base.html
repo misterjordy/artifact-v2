@@ -97,6 +97,36 @@
         </div>
       </header>
 
+      <!-- Playground banner -->
+      {% if playground_mode %}
+      <div class="flex items-center justify-between px-4 py-2 text-sm font-medium bg-amber-100 border-b border-amber-200 text-slate-800">
+        <span>&#127917; Playground Mode — You are <strong>{{ user.display_name if user is defined }}</strong></span>
+        <div class="flex items-center gap-2">
+          <button onclick="playgroundAction('/playground/reset')"
+                  class="px-3 py-1 text-xs font-semibold rounded bg-amber-200 hover:bg-amber-300 transition-colors">
+            Reset
+          </button>
+          <button onclick="playgroundAction('/playground/exit')"
+                  class="px-3 py-1 text-xs font-semibold rounded bg-slate-200 hover:bg-slate-300 transition-colors">
+            Exit
+          </button>
+        </div>
+      </div>
+      <script>
+        function playgroundAction(url) {
+          const csrfToken = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrf_token='))
+            ?.split('=')[1] || '';
+          fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+            redirect: 'follow',
+          }).then(resp => { window.location.href = resp.url || '/playground'; });
+        }
+      </script>
+      {% endif %}
+
       <!-- Page content -->
       <main class="flex-1 overflow-y-auto {% block main_class %}p-6{% endblock %}">
         {% block content %}{% endblock %}

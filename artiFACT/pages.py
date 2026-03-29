@@ -44,57 +44,89 @@ async def login_page(
 async def queue_page(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
 ) -> HTMLResponse:
     """Queue view with tabs for proposals, moves, unsigned."""
     approvable = await get_approvable_nodes(db, user)
     badge_total = await get_badge_count(db, user.user_uid, list(approvable.keys()))
     html = _jinja.get_template("queue.html").render(
-        user=user, badge_total=badge_total, active_nav="queue"
+        user=user, badge_total=badge_total, active_nav="queue",
+        playground_mode=(playground_mode == "true"),
     )
     return HTMLResponse(html)
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+async def settings_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
     """AI key settings page."""
-    html = _jinja.get_template("settings.html").render(user=user, active_nav="settings")
+    html = _jinja.get_template("settings.html").render(
+        user=user, active_nav="settings", playground_mode=(playground_mode == "true"),
+    )
     return HTMLResponse(html)
 
 
 @router.get("/chat", response_class=HTMLResponse)
-async def chat_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+async def chat_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
     """AI chat page."""
-    html = _jinja.get_template("chat.html").render(user=user, active_nav="chat")
+    html = _jinja.get_template("chat.html").render(
+        user=user, active_nav="chat", playground_mode=(playground_mode == "true"),
+    )
     return HTMLResponse(html)
 
 
 @router.get("/import", response_class=HTMLResponse)
-async def import_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+async def import_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
     """Document import page."""
-    html = _jinja.get_template("import.html").render(user=user, active_nav="import")
+    html = _jinja.get_template("import.html").render(
+        user=user, active_nav="import", playground_mode=(playground_mode == "true"),
+    )
     return HTMLResponse(html)
 
 
 @router.get("/export", response_class=HTMLResponse)
-async def export_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+async def export_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
     """Export and document generation page."""
-    html = _jinja.get_template("export.html").render(user=user, active_nav="export")
+    html = _jinja.get_template("export.html").render(
+        user=user, active_nav="export", playground_mode=(playground_mode == "true"),
+    )
     return HTMLResponse(html)
 
 
 @router.get("/admin", response_class=HTMLResponse)
-async def admin_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+async def admin_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
     """Admin dashboard page (admin-only)."""
     if user.global_role != "admin":
         raise Forbidden("Admin access required")
-    html = _jinja.get_template("admin.html").render(user=user, active_nav="admin")
+    html = _jinja.get_template("admin.html").render(
+        user=user, active_nav="admin", playground_mode=(playground_mode == "true"),
+    )
     return HTMLResponse(html)
 
 
 @router.get("/browse", response_class=HTMLResponse)
-async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+async def browse_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
     """Main browse view with tree in left pane."""
-    html = _jinja.get_template("browse.html").render(user=user, active_nav="browse")
+    html = _jinja.get_template("browse.html").render(
+        user=user, active_nav="browse", playground_mode=(playground_mode == "true"),
+    )
     return HTMLResponse(html)
 
 
