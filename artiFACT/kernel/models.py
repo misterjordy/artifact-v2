@@ -9,9 +9,11 @@ from sqlalchemy import (
     Computed,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     MetaData,
+    Sequence,
     SmallInteger,
     String,
     Text,
@@ -292,6 +294,9 @@ class FcEventLog(Base):
     event_uid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    seq: Mapped[int] = mapped_column(
+        Integer, Identity(always=True), unique=True, nullable=False, index=True
+    )
     entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
     entity_uid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -391,6 +396,28 @@ class FcImportSession(Base):
         ),
         Index("idx_import_program", "program_node_uid"),
         Index("idx_import_hash", "source_hash"),
+    )
+
+
+class FcDocumentTemplate(Base):
+    __tablename__ = "fc_document_template"
+
+    template_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    abbreviation: Mapped[str] = mapped_column(String(20), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sections: Mapped[list] = mapped_column(JSONB, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
 

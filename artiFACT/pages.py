@@ -71,6 +71,13 @@ async def import_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     return HTMLResponse(html)
 
 
+@router.get("/export", response_class=HTMLResponse)
+async def export_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
+    """Export and document generation page."""
+    html = _jinja.get_template("export.html").render(user=user, active_nav="export")
+    return HTMLResponse(html)
+
+
 @router.get("/browse", response_class=HTMLResponse)
 async def browse_page(user: FcUser = Depends(get_current_user)) -> HTMLResponse:
     """Main browse view with tree in left pane."""
