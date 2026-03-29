@@ -1,11 +1,11 @@
 {% macro render_node(node, level=0, breadcrumb_path="") %}
 {% set current_breadcrumb = (breadcrumb_path + " > " + node.title) if breadcrumb_path else node.title %}
-<div class="group" x-data="{ open: true }" style="padding-left: {{ level * 16 }}px">
-  <div class="flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors">
+<div x-data="{ open: true }">
+  <div class="group flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors">
     {% if node.children %}
-    <button class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-[10px] text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]"
+    <button class="tree-toggle flex-shrink-0 w-4 h-4 flex items-center justify-center text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]"
             @click="open = !open" aria-label="Toggle">
-      <span x-text="open ? '\u25BE' : '\u25B8'"></span>
+      <span class="text-[1.25em] leading-none" x-text="open ? '\u25BE' : '\u25B8'"></span>
     </button>
     {% else %}
     <span class="flex-shrink-0 w-4 h-4"></span>
@@ -45,7 +45,7 @@
   </div>
 
   {% if node.children %}
-  <div x-show="open" x-collapse>
+  <div x-show="open" x-collapse class="tree-children">
     {% for child in node.children %}
     {{ render_node(child, level + 1, current_breadcrumb) }}
     {% endfor %}

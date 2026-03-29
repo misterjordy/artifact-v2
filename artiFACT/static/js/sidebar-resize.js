@@ -27,7 +27,7 @@
     handle.className = "sidebar-resize-handle";
     handle.setAttribute("role", "separator");
     handle.setAttribute("aria-label", "Resize sidebar");
-    sidebar.style.position = "relative";
+    sidebar.classList.add("relative");
     sidebar.appendChild(handle);
 
     var dragging = false;

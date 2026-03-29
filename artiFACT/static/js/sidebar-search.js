@@ -19,21 +19,21 @@
     var isSearching = false;
 
     function showCollapseBtn() {
-      if (collapseBtn) collapseBtn.style.display = "";
-      if (clearBtn) clearBtn.style.display = "none";
+      if (collapseBtn) collapseBtn.classList.remove("hidden");
+      if (clearBtn) clearBtn.classList.add("hidden");
     }
 
     function showClearBtn() {
-      if (collapseBtn) collapseBtn.style.display = "none";
-      if (clearBtn) clearBtn.style.display = "";
+      if (collapseBtn) collapseBtn.classList.add("hidden");
+      if (clearBtn) clearBtn.classList.remove("hidden");
     }
 
     function clearSearch() {
       input.value = "";
       showCollapseBtn();
       if (searchResultsContainer) searchResultsContainer.innerHTML = "";
-      if (searchResultsContainer) searchResultsContainer.style.display = "none";
-      if (treeContainer) treeContainer.style.display = "";
+      if (searchResultsContainer) searchResultsContainer.classList.add("hidden");
+      if (treeContainer) treeContainer.classList.remove("hidden");
       isSearching = false;
     }
 
@@ -55,8 +55,8 @@
       }
       isSearching = true;
       showClearBtn();
-      if (treeContainer) treeContainer.style.display = "none";
-      if (searchResultsContainer) searchResultsContainer.style.display = "";
+      if (treeContainer) treeContainer.classList.add("hidden");
+      if (searchResultsContainer) searchResultsContainer.classList.remove("hidden");
 
       // Get active program filters
       var programFilter = "";

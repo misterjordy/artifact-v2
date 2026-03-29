@@ -27,7 +27,11 @@
      hx-target="#center-pane"
      hx-swap="innerHTML">
     <span class="block truncate text-[12px] text-[var(--color-text-sidebar)]">{{ r.display_sentence }}</span>
+    {% if r.state == 'node' %}
+    <span class="block truncate text-[10px] text-[var(--color-accent-gold)]">node</span>
+    {% else %}
     <span class="block truncate text-[10px] text-[var(--color-text-sidebar-heading)]">{{ r.state }}</span>
+    {% endif %}
   </a>
 {% endfor %}
 {% else %}

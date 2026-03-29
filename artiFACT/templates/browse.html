@@ -15,8 +15,8 @@
 {% block page_heading %}Browse{% endblock %}
 
 {% block sidebar_top %}
-<!-- Search bar + collapse button -->
-<div class="flex items-center gap-1 px-1 pb-2">
+<!-- Search bar + collapse button (sticky) -->
+<div class="sticky top-0 z-10 flex items-center gap-1 px-1 pb-2 pt-0 bg-[var(--color-bg-sidebar)]">
   <input id="sidebar-search-input"
          type="text"
          placeholder="Search taxonomy"
@@ -33,9 +33,8 @@
     </svg>
   </button>
   <button id="sidebar-clear-btn"
-          class="flex-shrink-0 p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
-          title="Clear search"
-          style="display: none;">
+          class="hidden flex-shrink-0 p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
+          title="Clear search">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
     </svg>
@@ -72,27 +71,14 @@
   <div class="border-b border-[var(--color-border)]/10 mt-2 mb-1"></div>
 </div>
 
-<!-- Taxonomy section label -->
-<div class="px-1 pb-2">
-  <span class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)]">
-    Taxonomy
-  </span>
-</div>
-
 <!-- Search results container (hidden by default) -->
-<div id="sidebar-search-results" class="mb-4 -mx-2 px-2" style="display: none;"></div>
+<div id="sidebar-search-results" class="hidden mb-4 -mx-2 px-2"></div>
 
 <!-- Tree container -->
 <div id="tree-container"
      class="mb-4 -mx-2 px-2"
      hx-get="/partials/tree" hx-trigger="load, refreshTree from:body" hx-swap="innerHTML">
   <div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">Loading tree&hellip;</div>
-</div>
-
-<div class="border-t border-[var(--color-border)]/10 pt-3 mt-1">
-  <span class="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)]">
-    Navigation
-  </span>
 </div>
 {% endblock %}
 

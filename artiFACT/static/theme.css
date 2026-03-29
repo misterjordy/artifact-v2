@@ -139,6 +139,16 @@ html.eyecare .sidebar-resize-handle::after {
   color: var(--color-accent-gold);
 }
 
+/* Tree hierarchy indent + Reddit-style left line */
+.tree-children {
+  margin-left: 0.75rem;
+  padding-left: 0.125rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+}
+.tree-children .tree-toggle {
+  margin-left: -0.2rem;
+}
+
 /* Scrollbar styling for sidebar */
 .sidebar-scroll::-webkit-scrollbar { width: 4px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }

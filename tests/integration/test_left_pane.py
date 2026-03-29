@@ -201,29 +201,51 @@ async def test_favorites_use_localstorage() -> None:
     assert "localStorage" in js
 
 
-# ── TEST 6: Search input in sidebar ──────────────────────────────────────
+# ── TEST 6: Search input in sidebar, nav in header ──────────────────────
 
 async def test_search_input_in_sidebar(authed_client: AsyncClient) -> None:
-    """Sidebar has search input, no submit button, header has no search."""
+    """Sidebar has search input, no submit button, header has nav links."""
     resp = await authed_client.get("/browse")
     assert resp.status_code == 200
     html = resp.text
     assert 'placeholder="Search taxonomy"' in html
     # No search submit button in sidebar
     assert '<button type="submit"' not in html or "Search" not in html.split("sidebar")[0]
-    # The header should not contain a search input
+    # Header should contain nav links, not search
     header_match = re.search(r"<header.*?</header>", html, re.DOTALL)
     if header_match:
-        assert "Search taxonomy" not in header_match.group()
+        header_html = header_match.group()
+        assert "Search taxonomy" not in header_html
+        assert "Queue" in header_html
+        assert "Import" in header_html
+        assert "AI Chat" in header_html
+        assert "Export" in header_html
+        assert "Admin" in header_html
+    # Sidebar should NOT have nav links
+    sidebar_match = re.search(r"<aside.*?</aside>", html, re.DOTALL)
+    if sidebar_match:
+        sidebar_html = sidebar_match.group()
+        assert 'href="/queue"' not in sidebar_html
+        assert 'href="/settings"' not in sidebar_html
 
 
-# ── TEST 7: Collapse button SVG present ──────────────────────────────────
+# ── TEST 7: Collapse button SVG present, search sticky, no Taxonomy heading
 
-async def test_collapse_svg_present(authed_client: AsyncClient) -> None:
-    """Sidebar contains the collapse SVG with unique path."""
+async def test_collapse_svg_and_sticky_search(authed_client: AsyncClient) -> None:
+    """Sidebar contains collapse SVG, sticky search, no Taxonomy heading."""
     resp = await authed_client.get("/browse")
     assert resp.status_code == 200
-    assert "M22.6,15.4" in resp.text
+    html = resp.text
+    assert "M22.6,15.4" in html
+    # Search bar should be sticky
+    assert "sticky" in html
+    # No "Taxonomy" section heading
+    sidebar_match = re.search(r"<aside.*?</aside>", html, re.DOTALL)
+    if sidebar_match:
+        # Should not have a standalone "Taxonomy" heading label
+        assert ">Taxonomy<" not in sidebar_match.group().replace(" ", "").replace("\n", "")
+        # But "Search taxonomy" placeholder is fine
+        assert 'placeholder="Search taxonomy"' in sidebar_match.group()
 
 
 # ── TEST 8: Search results endpoint works ────────────────────────────────
