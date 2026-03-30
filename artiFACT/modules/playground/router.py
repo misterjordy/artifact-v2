@@ -38,7 +38,7 @@ async def playground_landing(response: Response) -> HTMLResponse:
     csrf_token = generate_csrf_token()
     set_csrf_cookie(response, csrf_token)
     html = _jinja.get_template("playground.html").render(
-        csrf_token=csrf_token, active_nav=""
+        csrf_token=csrf_token, active_nav="playground"
     )
     resp = HTMLResponse(html)
     # Copy CSRF cookie to the HTML response

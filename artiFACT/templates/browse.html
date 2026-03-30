@@ -44,15 +44,15 @@
 <!-- Favorites section -->
 <div x-data="{ favOpen: true }" x-show="$store.favorites.items.length > 0" class="px-1 pb-2">
   <button @click="favOpen = !favOpen"
-          class="flex items-center gap-1 w-full text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)] hover:text-[var(--color-text-sidebar-bright)] transition-colors">
-    <span x-text="favOpen ? '▾' : '▸'" class="text-[10px]"></span>
+          class="flex items-center gap-1 w-full text-label font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)] hover:text-[var(--color-text-sidebar-bright)] transition-colors">
+    <span x-text="favOpen ? '▾' : '▸'" class="text-2xs"></span>
     <span>Favorites</span>
-    <span class="ml-auto text-[10px] font-normal" x-text="$store.favorites.items.length"></span>
+    <span class="ml-auto text-2xs font-normal" x-text="$store.favorites.items.length"></span>
   </button>
   <div x-show="favOpen" x-collapse class="mt-1 space-y-0.5">
     <template x-for="fav in $store.favorites.items" :key="fav.uid">
       <div class="group flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors">
-        <button class="flex-shrink-0 text-[12px] text-[var(--color-accent-gold)] hover:text-[var(--color-danger)] transition-colors"
+        <button class="flex-shrink-0 text-xs text-[var(--color-accent-gold)] hover:text-[var(--color-danger)] transition-colors"
                 @click="$store.favorites.remove(fav.uid)"
                 title="Unstar">★</button>
         <a class="flex-1 min-w-0 cursor-pointer"
@@ -60,9 +60,9 @@
            hx-target="#center-pane"
            hx-swap="innerHTML"
            @click="htmx.ajax('GET', '/partials/browse/' + fav.uid, {target: '#center-pane', swap: 'innerHTML'})">
-          <span class="block truncate text-[13px] text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors"
+          <span class="block truncate text-node text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors"
                 x-text="fav.title"></span>
-          <span class="block truncate text-[10px] text-[var(--color-text-sidebar-heading)]"
+          <span class="block truncate text-2xs text-[var(--color-text-sidebar-heading)]"
                 x-text="fav.breadcrumb"></span>
         </a>
       </div>

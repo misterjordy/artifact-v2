@@ -38,6 +38,23 @@
     </div>
   </section>
 
+  <!-- Font Size Section -->
+  <section class="mb-6" x-data="fontSizeSlider()">
+    <h3 class="text-sm font-semibold mb-3 text-[var(--color-text)]">Font Size</h3>
+    <div class="flex items-center gap-3">
+      <span class="text-2xs text-[var(--color-text-muted)] select-none" aria-hidden="true">A</span>
+      <input type="range" min="0" max="100" step="1"
+             x-model="sliderVal" @input="update()"
+             class="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-[var(--color-accent)] bg-[var(--color-border)]"
+             aria-label="Font size">
+      <span class="text-base text-[var(--color-text-muted)] select-none" aria-hidden="true">A</span>
+    </div>
+    <div class="flex items-center justify-between mt-2">
+      <span class="text-2xs text-[var(--color-text-muted)]" x-text="displayPct + '%'"></span>
+      <button @click="reset()" class="text-2xs text-[var(--color-accent)] hover:underline">Reset</button>
+    </div>
+  </section>
+
   <!-- AI API Keys Section -->
   <section class="mb-6">
     <h3 class="text-sm font-semibold mb-3 text-[var(--color-text)]">AI API Keys</h3>
@@ -53,7 +70,7 @@
             <span class="text-xs font-medium capitalize" x-text="key.provider"></span>
             <span class="text-xs text-[var(--color-text-muted)] ml-1" x-text="key.key_prefix"></span>
             <template x-if="key.model_override">
-              <span class="text-[10px] bg-[var(--color-accent-light)] text-[var(--color-accent)] rounded px-1.5 py-0.5 ml-1" x-text="key.model_override"></span>
+              <span class="text-2xs bg-[var(--color-accent-light)] text-[var(--color-accent)] rounded px-1.5 py-0.5 ml-1" x-text="key.model_override"></span>
             </template>
           </div>
           <button class="text-xs text-[var(--color-danger)] hover:opacity-80 transition-opacity"

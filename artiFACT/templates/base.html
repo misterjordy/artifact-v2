@@ -64,7 +64,7 @@
                       {% if active_nav == 'queue' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
               Queue
               {% if badge_total is defined and badge_total %}
-              <span id="nav-badge" class="ml-0.5 inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">{{ badge_total }}</span>
+              <span id="nav-badge" class="ml-0.5 inline-flex items-center justify-center w-4 h-4 text-3xs font-bold rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">{{ badge_total }}</span>
               {% endif %}
             </a>
             <a href="/import"
@@ -79,6 +79,10 @@
                class="px-2 py-1 text-xs rounded transition-colors
                       {% if active_nav == 'export' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
               Export</a>
+            <a href="/playground"
+               class="px-2 py-1 text-xs rounded transition-colors
+                      {% if active_nav == 'playground' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
+              Playground</a>
             <a href="/admin"
                class="px-2 py-1 text-xs rounded transition-colors
                       {% if active_nav == 'admin' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">

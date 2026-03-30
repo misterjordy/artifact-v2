@@ -11,12 +11,12 @@
     <span class="flex-shrink-0 w-4 h-4"></span>
     {% endif %}
 
-    <a class="flex-1 truncate text-[13px] text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] cursor-pointer transition-colors"
+    <a class="flex-1 truncate text-node text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] cursor-pointer transition-colors"
        hx-get="/partials/browse/{{ node.node_uid }}"
        hx-target="#center-pane"
        hx-swap="innerHTML">{{ node.title }}</a>
 
-    <button class="flex-shrink-0 text-[12px] transition-colors star-toggle"
+    <button class="flex-shrink-0 text-xs transition-colors star-toggle"
             :class="$store.favorites.isFavorite('{{ node.node_uid }}') ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-sidebar)] opacity-0 group-hover:opacity-100'"
             @click="$store.favorites.toggle('{{ node.node_uid }}', '{{ node.title | e }}', '{{ breadcrumb_path | e }}')"
             title="Toggle favorite">
@@ -27,14 +27,14 @@
     {% if can_manage_uids and nuid in can_manage_uids or can_contribute_uids and nuid in can_contribute_uids %}
     <span class="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
       {% if can_manage_uids and nuid in can_manage_uids %}
-      <button class="px-1 py-0.5 text-[10px] rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
+      <button class="px-1 py-0.5 text-2xs rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
               title="Add node"
               hx-get="/partials/node-form?parent={{ node.node_uid }}"
               hx-target="#modal"
               hx-swap="innerHTML">+node</button>
       {% endif %}
       {% if can_contribute_uids and nuid in can_contribute_uids %}
-      <button class="px-1 py-0.5 text-[10px] rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
+      <button class="px-1 py-0.5 text-2xs rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
               title="Add fact"
               hx-get="/partials/fact-form?node={{ node.node_uid }}"
               hx-target="#modal"
