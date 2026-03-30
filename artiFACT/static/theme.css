@@ -1,6 +1,9 @@
 /* artiFACT design tokens — all theming via CSS variables */
 /* Three modes: eyecare (default, 508-compliant), dark, default */
 
+/* Alpine.js: hide x-cloak elements until Alpine initializes */
+[x-cloak] { display: none !important; }
+
 /* Shared non-color tokens */
 :root {
   --sidebar-width:     272px;
