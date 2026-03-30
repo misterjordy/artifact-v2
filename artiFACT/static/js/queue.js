@@ -6,11 +6,17 @@ function queuePage() {
     proposals: [],
     moves: [],
     unsigned: [],
+    challenges: [],
+    myChallenges: [],
     revising: false,
     reviseVersionUid: null,
     reviseOriginal: '',
     reviseSentence: '',
     reviseNote: '',
+    rejectingChallenge: false,
+    rejectChallengeUid: null,
+    rejectChallengeProposed: '',
+    rejectChallengeNote: '',
 
     async init() {
       await this.refresh();
@@ -18,14 +24,18 @@ function queuePage() {
     },
 
     async refresh() {
-      const [pRes, mRes, uRes] = await Promise.all([
+      const [pRes, mRes, uRes, cRes, mcRes] = await Promise.all([
         fetch('/api/v1/queue/proposals', { credentials: 'same-origin' }),
         fetch('/api/v1/queue/moves', { credentials: 'same-origin' }),
         fetch('/api/v1/queue/unsigned', { credentials: 'same-origin' }),
+        fetch('/api/v1/queue/challenges', { credentials: 'same-origin' }),
+        fetch('/api/v1/queue/my-challenges', { credentials: 'same-origin' }),
       ]);
       if (pRes.ok) this.proposals = (await pRes.json()).data;
       if (mRes.ok) this.moves = (await mRes.json()).data;
       if (uRes.ok) this.unsigned = (await uRes.json()).data;
+      if (cRes.ok) this.challenges = (await cRes.json()).data;
+      if (mcRes.ok) this.myChallenges = (await mcRes.json()).data;
       this.updateNavBadge();
     },
 
@@ -39,7 +49,7 @@ function queuePage() {
     },
 
     updateNavBadge() {
-      const total = this.proposals.length + this.moves.length;
+      const total = this.proposals.length + this.moves.length + this.challenges.length;
       const el = document.getElementById('nav-badge');
       if (el) el.textContent = total;
     },
@@ -101,6 +111,34 @@ function queuePage() {
         body: '{}',
       });
       if (res.ok) await this.refresh();
+    },
+
+    async approveChallenge(uid) {
+      const res = await fetch(`/api/v1/queue/approve-challenge/${uid}`, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (res.ok) await this.refresh();
+    },
+
+    openRejectChallenge(ch) {
+      this.rejectChallengeUid = ch.comment_uid;
+      this.rejectChallengeProposed = ch.proposed_sentence;
+      this.rejectChallengeNote = '';
+      this.rejectingChallenge = true;
+    },
+
+    async submitRejectChallenge() {
+      const res = await fetch(`/api/v1/queue/reject-challenge/${this.rejectChallengeUid}`, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: this.rejectChallengeNote || null }),
+      });
+      if (res.ok) {
+        this.rejectingChallenge = false;
+        await this.refresh();
+      }
     },
   };
 }

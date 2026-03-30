@@ -1,10 +1,10 @@
 """Pydantic input/output models for facts."""
 
-from datetime import datetime
-from typing import Any
+from datetime import date, datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FactCreate(BaseModel):
@@ -79,3 +79,62 @@ class BulkRetireRequest(BaseModel):
 class BulkMoveRequest(BaseModel):
     fact_uids: list[UUID]
     target_node_uid: UUID
+
+
+# ── Fact History & Comments ──
+
+
+class CommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    comment_type: Literal["comment", "challenge", "resolution"] = "comment"
+    parent_comment_uid: UUID | None = None
+    proposed_sentence: str | None = Field(None, min_length=10, max_length=2000)
+
+
+class CommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    comment_uid: UUID
+    version_uid: UUID
+    parent_comment_uid: UUID | None = None
+    comment_type: str
+    body: str
+    created_by: dict[str, Any]
+    created_at: datetime
+    proposed_sentence: str | None = None
+    resolution_state: str | None = None
+    resolution_note: str | None = None
+    resolved_at: datetime | None = None
+
+
+class EventSummaryOut(BaseModel):
+    event_uid: UUID
+    event_type: str
+    actor: dict[str, Any]
+    occurred_at: datetime
+    note: str | None = None
+
+
+class VersionHistoryOut(BaseModel):
+    version_uid: UUID
+    state: str
+    display_sentence: str
+    change_summary: str | None = None
+    created_by: dict[str, Any]
+    created_at: datetime
+    published_at: datetime | None = None
+    signed_at: datetime | None = None
+    effective_date: str | None = None
+    classification: str | None = None
+    is_current_published: bool
+    is_current_signed: bool
+    comments: list[CommentOut] = []
+    events: list[EventSummaryOut] = []
+
+
+class FactHistoryOut(BaseModel):
+    fact_uid: UUID
+    node_uid: UUID
+    current_sentence: str
+    is_retired: bool
+    versions: list[VersionHistoryOut] = []

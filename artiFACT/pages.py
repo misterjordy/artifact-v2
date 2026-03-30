@@ -20,6 +20,7 @@ from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.kernel.permissions.resolver import can
 from artiFACT.kernel.schemas import NodeOut
 from artiFACT.modules.audit.service import flush_pending_events
+from artiFACT.modules.facts.history import get_fact_history
 from artiFACT.modules.facts.service import create_fact
 from artiFACT.modules.queue.badge_counter import get_badge_count
 from artiFACT.modules.queue.scope_resolver import get_approvable_nodes
@@ -269,6 +270,23 @@ async def browse_node_partial(
         children_with_facts=children_with_facts,
         can_contribute=can_contribute,
         can_manage=can_manage,
+    )
+    return HTMLResponse(html)
+
+
+@router.get("/partials/fact-history/{fact_uid}", response_class=HTMLResponse)
+async def fact_history_partial(
+    fact_uid: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> HTMLResponse:
+    """HTMX partial: fact version history timeline for the right pane."""
+    data = await get_fact_history(db, fact_uid, user)
+    approvable = await get_approvable_nodes(db, user)
+    can_approve = data["node_uid"] in approvable
+    can_contribute = await can(user, "contribute", data["node_uid"], db)
+    html = _jinja.get_template("partials/fact_history.html").render(
+        **data, can_approve=can_approve, can_contribute=can_contribute,
     )
     return HTMLResponse(html)
 

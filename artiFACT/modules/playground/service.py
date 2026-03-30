@@ -13,13 +13,14 @@ GOLDEN_SNAPSHOT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts"
 # Delete order respects FK constraints
 DELETE_STATEMENTS = [
     "DELETE FROM fc_event_log",
+    "DELETE FROM fc_fact_comment",
     "DELETE FROM fc_node_permission",
     "UPDATE fc_fact SET current_published_version_uid = NULL, current_signed_version_uid = NULL",
     "DELETE FROM fc_fact_version",
     "DELETE FROM fc_fact",
     "DELETE FROM fc_node",
     "DELETE FROM fc_document_template",
-    "DELETE FROM fc_user WHERE cac_dn IN ('jallred', 'dwallace', 'omartinez', 'pbeesly')",
+    "DELETE FROM fc_user WHERE cac_dn IN ('jallred', 'dwallace', 'omartinez', 'pbeesly', 'mscott', 'mpalmer', 'jhalpert', 'cbratton')",
 ]
 
 # SQL prefixes that should be executed from the snapshot

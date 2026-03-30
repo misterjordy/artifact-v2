@@ -10,18 +10,25 @@
   var MAX_WIDTH = 700;
   var DEFAULT_WIDTH = 380;
 
+  function pushCenter(widthPx) {
+    var main = document.getElementById("main-content");
+    if (main) main.style.marginRight = widthPx + "px";
+  }
+
   window.openRightPane = function (title) {
     var pane = document.getElementById("right-pane");
     var titleEl = document.getElementById("right-pane-title");
     if (!pane) return;
     if (titleEl && title) titleEl.textContent = title;
     pane.classList.add("open");
+    pushCenter(parseInt(pane.style.width, 10) || DEFAULT_WIDTH);
   };
 
   window.closeRightPane = function () {
     var pane = document.getElementById("right-pane");
     if (!pane) return;
     pane.classList.remove("open");
+    pushCenter(0);
     // Clear content after the slide-out animation completes
     setTimeout(function () {
       if (!pane.classList.contains("open")) {
@@ -73,6 +80,9 @@
       dragging = true;
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
+      // Disable transition during drag for instant feedback
+      var main = document.getElementById("main-content");
+      if (main) main.style.transition = "none";
     });
 
     document.addEventListener("mousemove", function (e) {
@@ -80,6 +90,7 @@
       var newWidth = window.innerWidth - e.clientX;
       newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth));
       pane.style.width = newWidth + "px";
+      pushCenter(newWidth);
     });
 
     document.addEventListener("mouseup", function () {
@@ -88,6 +99,9 @@
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       localStorage.setItem(STORAGE_KEY, parseInt(pane.style.width, 10));
+      // Re-enable transition after drag
+      var main = document.getElementById("main-content");
+      if (main) main.style.transition = "margin-right 0.25s ease";
     });
 
     // Listen for HTMX events that want to open the right pane

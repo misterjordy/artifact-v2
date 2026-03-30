@@ -272,6 +272,47 @@ class FcFactVersion(Base):
     )
 
 
+class FcFactComment(Base):
+    __tablename__ = "fc_fact_comment"
+
+    comment_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    version_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_fact_version.version_uid"), nullable=False
+    )
+    parent_comment_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_fact_comment.comment_uid"), nullable=True
+    )
+    comment_type: Mapped[str] = mapped_column(String(20), nullable=False, default="comment")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
+    proposed_sentence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_state: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "comment_type IN ('comment','challenge','resolution')",
+            name="ck_comment_type",
+        ),
+        CheckConstraint(
+            "resolution_state IN ('approved', 'rejected')",
+            name="ck_resolution_state",
+        ),
+        Index("idx_comment_version", "version_uid"),
+    )
+
+
 class FcEventLog(Base):
     __tablename__ = "fc_event_log"
 

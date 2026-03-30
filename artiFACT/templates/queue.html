@@ -24,6 +24,14 @@
             class="px-4 py-2 text-sm font-medium border-b-2 transition-colors">
       Unsigned <span class="ml-1 text-xs" x-text="'('+unsigned.length+')'"></span>
     </button>
+    <button @click="tab='challenges'" :class="tab==='challenges' ? 'border-amber-500 text-amber-500' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'"
+            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors">
+      Challenges <span class="ml-1 text-xs" x-text="'('+challenges.length+')'"></span>
+    </button>
+    <button @click="tab='my-challenges'" :class="tab==='my-challenges' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'"
+            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors">
+      My Challenges <span class="ml-1 text-xs" x-text="'('+myChallenges.length+')'"></span>
+    </button>
   </div>
 
   <!-- Proposals pane -->
@@ -107,6 +115,81 @@
     </template>
   </div>
 
+  <!-- Challenges pane -->
+  <div x-show="tab==='challenges'" class="space-y-3">
+    <template x-if="challenges.length === 0">
+      <p class="text-sm text-[var(--color-text-muted)]">No pending challenges.</p>
+    </template>
+    <template x-for="ch in challenges" :key="ch.comment_uid">
+      <div class="bg-[var(--color-bg-card)] border border-amber-300 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium uppercase bg-amber-100 text-amber-800">Challenge</span>
+          <span class="text-2xs text-[var(--color-text-muted)]" x-text="ch.node_title"></span>
+        </div>
+        <p class="text-xs text-[var(--color-text-muted)] mb-1">Current:</p>
+        <p class="text-sm text-[var(--color-text)] mb-2" x-text="ch.display_sentence"></p>
+        <p class="text-xs text-[var(--color-text-muted)] mb-1">Proposed:</p>
+        <p class="text-sm text-[var(--color-text)] font-medium mb-2" x-text="ch.proposed_sentence"></p>
+        <p class="text-xs text-[var(--color-text-muted)] italic mb-2" x-text="ch.body"></p>
+        <p class="text-2xs text-[var(--color-text-muted)]">
+          <span x-text="ch.created_by_name || 'Unknown'"></span> &middot;
+          <span x-text="new Date(ch.created_at).toLocaleDateString()"></span>
+        </p>
+        <div class="mt-3 flex items-center space-x-2">
+          <button @click="approveChallenge(ch.comment_uid)"
+                  class="px-3 py-1.5 text-xs font-medium text-[var(--color-text-on-accent)] bg-green-600 rounded hover:bg-green-700 transition-colors">
+            Approve
+          </button>
+          <button @click="openRejectChallenge(ch)"
+                  class="px-3 py-1.5 text-xs font-medium text-[var(--color-text-on-accent)] bg-red-600 rounded hover:bg-red-700 transition-colors">
+            Reject
+          </button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- My Challenges pane -->
+  <div x-show="tab==='my-challenges'" class="space-y-3">
+    <template x-if="myChallenges.length === 0">
+      <p class="text-sm text-[var(--color-text-muted)]">You haven't submitted any challenges.</p>
+    </template>
+    <template x-for="mc in myChallenges" :key="mc.comment_uid">
+      <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium uppercase"
+                :class="mc.resolution_state === 'approved' ? 'bg-green-100 text-green-800'
+                       : mc.resolution_state === 'rejected' ? 'bg-red-100 text-red-800'
+                       : 'bg-amber-100 text-amber-800'"
+                x-text="mc.resolution_state ? 'Challenge ' + mc.resolution_state : 'Challenge (pending)'"></span>
+          <span class="text-2xs text-[var(--color-text-muted)]" x-text="mc.node_title"></span>
+        </div>
+        <p class="text-xs text-[var(--color-text-muted)] mb-1">Current:</p>
+        <p class="text-sm text-[var(--color-text)] mb-1" x-text="mc.display_sentence"></p>
+        <p class="text-xs text-[var(--color-text-muted)] mb-1">Your proposal:</p>
+        <p class="text-sm text-[var(--color-text)] font-medium mb-1" x-text="mc.proposed_sentence"></p>
+        <p class="text-xs text-[var(--color-text-muted)] italic mb-2" x-text="mc.body"></p>
+        <template x-if="mc.resolution_state === 'rejected' && mc.resolution_note">
+          <div class="px-3 py-2 rounded border border-red-200 bg-red-50 text-xs text-red-800 mb-2">
+            <span class="font-medium" x-text="(mc.resolved_by_name || 'Approver') + ':'"></span>
+            <span x-text="mc.resolution_note"></span>
+          </div>
+        </template>
+        <template x-if="mc.resolution_state === 'approved'">
+          <div class="px-3 py-2 rounded border border-green-200 bg-green-50 text-xs text-green-800 mb-2">
+            Approved by <span x-text="mc.resolved_by_name || 'Approver'"></span>
+            <template x-if="mc.resolved_at">
+              <span> &middot; <span x-text="new Date(mc.resolved_at).toLocaleDateString()"></span></span>
+            </template>
+          </div>
+        </template>
+        <p class="text-2xs text-[var(--color-text-muted)]">
+          Submitted <span x-text="new Date(mc.created_at).toLocaleDateString()"></span>
+        </p>
+      </div>
+    </template>
+  </div>
+
   <!-- Revise modal -->
   <div x-show="revising" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="revising=false">
     <div class="bg-[var(--color-bg-card)] rounded-lg shadow-xl p-6 w-full max-w-lg">
@@ -127,6 +210,28 @@
         <button @click="submitRevise()"
                 class="px-4 py-2 text-xs font-medium text-[var(--color-text-on-accent)] bg-[var(--color-accent)] rounded hover:bg-[var(--color-accent-hover)] transition-colors">
           Submit Revision
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reject challenge modal -->
+  <div x-show="rejectingChallenge" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="rejectingChallenge=false">
+    <div class="bg-[var(--color-bg-card)] rounded-lg shadow-xl p-6 w-full max-w-lg">
+      <h2 class="text-sm font-semibold mb-3">Reject Challenge</h2>
+      <p class="text-xs text-[var(--color-text-muted)] mb-1">Proposed:</p>
+      <p class="text-sm mb-3 p-2 bg-[var(--color-bg)] rounded" x-text="rejectChallengeProposed"></p>
+      <textarea x-model="rejectChallengeNote" rows="3"
+                class="w-full border border-[var(--color-border-input)] rounded px-3 py-2 text-sm bg-[var(--color-bg-input)] focus:outline-none focus:ring-2 focus:ring-red-400"
+                placeholder="Reason for rejection (optional)"></textarea>
+      <div class="mt-4 flex justify-end space-x-2">
+        <button @click="rejectingChallenge=false"
+                class="px-4 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+          Cancel
+        </button>
+        <button @click="submitRejectChallenge()"
+                class="px-4 py-2 text-xs font-medium text-[var(--color-text-on-accent)] bg-red-600 rounded hover:bg-red-700 transition-colors">
+          Reject Challenge
         </button>
       </div>
     </div>

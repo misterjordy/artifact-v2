@@ -50,7 +50,7 @@
     </aside>
 
     <!-- Main content area -->
-    <div class="flex flex-col flex-1 min-w-0">
+    <div id="main-content" class="flex flex-col flex-1 min-w-0" style="transition: margin-right 0.25s ease">
       <!-- Top bar -->
       <header class="flex items-center justify-between px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-header-bg)]">
         <div class="flex items-center gap-6">
@@ -104,8 +104,8 @@
 
       <!-- Playground banner -->
       {% if playground_mode %}
-      <div class="flex items-center justify-between px-4 py-2 text-sm font-medium bg-amber-100 border-b border-amber-200 text-[var(--color-text)]">
-        <span>&#127917; Playground Mode — You are <strong>{{ user.display_name if user is defined }}</strong></span>
+      <div class="flex items-center justify-between px-4 py-2 text-sm font-medium bg-amber-100 border-b border-amber-200 text-amber-900">
+        <span>&#127917; Playground Mode &middot; You are <strong>{{ user.display_name if user is defined }}</strong></span>
         <div class="flex items-center gap-2">
           <form action="/playground/reset" method="post" class="inline">
             <button type="submit"
@@ -115,7 +115,7 @@
           </form>
           <form action="/playground/exit" method="post" class="inline">
             <button type="submit"
-                    class="px-3 py-1 text-xs font-semibold rounded bg-[var(--color-border)] hover:opacity-80 transition-colors">
+                    class="px-3 py-1 text-xs font-semibold rounded bg-amber-800 text-amber-100 hover:bg-amber-900 transition-colors">
               Exit
             </button>
           </form>

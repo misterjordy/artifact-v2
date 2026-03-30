@@ -51,7 +51,40 @@ class ReviseRequest(BaseModel):
     note: str | None = None
 
 
+class ChallengeOut(BaseModel):
+    comment_uid: UUID
+    fact_uid: UUID
+    version_uid: UUID
+    node_uid: UUID
+    node_title: str
+    display_sentence: str
+    proposed_sentence: str
+    body: str
+    created_by_uid: UUID | None = None
+    created_by_name: str | None = None
+    created_at: datetime
+
+
+class ChallengeRejectRequest(BaseModel):
+    note: str | None = Field(None, max_length=2000)
+
+
+class MyChallengeOut(BaseModel):
+    comment_uid: UUID
+    fact_uid: UUID
+    node_title: str
+    display_sentence: str
+    proposed_sentence: str
+    body: str
+    resolution_state: str | None = None
+    resolution_note: str | None = None
+    resolved_at: datetime | None = None
+    resolved_by_name: str | None = None
+    created_at: datetime
+
+
 class BadgeCountOut(BaseModel):
     proposals: int = 0
     moves: int = 0
+    challenges: int = 0
     total: int = 0

@@ -13,10 +13,14 @@ from artiFACT.kernel.models import FcFact, FcFactVersion, FcUser
 from artiFACT.modules.audit.service import flush_pending_events
 from artiFACT.modules.facts.bulk import bulk_move, bulk_retire
 from artiFACT.modules.facts.reassign import reassign_fact
+from artiFACT.modules.facts.history import add_comment, get_fact_history
 from artiFACT.modules.facts.schemas import (
     BulkMoveRequest,
     BulkRetireRequest,
+    CommentCreate,
+    CommentOut,
     FactCreate,
+    FactHistoryOut,
     FactMoveRequest,
     FactOut,
     FactUpdate,
@@ -238,3 +242,52 @@ async def bulk_move_endpoint(
     await flush_pending_events(db)
     await db.commit()
     return {"moved": [str(uid) for uid in moved]}
+
+
+@router.get("/facts/{fact_uid}/history")
+async def fact_history(
+    fact_uid: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return enriched version history for a fact."""
+    data = await get_fact_history(db, fact_uid, user)
+    return {"data": FactHistoryOut(**data).model_dump(mode="json")}
+
+
+@router.post("/facts/{fact_uid}/versions/{version_uid}/comments", status_code=201)
+async def create_comment(
+    fact_uid: uuid.UUID,
+    version_uid: uuid.UUID,
+    body: CommentCreate,
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Add a comment to a specific version of a fact."""
+    comment = await add_comment(
+        db, fact_uid, version_uid, body.body, body.comment_type,
+        body.parent_comment_uid, user,
+        proposed_sentence=body.proposed_sentence,
+    )
+    await flush_pending_events(db)
+    await db.commit()
+    await db.refresh(comment)
+    author = await db.get(FcUser, comment.created_by_uid)
+    out = CommentOut(
+        comment_uid=comment.comment_uid,
+        version_uid=comment.version_uid,
+        parent_comment_uid=comment.parent_comment_uid,
+        comment_type=comment.comment_type,
+        body=comment.body,
+        created_by={
+            "user_uid": str(author.user_uid) if author else "",
+            "display_name": author.display_name if author else "Unknown",
+            "username": author.cac_dn if author else "unknown",
+        },
+        created_at=comment.created_at,
+        proposed_sentence=comment.proposed_sentence,
+        resolution_state=comment.resolution_state,
+        resolution_note=comment.resolution_note,
+        resolved_at=comment.resolved_at,
+    )
+    return {"data": out.model_dump(mode="json")}

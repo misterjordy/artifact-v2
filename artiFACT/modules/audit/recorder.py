@@ -104,6 +104,47 @@ async def _record_version_event(payload: dict[str, Any]) -> None:
     _pending_events.append(event)
 
 
+async def _record_comment_created(payload: dict[str, Any]) -> None:
+    """Record a comment.created event."""
+    event = FcEventLog(
+        entity_type="comment",
+        entity_uid=payload["comment_uid"],
+        event_type="comment.created",
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        reversible=False,
+        reverse_payload=None,
+    )
+    _pending_events.append(event)
+
+
+async def _record_challenge_event(payload: dict[str, Any], event_type: str) -> None:
+    """Record a challenge lifecycle event."""
+    event = FcEventLog(
+        entity_type="comment",
+        entity_uid=payload["comment_uid"],
+        event_type=event_type,
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        note=payload.get("note"),
+        reversible=False,
+        reverse_payload=None,
+    )
+    _pending_events.append(event)
+
+
+async def _record_challenge_created(payload: dict[str, Any]) -> None:
+    await _record_challenge_event(payload, "challenge.created")
+
+
+async def _record_challenge_approved(payload: dict[str, Any]) -> None:
+    await _record_challenge_event(payload, "challenge.approved")
+
+
+async def _record_challenge_rejected(payload: dict[str, Any]) -> None:
+    await _record_challenge_event(payload, "challenge.rejected")
+
+
 def register_subscribers() -> None:
     """Register all audit event subscribers. Call at app startup."""
     subscribe("fact.created", _record_fact_created)
@@ -115,3 +156,7 @@ def register_subscribers() -> None:
     subscribe("version.rejected", _record_version_event)
     subscribe("version.signed", _record_version_event)
     subscribe("signature.created", _record_signature_created)
+    subscribe("comment.created", _record_comment_created)
+    subscribe("challenge.created", _record_challenge_created)
+    subscribe("challenge.approved", _record_challenge_approved)
+    subscribe("challenge.rejected", _record_challenge_rejected)

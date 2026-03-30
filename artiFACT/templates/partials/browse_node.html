@@ -35,7 +35,11 @@
   {% if facts %}
   <div class="space-y-2">
     {% for item in facts %}
-    <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 hover:shadow-sm transition-shadow">
+    <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 hover:shadow-sm transition-shadow cursor-pointer hover:border-[var(--color-accent)]"
+         hx-get="/partials/fact-history/{{ item.fact_uid }}"
+         hx-target="#right-pane-content"
+         hx-swap="innerHTML"
+         onclick="window.openRightPane('{{ item.sentence[:60] | e }}')">
       <div class="flex items-start justify-between gap-3">
         <p class="text-sm text-[var(--color-text)] leading-relaxed flex-1">{{ item.sentence }}</p>
         <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium
@@ -70,7 +74,11 @@
       <span class="text-2xs text-[var(--color-text-muted)] font-normal">{{ child_group.facts | length }}</span>
     </h3>
     {% for item in child_group.facts %}
-    <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 ml-4 mb-2 hover:shadow-sm transition-shadow">
+    <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 ml-4 mb-2 hover:shadow-sm transition-shadow cursor-pointer hover:border-[var(--color-accent)]"
+         hx-get="/partials/fact-history/{{ item.fact_uid }}"
+         hx-target="#right-pane-content"
+         hx-swap="innerHTML"
+         onclick="window.openRightPane('{{ item.sentence[:60] | e }}')">
       <div class="flex items-start justify-between gap-3">
         <p class="text-sm text-[var(--color-text)] leading-relaxed flex-1">{{ item.sentence }}</p>
         <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium
