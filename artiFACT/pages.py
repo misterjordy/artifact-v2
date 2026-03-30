@@ -84,6 +84,28 @@ async def settings_partial(
     return HTMLResponse(html)
 
 
+@router.get("/partials/undo-actions", response_class=HTMLResponse)
+async def undo_actions_partial(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+) -> HTMLResponse:
+    """HTMX partial: undo actions list for the right pane."""
+    from artiFACT.modules.audit.undo_actions import get_undo_actions_for_template
+
+    actions, total = await get_undo_actions_for_template(
+        db, user, days=30, limit=limit, offset=offset,
+    )
+    has_more = (offset + limit) < total
+    next_offset = offset + limit
+    html = _jinja.get_template("partials/undo_actions.html").render(
+        actions=actions, has_more=has_more, next_offset=next_offset,
+        is_append=(offset > 0),
+    )
+    return HTMLResponse(html)
+
+
 @router.get("/chat", response_class=HTMLResponse)
 async def chat_page(
     user: FcUser = Depends(get_current_user),

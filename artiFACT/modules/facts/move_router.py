@@ -115,8 +115,39 @@ async def list_pending(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Return pending moves in user's approval scope."""
+    """Return pending moves in user's approval scope with resolved names."""
+    from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser as UserModel
+
     approvable = await get_approvable_nodes(db, user)
     moves = await get_pending_moves(db, list(approvable.keys()))
-    data = [PendingMoveOut(**m).model_dump(mode="json") for m in moves]
+
+    data = []
+    for m in moves:
+        out = PendingMoveOut(**m)
+        payload = out.payload or {}
+        # Resolve fact sentence
+        if out.entity_type == "fact":
+            fact = await db.get(FcFact, out.entity_uid)
+            if fact and fact.current_published_version_uid:
+                ver = await db.get(FcFactVersion, fact.current_published_version_uid)
+                if ver:
+                    out.display_sentence = ver.display_sentence or ""
+        # Resolve source/target node titles
+        src_uid = payload.get("source_node_uid")
+        tgt_uid = payload.get("target_node_uid")
+        if src_uid:
+            src = await db.get(FcNode, src_uid)
+            if src:
+                out.source_node_title = src.title
+        if tgt_uid:
+            tgt = await db.get(FcNode, tgt_uid)
+            if tgt:
+                out.target_node_title = tgt.title
+        # Resolve actor name
+        if out.actor_uid:
+            actor = await db.get(UserModel, out.actor_uid)
+            if actor:
+                out.actor_name = actor.display_name
+        out.comment = payload.get("comment", "")
+        data.append(out.model_dump(mode="json"))
     return {"data": data, "total": len(data)}

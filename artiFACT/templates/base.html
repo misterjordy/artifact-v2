@@ -19,6 +19,7 @@
   <script src="/static/js/auto_approve.js" defer></script>
   <script src="/static/js/settings.js" defer></script>
   <script src="/static/js/right-pane.js" defer></script>
+  <script src="/static/js/undo.js" defer></script>
   {% block head_scripts %}{% endblock %}
   <script src="https://unpkg.com/@alpinejs/collapse@3.14.8/dist/cdn.min.js" defer></script>
   <script src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
@@ -134,6 +135,12 @@
               </div>
             </div>
           </div>
+
+          <button class="text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors"
+                  title="Undo (Ctrl+Z)"
+                  onclick="openUndoPane()">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4"/></svg>
+          </button>
 
           <button class="text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors"
                   title="Settings"

@@ -43,3 +43,9 @@ class PendingMoveOut(BaseModel):
     actor_uid: UUID | None = None
     occurred_at: datetime
     correlation_id: str | None = None
+    # Resolved display fields (set by the endpoint, not the DB)
+    display_sentence: str = ""
+    source_node_title: str = ""
+    target_node_title: str = ""
+    actor_name: str = ""
+    comment: str = ""

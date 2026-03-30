@@ -1,0 +1,172 @@
+{# Undo actions pane — rendered inside #right-pane-content #}
+{% if not is_append %}
+<div x-data="undoPane()" id="undo-actions-list" class="space-y-1">
+{% endif %}
+
+  {% for action in actions %}
+  <div class="undo-line rounded px-3 py-2 border border-[var(--color-border)] bg-[var(--color-bg)]
+              {% if not action.is_undoable %}opacity-50{% endif %}
+              {% if action.fact_uid %}cursor-pointer{% endif %}"
+       x-ref="line_{{ action.event_uid }}"
+       {% if action.fact_uid %}
+       hx-get="/partials/fact-history/{{ action.fact_uid }}"
+       hx-target="#right-pane-content"
+       hx-swap="innerHTML"
+       onclick="window.openRightPane('Fact History')"
+       {% endif %}
+       {% if action.is_bulk %}x-data="{ expanded: false }"{% endif %}>
+
+    {# Timestamp #}
+    <div class="text-2xs text-[var(--color-text-muted)] mb-1">
+      {{ action.occurred_at.strftime('%Y-%m-%d %H:%M') }} UTC
+    </div>
+
+    {# Badge + description + undo button #}
+    <div class="flex items-start justify-between gap-2">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+          {# Event type badge #}
+          {% set et = action.event_type %}
+          {% if et in ('fact.created', 'fact.edited') %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-blue-100 text-blue-800">
+            {% if et == 'fact.created' %}PROPOSED{% else %}EDITED{% endif %}
+          </span>
+          {% elif et in ('move.proposed',) %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-amber-100 text-amber-800">PENDING MOVE</span>
+          {% elif et in ('version.published', 'fact.published', 'move.approved', 'grant.created') %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-green-100 text-green-800">
+            {% if et in ('version.published', 'fact.published') %}PUBLISHED{% elif et == 'move.approved' %}MOVED{% else %}GRANTED{% endif %}
+          </span>
+          {% elif et in ('version.rejected', 'move.rejected', 'grant.revoked') %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-red-100 text-red-800">
+            {% if et == 'grant.revoked' %}REVOKED{% else %}REJECTED{% endif %}
+          </span>
+          {% elif et in ('version.signed',) %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-purple-100 text-purple-800">SIGNED</span>
+          {% elif et in ('challenge.created',) %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-amber-100 text-amber-800">CHALLENGE</span>
+          {% elif et in ('fact.retired', 'node.archived') %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-[var(--color-border)] text-[var(--color-text-muted)]">
+            {% if et == 'fact.retired' %}RETIRED{% else %}ARCHIVED{% endif %}
+          </span>
+          {% elif et == 'comment.created' %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-[var(--color-border)] text-[var(--color-text-muted)]">COMMENT</span>
+          {% elif et == 'fact.unretired' %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-green-100 text-green-800">UNRETIRED</span>
+          {% elif et in ('node.created',) %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-blue-100 text-blue-800">CREATED</span>
+          {% elif et == 'fact.moved' %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-green-100 text-green-800">MOVED</span>
+          {% else %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase bg-[var(--color-border)] text-[var(--color-text-muted)]">{{ et.split('.')[-1] | upper }}</span>
+          {% endif %}
+
+          <span class="text-sm font-medium text-[var(--color-text)]">{{ action.description }}</span>
+        </div>
+
+        {# Entity detail — full text, no truncation #}
+        {% if action.entity_detail %}
+        <div class="text-xs text-[var(--color-text-muted)] leading-relaxed">
+          {{ action.entity_detail }}
+        </div>
+        {% endif %}
+
+        {# Context: from/to for moves, old/new for edits, comment body #}
+        {% if action.context %}
+          {% if action.context.get('from') and action.context.get('to') %}
+          <div class="text-2xs text-[var(--color-text-muted)] mt-0.5">
+            {{ action.context['from'] }} &rarr; {{ action.context['to'] }}
+          </div>
+          {% endif %}
+          {% if action.context.get('old') and action.context.get('new') %}
+          <div class="text-2xs text-[var(--color-text-muted)] mt-0.5">
+            was: {{ action.context['old'] }}
+          </div>
+          {% endif %}
+          {% if action.context.get('comment') %}
+          <div class="text-2xs text-[var(--color-text-muted)] mt-0.5 italic">
+            &ldquo;{{ action.context['comment'] }}&rdquo;
+          </div>
+          {% endif %}
+          {% if action.context.get('comment_body') %}
+          <div class="text-xs text-[var(--color-text-muted)] mt-0.5 italic border-l-2 border-[var(--color-border)] pl-2">
+            {{ action.context['comment_body'] }}
+          </div>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      {# Undo button or lock indicator — stop click from navigating #}
+      <div class="flex-shrink-0 mt-0.5" @click.stop>
+        {% if action.is_undoable %}
+          {% if action.is_bulk %}
+            <button @click="undoBulk('{{ action.bulk_event_uids | tojson }}', 'line_{{ action.event_uid }}')"
+                    class="undo-btn px-3 py-1 text-xs font-semibold rounded bg-amber-500 hover:bg-amber-600 text-[var(--color-text-on-accent)] transition-colors">
+              Undo {{ action.bulk_count }}
+            </button>
+          {% else %}
+            <button @click="undoSingle('{{ action.event_uid }}', 'line_{{ action.event_uid }}')"
+                    class="undo-btn px-3 py-1 text-xs font-semibold rounded bg-amber-500 hover:bg-amber-600 text-[var(--color-text-on-accent)] transition-colors">
+              Undo
+            </button>
+          {% endif %}
+        {% else %}
+          <span class="text-xs text-[var(--color-text-muted)] cursor-default"
+                title="{{ action.lock_reason or 'Not undoable' }}">
+            &#128274;
+          </span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Bulk expand toggle #}
+    {% if action.is_bulk and action.bulk_items %}
+    <div @click.stop>
+      <button @click="expanded = !expanded"
+              class="text-2xs text-[var(--color-text-muted)] underline mt-1 hover:text-[var(--color-text)] transition-colors">
+        <span x-text="expanded ? 'Collapse' : 'Show {{ action.bulk_count }} items'"></span>
+      </button>
+      <div x-show="expanded" x-collapse class="ml-4 mt-1 space-y-1">
+        {% for sub in action.bulk_items %}
+        <div class="flex items-center justify-between text-xs py-1 border-b border-[var(--color-border)]/50 last:border-0"
+             x-ref="line_{{ sub.event_uid }}">
+          <span class="text-[var(--color-text-muted)] flex-1 min-w-0 leading-relaxed">{{ sub.entity_detail or sub.description }}</span>
+          {% if sub.is_undoable %}
+          <button @click="undoSingle('{{ sub.event_uid }}', 'line_{{ sub.event_uid }}')"
+                  class="undo-btn ml-2 px-2 py-0.5 text-2xs font-semibold rounded bg-amber-500 hover:bg-amber-600 text-[var(--color-text-on-accent)] transition-colors flex-shrink-0">
+            Undo
+          </button>
+          {% else %}
+          <span class="text-2xs text-[var(--color-text-muted)] flex-shrink-0 ml-2"
+                title="{{ sub.lock_reason or 'Not undoable' }}">&#128274;</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+
+  {% if not actions and not is_append %}
+  <div class="text-sm text-[var(--color-text-muted)] text-center py-8">
+    No actions in the last 30 days.
+  </div>
+  {% endif %}
+
+  {# "See more" pagination button #}
+  {% if has_more %}
+  <div id="undo-see-more" class="text-center py-2">
+    <button hx-get="/partials/undo-actions?offset={{ next_offset }}&limit=100"
+            hx-target="#undo-see-more"
+            hx-swap="outerHTML"
+            class="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline transition-colors">
+      See more
+    </button>
+  </div>
+  {% endif %}
+
+{% if not is_append %}
+</div>
+{% endif %}

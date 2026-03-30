@@ -436,3 +436,18 @@ html.eyecare button.border-red-400:hover {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── Undo pane ── */
+
+.undo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.undo-line {
+  transition: border-color 0.15s;
+}
+
+.undo-line:hover {
+  border-color: var(--color-accent-gold);
+}

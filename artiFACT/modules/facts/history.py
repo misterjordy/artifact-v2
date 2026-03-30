@@ -436,6 +436,7 @@ async def add_comment(
             "fact_uid": str(fact_uid),
             "actor_uid": str(user.user_uid),
             "comment_type": comment_type,
+            "body": body,
         },
     )
 

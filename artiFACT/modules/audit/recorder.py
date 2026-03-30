@@ -40,6 +40,13 @@ def _compute_reverse(event_type: str, payload: dict[str, Any]) -> dict[str, Any]
             "entity_uid": payload["fact_uid"],
             "original_node_uid": payload["old_node_uid"],
         }
+    if event_type == "move.proposed":
+        return {
+            "action": "reject_move",
+            "event_uid": payload.get("event_uid"),
+            "entity_type": payload.get("entity_type", "fact"),
+            "entity_uid": payload.get("entity_uid"),
+        }
     if event_type == "move.approved":
         source = payload.get("source_node_uid")
         if source:

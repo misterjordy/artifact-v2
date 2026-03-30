@@ -43,6 +43,10 @@ async def check_collision(db: AsyncSession, event: FcEventLog) -> str | None:
         return await _check_restore_version(db, reverse)
     if action == "move_back":
         return await _check_move_back(db, reverse)
+    if action == "move":
+        return await _check_move_legacy(db, reverse)
+    if action == "reject_move":
+        return await _check_reject_move(db, reverse)
     if action == "unreject":
         return await _check_unreject(db, reverse)
     if action == "archive_node":
@@ -106,6 +110,12 @@ async def batch_check_collisions(
             else:
                 fact_uids.add(uid)
             node_uids.add(UUID(rp["original_node_uid"]))
+        elif action == "move":
+            # Backward compat: old format before Prompt A
+            if rp.get("fact_uid"):
+                fact_uids.add(UUID(rp["fact_uid"]))
+            if rp.get("target_node_uid"):
+                node_uids.add(UUID(rp["target_node_uid"]))
         elif action == "unreject":
             version_uids.add(UUID(rp["version_uid"]))
         elif action in ("archive_node", "unarchive_node"):
@@ -180,6 +190,36 @@ async def _check_restore_version(db: AsyncSession, rp: dict) -> str | None:
     prev = await db.get(FcFactVersion, UUID(prev_uid))
     if not prev:
         return "Previous version no longer exists"
+    return None
+
+
+async def _check_reject_move(db: AsyncSession, rp: dict) -> str | None:
+    """Check if a move proposal can still be rejected (cancelled)."""
+    event_uid = rp.get("event_uid")
+    if not event_uid:
+        return "Missing event_uid in reverse payload"
+    event = await db.get(FcEventLog, UUID(event_uid))
+    if not event:
+        return "Move proposal no longer exists"
+    if event.event_type != "move.proposed":
+        return f"Move is no longer pending — status is {event.event_type}"
+    return None
+
+
+async def _check_move_legacy(db: AsyncSession, rp: dict) -> str | None:
+    """Backward compat: old format {"action":"move","fact_uid":...,"target_node_uid":...}."""
+    fact_uid = rp.get("fact_uid") or rp.get("entity_uid")
+    if fact_uid:
+        fact = await db.get(FcFact, UUID(fact_uid))
+        if not fact:
+            return "Fact no longer exists"
+    target = rp.get("target_node_uid")
+    if target:
+        node = await db.get(FcNode, UUID(target))
+        if not node:
+            return "Target node no longer exists"
+        if node.is_archived:
+            return "Target node is archived"
     return None
 
 
@@ -369,6 +409,26 @@ def _check_from_cache(
             return "Original node no longer exists"
         if orig.is_archived:
             return "Original node is archived"
+        return None
+
+    if action == "move":
+        # Backward compat: old format {"action":"move","fact_uid":...,"target_node_uid":...}
+        fact_uid = rp.get("fact_uid") or rp.get("entity_uid")
+        if fact_uid:
+            if UUID(fact_uid) not in facts:
+                return "Fact no longer exists"
+        target = rp.get("target_node_uid")
+        if target:
+            t = nodes.get(UUID(target))
+            if not t:
+                return "Target node no longer exists"
+            if t.is_archived:
+                return "Target node is archived"
+        return None
+
+    if action == "reject_move":
+        # Can't batch-check this efficiently — return None (safe) and let
+        # the individual check handle it at undo time
         return None
 
     if action == "unreject":

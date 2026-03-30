@@ -149,7 +149,7 @@ def _permission_for_undo(event: FcEventLog) -> str:
     """Determine what permission level is needed to undo this event type."""
     rp = event.reverse_payload or {}
     action = rp.get("action", "")
-    if action in ("withdraw",):
+    if action in ("withdraw", "reject_move"):
         return "contribute"
     if action in ("delete_comment",):
         return "contribute"
@@ -195,6 +195,9 @@ async def _resolve_entity_node(db: AsyncSession, event: FcEventLog) -> UUID | No
                 return fact.node_uid
     if action == "move_back":
         return UUID(rp["original_node_uid"])
+    if action == "move":
+        # Backward compat: old format
+        return UUID(rp["target_node_uid"])
     if action in ("archive_node", "unarchive_node"):
         return UUID(rp["node_uid"])
 
@@ -220,6 +223,10 @@ async def _dispatch_undo(
         return await _undo_restore_version(db, reverse, actor)
     if action == "move_back":
         return await _undo_move_back(db, reverse, actor)
+    if action == "move":
+        return await _undo_move_legacy(db, reverse, actor)
+    if action == "reject_move":
+        return await _undo_reject_move(db, reverse, actor)
     if action == "unreject":
         return await _undo_unreject(db, reverse, actor)
     if action == "archive_node":
@@ -282,6 +289,29 @@ async def _undo_restore_version(
         raise NotFound("Previous version not found", code="VERSION_NOT_FOUND")
     fact.current_published_version_uid = prev_uid
     return "Restored previous version"
+
+
+async def _undo_reject_move(
+    db: AsyncSession, rp: dict, actor: FcUser,
+) -> str:
+    """Cancel a pending move proposal by rejecting it."""
+    from artiFACT.modules.facts.move_service import reject_move
+
+    event_uid = UUID(rp["event_uid"])
+    await reject_move(db, event_uid, actor, note="Cancelled by undo")
+    return "Cancelled move proposal"
+
+
+async def _undo_move_legacy(
+    db: AsyncSession, rp: dict, actor: FcUser,
+) -> str:
+    """Backward compat: old format {"action":"move","fact_uid":...,"target_node_uid":...}."""
+    from artiFACT.modules.facts.reassign import reassign_fact
+
+    fact_uid = UUID(rp.get("fact_uid") or rp["entity_uid"])
+    target_uid = UUID(rp["target_node_uid"])
+    await reassign_fact(db, fact_uid, target_uid, actor)
+    return "Moved fact back"
 
 
 async def _undo_move_back(
