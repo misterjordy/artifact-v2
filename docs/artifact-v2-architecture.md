@@ -222,7 +222,7 @@ modules/taxonomy/
 
 ---
 
-#### 2. FACTS (fact CRUD + versioning — 8 components)
+#### 2. FACTS (fact CRUD + versioning + history — 10 components)
 
 ```
 modules/facts/
@@ -235,6 +235,10 @@ modules/facts/
 │     POST /api/v1/facts/{uid}/retire         ← Retire
 │     POST /api/v1/facts/{uid}/unretire       ← Unretire (admin)
 │     POST /api/v1/facts/{uid}/move           ← Reassign to different node
+│     POST /api/v1/facts/bulk/retire          ← Batch retire
+│     POST /api/v1/facts/bulk/move            ← Batch move
+│     GET  /api/v1/facts/{uid}/history        ← Version timeline with comments + events
+│     POST /api/v1/facts/{uid}/versions/{vid}/comments ← Add comment or challenge
 │
 ├── service.py                 ← Core business logic
 │                                 State machine: proposed → published → signed
@@ -253,6 +257,13 @@ modules/facts/
 │                                 Always sets published_at when state=published
 │                                 Always sets created_by_uid
 │                                 Links supersedes_version_uid
+│
+├── history.py                 ← Version timeline + comment management
+│                                 get_fact_history() — batch queries (versions, comments,
+│                                   events in 3 queries assembled in Python) to avoid N+1
+│                                 add_comment() — validates comment_type, enforces 30-day
+│                                   challenge window on published facts
+│                                 Version ordering via supersedes_version_uid linked list
 │
 ├── validators.py              ← Content validation
 │                                 Uses kernel/content_filter.py for profanity/junk
@@ -274,10 +285,10 @@ modules/facts/
 └── tests/
     ├── test_create.py
     ├── test_state_machine.py
-    ├── test_versioning.py
-    ├── test_reassign.py
-    ├── test_validators.py
-    └── test_bulk.py
+    ├── test_browse.py
+    ├── test_comments.py
+    ├── test_history.py
+    └── test_fact_form_ui.py
 ```
 
 ---
@@ -344,9 +355,12 @@ modules/audit/
 │                                 Computes reverse_payload from current DB state at event time
 │
 ├── recorder.py                ← Event bus subscriber
-│                                 Listens for: fact.created, fact.published, fact.retired,
-│                                              version.approved, version.rejected,
-│                                              signature.created, node.moved, etc.
+│                                 Listens for: fact.created, fact.edited, fact.retired,
+│                                              fact.unretired, fact.moved,
+│                                              version.published, version.rejected,
+│                                              version.signed, signature.created,
+│                                              comment.created, challenge.created,
+│                                              challenge.approved, challenge.rejected
 │                                 Maps each event type to a reverse_payload computation
 │
 ├── undo_engine.py             ← Execute undo/redo operations
@@ -372,7 +386,7 @@ modules/audit/
 
 ---
 
-#### 5. QUEUE (approval workflows — 7 components)
+#### 5. QUEUE (approval workflows + challenges — 9 components)
 
 ```
 modules/queue/
@@ -380,17 +394,30 @@ modules/queue/
 │     GET  /api/v1/queue/proposals           ← Pending proposals for current user's scope
 │     GET  /api/v1/queue/moves               ← Pending move proposals
 │     GET  /api/v1/queue/unsigned             ← Facts awaiting signature
+│     GET  /api/v1/queue/challenges          ← Pending challenges for approver
+│     GET  /api/v1/queue/my-challenges       ← Challenges submitted by current user
 │     GET  /api/v1/queue/counts              ← Badge counts (cached in Redis)
 │     POST /api/v1/queue/approve/{version_uid}
 │     POST /api/v1/queue/reject/{version_uid}
+│     POST /api/v1/queue/revise/{version_uid}
 │     POST /api/v1/queue/approve-move/{event_uid}
 │     POST /api/v1/queue/reject-move/{event_uid}
+│     POST /api/v1/queue/approve-challenge/{comment_uid}
+│     POST /api/v1/queue/reject-challenge/{comment_uid}
 │
 ├── service.py                 ← Approval/rejection logic
 │                                 Every action verifies scope via kernel/permissions
 │                                 Approve: calls facts/service via kernel event
 │                                 Reject: calls facts/state_machine via kernel event
 │                                 All wrapped in transactions
+│
+├── challenge_service.py       ← Challenge resolution logic
+│                                 approve_challenge() — creates new published version with
+│                                   proposed sentence, marks challenge as resolved
+│                                 reject_challenge() — marks challenge resolved with note
+│                                 get_pending_challenges() — for approver queue pane
+│                                 get_my_challenges() — for user's own challenge tracking
+│                                 Scope-enforced: only approvers on the fact's node
 │
 ├── scope_resolver.py          ← Compute which nodes a user can approve
 │                                 Uses kernel/permissions/resolver.py
@@ -420,6 +447,7 @@ modules/queue/
     ├── test_scope_resolver.py
     ├── test_revision.py
     ├── test_badge_counter.py
+    ├── test_challenges.py
     └── test_scope_enforcement.py   ← Tests that subapprover can't approve outside scope
 ```
 
@@ -781,21 +809,20 @@ modules/admin/
 
 | Bounded Context | Internal Components | Test Files |
 |----------------|-------------------|------------|
-| Kernel | 18 | (tested via module tests) |
-| Taxonomy | 5 | 4 |
-| Facts | 8 | 6 |
-| Auth Admin | 7 | 4 |
+| Kernel | 22 | 6 (tests/kernel/) |
+| Taxonomy | 5 | 1 (tests/modules/) |
+| Facts | 9 | 6 |
+| Auth Admin | 4 | — |
 | Audit | 6 | 4 |
-| Queue | 7 | 6 |
-| Signing | 5 | 4 |
-| Import Pipeline | 9 + 5 extractors | 8 |
-| Export | 7 + 2 templates | 5 |
-| AI Chat | 7 + 3 safety | 5 |
+| Queue | 8 | 7 |
+| Signing | 5 | 1 |
+| Import Pipeline | 8 | 1 |
+| Export | 7 | 1 |
+| AI Chat | 5 | 6 |
 | Search | 4 | 2 |
-| Feedback | 5 | 3 |
-| Presentation | 4 | 1 |
-| Admin | 8 | 4 |
-| **Total** | **~108 components** | **~56 test files** |
+| Playground | 3 | 1 |
+| Admin | 9 | 1 |
+| **Total** | **~95 components** | **45 test files** |
 
 Each component averages 50-200 lines. The largest (analyzer.py, orchestrator.py) might hit 400. Nothing approaches v1's 1,096-line factQueue.php or 2,233-line telemetry.php. When you send me a broken component, I see a 100-line file with one job — not a 1,000-line file where the bug could be anywhere.
 
@@ -1053,9 +1080,15 @@ CREATE TABLE fc_fact_comment (
     created_by_uid     UUID REFERENCES fc_user(user_uid),
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     resolved_at        TIMESTAMPTZ,
-    resolved_by_uid    UUID REFERENCES fc_user(user_uid)
+    resolved_by_uid    UUID REFERENCES fc_user(user_uid),
+    proposed_sentence  TEXT,                      -- challenge: alternative wording to replace published fact
+    resolution_state   VARCHAR(20)
+                       CHECK (resolution_state IN ('approved','rejected')),
+    resolution_note    TEXT                       -- approver's explanation when resolving a challenge
 );
 CREATE INDEX idx_comment_version ON fc_fact_comment (version_uid);
+CREATE INDEX idx_comment_challenge_pending ON fc_fact_comment (comment_type, resolution_state)
+    WHERE comment_type = 'challenge' AND resolution_state IS NULL;
 
 
 -- ═══════════════════════════════════════════════════════════
@@ -1123,6 +1156,10 @@ CREATE TABLE fc_system_config (
 **`fc_user_preference` is a flexible key-value store.** Rather than adding a column to `fc_user` for every preference (auto-approve toggle, UI theme, default view, etc.), preferences are stored as key-value pairs. New preferences never require a schema migration.
 
 **`fc_ai_usage` enables per-user cost visibility.** Every AI call logs input/output tokens and estimated cost. Users see their own spend in Settings. Admins see aggregate spend across all users. The `action` column distinguishes chat vs. import vs. docgen spending.
+
+**Challenge columns on `fc_fact_comment`.** `proposed_sentence` stores the challenger's alternative wording, `resolution_state` tracks whether the challenge was approved or rejected, and `resolution_note` captures the approver's explanation. When a challenge is approved, `queue/challenge_service.py` creates a new published version with the proposed sentence — the challenge comment is a proposal mechanism, not a direct mutation of the existing version. The partial index `idx_comment_challenge_pending` (WHERE comment_type = 'challenge' AND resolution_state IS NULL) accelerates the approver's pending challenges queue.
+
+**Root-level nodes define program boundaries.** Each depth-0 node in the taxonomy is a program boundary for data isolation. The playground reset (`playground/service.py`) is scoped to the Special Projects root — it wipes and restores only that subtree. The artiFACT corpus, any future live programs, global tables (system_config, document_templates), and the admin user are never touched. Both pre-seeded programs (Special Projects and artiFACT) ship to all environments including COSMOS production.
 
 ### 4.4 Advana/Jupiter API Compatibility
 
@@ -1208,6 +1245,27 @@ Response:
 **Authentication**: service account (`global_role = 'viewer'`) with a scoped API key (`scopes: ["read", "sync"]`). Authenticates via `Authorization: Bearer af_svc_...` header. Rate limited separately from interactive users (1000 req/hr vs 150 for humans). The API key is provisioned by an admin and given to the Advana integration team.
 
 All endpoints return JSON with consistent pagination (`?cursor=` for sync, `?offset=&limit=` for browse), filtering (`?state=published&node_uid=...`), and sorting (`?sort=created_at&order=desc`).
+
+### 4.5 Data Separation
+
+Each root-level node (depth 0) is a **program boundary**. Both pre-seeded programs ship to all environments (dev, test, COSMOS prod).
+
+**artiFACT** (dogfood corpus):
+- Seed: `artiFACT/scripts/seed_artifact_corpus.py` (idempotent)
+- Contains: 200+ atomic facts about artiFACT itself
+- Purpose: generates its own ConOps/SDD compliance documentation
+- Survives: playground resets (not affected)
+
+**Special Projects** (playground):
+- Snapshot: `artiFACT/scripts/playground_snapshot.sql`
+- Generator: `artiFACT/scripts/generate_playground_snapshot.py`
+- Contains: Boatwing H-12, SNIPE-B with enriched Office character data
+- Purpose: demo/training environment for new users
+- Reset: `playground/service.py` wipes only this subtree and restores
+
+**Live programs** (created by real users on COSMOS):
+- Created via: API (admin creates new root node = new program)
+- Protected: playground reset never touches non-playground roots
 
 ---
 
