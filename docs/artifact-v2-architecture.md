@@ -142,7 +142,7 @@ artiFACT/
 
 ### 3.4 Sub-Module Breakdown
 
-Each bounded context is broken into internal components averaging 50-200 lines. The largest (analyzer.py, orchestrator.py) might hit 400. Nothing approaches v1's 1,096-line factQueue.php or 2,233-line telemetry.php. When a component breaks, you send a 100-line file with one job — not a 1,000-line file where the bug could be anywhere.
+Each bounded context is broken into internal components averaging 50-200 lines. The largest (models.py, collision_checker.py, move_service.py) might hit 500. Nothing approaches v1's 1,096-line factQueue.php or 2,233-line telemetry.php. When a component breaks, you send a 100-line file with one job — not a 1,000-line file where the bug could be anywhere.
 
 #### KERNEL (shared infrastructure — 12 components)
 
@@ -824,7 +824,7 @@ modules/admin/
 | Admin | 9 | 1 |
 | **Total** | **~95 components** | **45 test files** |
 
-Each component averages 50-200 lines. The largest (analyzer.py, orchestrator.py) might hit 400. Nothing approaches v1's 1,096-line factQueue.php or 2,233-line telemetry.php. When you send me a broken component, I see a 100-line file with one job — not a 1,000-line file where the bug could be anywhere.
+Each component averages 50-200 lines. The largest (models.py, collision_checker.py, move_service.py) might hit 500. Nothing approaches v1's 1,096-line factQueue.php or 2,233-line telemetry.php. When you send me a broken component, I see a 100-line file with one job — not a 1,000-line file where the bug could be anywhere.
 
 ---
 

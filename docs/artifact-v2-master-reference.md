@@ -79,7 +79,7 @@ Pydantic models: PascalCase + suffix (FactCreate, FactOut, FactUpdate)
 - Every function has a type signature (params + return)
 - Every module has a docstring (one line: what it does)
 - No function exceeds 50 lines (extract a helper)
-- No file exceeds 300 lines (split the component)
+- No file exceeds 500 lines (split the component)
 - No bare except — always catch specific exceptions
 - No mutable default arguments
 - No global state — use dependency injection (FastAPI Depends)

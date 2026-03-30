@@ -235,7 +235,7 @@ FACTS: list[tuple[str, str]] = [
     ("Backend", "Line length is set to 100 characters"),
     ("Backend", "mypy runs in strict mode for type checking"),
     ("Backend", "Every function has a type signature for parameters and return values"),
-    ("Backend", "No file exceeds 300 lines"),
+    ("Backend", "No file exceeds 500 lines"),
     ("Backend", "No function exceeds 50 lines"),
 
     # === Architecture & Design > Technology Stack > Frontend ===
@@ -1893,8 +1893,8 @@ FACT_COMMENTS: list[tuple[str, str]] = [
         " critical for SSE streaming and background task coordination.",
     ),
     (
-        "No file exceeds 300 lines",
-        "The 300-line file limit forces decomposition into focused, single-responsibility"
+        "No file exceeds 500 lines",
+        "The 500-line file limit forces decomposition into focused, single-responsibility"
         " modules. It is a hard rule enforced by ruff in CI \u2014 no exceptions.",
     ),
     (
