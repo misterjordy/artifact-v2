@@ -15,7 +15,7 @@ from artiFACT.kernel.config import settings
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.models import FcUser
 from artiFACT.modules.playground.schemas import VALID_ROLES
-from artiFACT.modules.playground.service import reset_to_golden
+from artiFACT.modules.playground.service import reset_playground
 
 log = structlog.get_logger()
 
@@ -120,7 +120,7 @@ async def playground_reset(
     if not user:
         return RedirectResponse("/playground", status_code=303)
 
-    await reset_to_golden(db)
+    await reset_playground(db)
     await db.commit()
 
     log.info("playground_reset_by_user", user=user.display_name)

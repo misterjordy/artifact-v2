@@ -15,6 +15,8 @@ so that cross-test pool contamination cannot cause spurious failures.
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.db import engine
 from artiFACT.main import app
@@ -224,3 +226,127 @@ async def test_playground_user_cannot_access_admin() -> None:
             c.cookies.set(k, v)
         resp = await c.get("/admin")
     assert resp.status_code == 403
+
+
+# --- Scoped reset preservation tests ---
+
+_CORPUS_COUNT_SQL = text(
+    "WITH RECURSIVE corpus AS ("
+    "  SELECT node_uid FROM fc_node WHERE title = 'artiFACT' AND parent_node_uid IS NULL"
+    "  UNION ALL"
+    "  SELECT n.node_uid FROM fc_node n JOIN corpus c ON n.parent_node_uid = c.node_uid"
+    ") SELECT count(*) FROM fc_fact WHERE node_uid IN (SELECT node_uid FROM corpus)"
+)
+
+_PLAYGROUND_COUNT_SQL = text(
+    "WITH RECURSIVE sp AS ("
+    "  SELECT node_uid FROM fc_node WHERE title = 'Special Projects' AND parent_node_uid IS NULL"
+    "  UNION ALL"
+    "  SELECT n.node_uid FROM fc_node n JOIN sp ON n.parent_node_uid = sp.node_uid"
+    ") SELECT count(*) FROM fc_fact WHERE node_uid IN (SELECT node_uid FROM sp)"
+)
+
+
+async def _query_scalar(sql: text) -> int:
+    """Run a scalar SQL query against the live database."""
+    async with AsyncSession(engine) as session:
+        result = await session.execute(sql)
+        return result.scalar() or 0
+
+
+async def _do_playground_reset() -> int:
+    """Enter playground, trigger reset, return HTTP status code."""
+    cookies = await _enter_playground("contributor")
+    async with _make_client() as c:
+        for k, v in cookies.items():
+            c.cookies.set(k, v)
+        resp = await c.post(
+            "/playground/reset",
+            headers={"X-CSRF-Token": cookies.get("csrf_token", "")},
+        )
+    return resp.status_code
+
+
+async def test_reset_preserves_artifact_corpus() -> None:
+    """Playground reset must not touch artiFACT corpus facts."""
+    before = await _query_scalar(_CORPUS_COUNT_SQL)
+    assert before > 0, "artiFACT corpus should have facts before reset"
+
+    status = await _do_playground_reset()
+    assert status in (302, 303)
+
+    after = await _query_scalar(_CORPUS_COUNT_SQL)
+    assert after == before, f"Corpus facts changed: {before} -> {after}"
+
+
+async def test_reset_preserves_jallred_user() -> None:
+    """Playground reset must preserve the admin user jallred."""
+    status = await _do_playground_reset()
+    assert status in (302, 303)
+
+    async with AsyncSession(engine) as session:
+        result = await session.execute(
+            text("SELECT global_role FROM fc_user WHERE cac_dn = 'jallred'")
+        )
+        row = result.one_or_none()
+    assert row is not None, "jallred user was deleted by reset"
+    assert row[0] == "admin", f"jallred role changed to {row[0]}"
+
+
+async def test_reset_preserves_system_config() -> None:
+    """Playground reset must not touch fc_system_config rows."""
+    before = await _query_scalar(text("SELECT count(*) FROM fc_system_config"))
+
+    status = await _do_playground_reset()
+    assert status in (302, 303)
+
+    after = await _query_scalar(text("SELECT count(*) FROM fc_system_config"))
+    assert after == before, f"system_config rows changed: {before} -> {after}"
+
+
+async def test_reset_preserves_document_templates() -> None:
+    """Playground reset must not touch fc_document_template rows."""
+    before = await _query_scalar(text("SELECT count(*) FROM fc_document_template"))
+
+    status = await _do_playground_reset()
+    assert status in (302, 303)
+
+    after = await _query_scalar(text("SELECT count(*) FROM fc_document_template"))
+    assert after == before, f"template rows changed: {before} -> {after}"
+
+
+async def test_reset_cleans_playground_data() -> None:
+    """Extra playground facts should be wiped and snapshot restored."""
+    pg_before = await _query_scalar(_PLAYGROUND_COUNT_SQL)
+    assert pg_before > 0, "Playground should have facts"
+
+    # Insert an extra fact under a playground node
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            node_result = await session.execute(text(
+                "SELECT node_uid FROM fc_node "
+                "WHERE parent_node_uid IS NOT NULL "
+                "AND node_uid IN ("
+                "  WITH RECURSIVE sp AS ("
+                "    SELECT node_uid FROM fc_node"
+                "    WHERE title = 'Special Projects' AND parent_node_uid IS NULL"
+                "    UNION ALL"
+                "    SELECT n.node_uid FROM fc_node n JOIN sp ON n.parent_node_uid = sp.node_uid"
+                "  ) SELECT node_uid FROM sp"
+                ") LIMIT 1"
+            ))
+            node_uid = node_result.scalar()
+            await session.execute(text(
+                "INSERT INTO fc_fact (fact_uid, node_uid, is_retired, created_by_uid) "
+                "VALUES (gen_random_uuid(), :nid, false, "
+                "'a0000001-0000-4000-8000-000000000001')"
+            ), {"nid": str(node_uid)})
+
+    extra = await _query_scalar(_PLAYGROUND_COUNT_SQL)
+    assert extra == pg_before + 1, "Extra fact should exist before reset"
+
+    status = await _do_playground_reset()
+    assert status in (302, 303)
+
+    restored = await _query_scalar(_PLAYGROUND_COUNT_SQL)
+    assert restored == pg_before, f"Playground facts not restored: expected {pg_before}, got {restored}"
