@@ -50,7 +50,11 @@
 
     function doSearch(query) {
       if (query.length < MIN_CHARS) {
-        clearSearch();
+        // Not enough chars to search — restore tree but keep input value
+        if (searchResultsContainer) searchResultsContainer.innerHTML = "";
+        if (searchResultsContainer) searchResultsContainer.classList.add("hidden");
+        if (treeContainer) treeContainer.classList.remove("hidden");
+        isSearching = false;
         return;
       }
       isSearching = true;
