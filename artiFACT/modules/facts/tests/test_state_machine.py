@@ -77,13 +77,23 @@ async def test_sign_sets_signed_at():
 
 
 async def test_all_terminal_states_reject_transitions():
-    """Terminal states (rejected, withdrawn, retired) allow no transitions."""
+    """Terminal states (withdrawn, retired) allow no transitions.
+
+    Note: rejected allows transition back to proposed (for undo).
+    """
+    from artiFACT.kernel.exceptions import Conflict
+
     actor = _make_actor()
-    for terminal_state in ["rejected", "withdrawn", "retired"]:
+    for terminal_state in ["withdrawn", "retired"]:
         version = _make_version(terminal_state)
         assert ALLOWED_TRANSITIONS[terminal_state] == []
         for target in ["proposed", "published", "signed"]:
-            from artiFACT.kernel.exceptions import Conflict
-
             with pytest.raises(Conflict):
                 await transition(version, target, actor)
+
+    # rejected -> proposed is allowed (undo path), but other transitions are blocked
+    assert ALLOWED_TRANSITIONS["rejected"] == ["proposed"]
+    for target in ["published", "signed"]:
+        version = _make_version("rejected")
+        with pytest.raises(Conflict):
+            await transition(version, target, actor)

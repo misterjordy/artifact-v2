@@ -127,6 +127,7 @@ async def edit_fact(
         {
             "fact_uid": str(fact.fact_uid),
             "version_uid": str(version.version_uid),
+            "previous_version_uid": str(version.supersedes_version_uid) if version.supersedes_version_uid else None,
             "node_uid": str(fact.node_uid),
             "actor_uid": str(actor.user_uid),
             "state": version.state,

@@ -335,6 +335,10 @@ class FcEventLog(Base):
     )
     reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     reverse_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    undone_by_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_event_entity", "entity_uid", "entity_type"),

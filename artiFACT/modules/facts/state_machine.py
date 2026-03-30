@@ -10,7 +10,7 @@ ALLOWED_TRANSITIONS: dict[str, list[str]] = {
     "proposed": ["published", "rejected", "withdrawn"],
     "challenged": ["accepted", "rejected"],
     "accepted": ["published"],
-    "rejected": [],
+    "rejected": ["proposed"],
     "published": ["signed", "retired"],
     "signed": ["retired"],
     "withdrawn": [],

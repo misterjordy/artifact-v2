@@ -16,31 +16,62 @@ def get_pending_events() -> list[FcEventLog]:
 
 
 def _compute_reverse(event_type: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-    """Compute reverse_payload for undoable events."""
+    """Compute reverse_payload for undoable events.
+
+    Called BEFORE the mutation is applied, so payload reflects pre-mutation state.
+    Returns None for non-reversible events.
+    """
+    if event_type == "fact.created":
+        return {"action": "withdraw", "version_uid": payload.get("version_uid")}
     if event_type == "fact.retired":
         return {"action": "unretire", "fact_uid": payload["fact_uid"]}
+    if event_type == "fact.unretired":
+        return {"action": "retire", "fact_uid": payload["fact_uid"]}
+    if event_type == "fact.edited":
+        return {
+            "action": "restore_version",
+            "fact_uid": payload["fact_uid"],
+            "previous_version_uid": payload.get("previous_version_uid"),
+        }
     if event_type == "fact.moved":
         return {
-            "action": "move",
-            "fact_uid": payload["fact_uid"],
-            "target_node_uid": payload["old_node_uid"],
+            "action": "move_back",
+            "entity_type": "fact",
+            "entity_uid": payload["fact_uid"],
+            "original_node_uid": payload["old_node_uid"],
         }
     if event_type == "move.approved":
         source = payload.get("source_node_uid")
         if source:
             return {
-                "action": "move",
+                "action": "move_back",
                 "entity_type": payload.get("entity_type", "fact"),
                 "entity_uid": payload.get("entity_uid"),
-                "target_node_uid": source,
+                "original_node_uid": source,
             }
         return None
-    if event_type in ("version.rejected",):
+    if event_type == "version.rejected":
         return {
             "action": "unreject",
             "version_uid": payload["version_uid"],
             "restore_state": "proposed",
         }
+    if event_type == "node.created":
+        return {"action": "archive_node", "node_uid": payload["node_uid"]}
+    if event_type == "node.archived":
+        return {"action": "unarchive_node", "node_uid": payload["node_uid"]}
+    if event_type == "grant.created":
+        return {"action": "revoke_grant", "permission_uid": payload["permission_uid"]}
+    if event_type == "grant.revoked":
+        return {
+            "action": "restore_grant",
+            "permission_uid": payload["permission_uid"],
+            "user_uid": payload.get("user_uid"),
+            "node_uid": payload.get("node_uid"),
+            "role": payload.get("role"),
+        }
+    if event_type == "comment.created":
+        return {"action": "delete_comment", "comment_uid": payload["comment_uid"]}
     return None
 
 
@@ -116,14 +147,15 @@ async def _record_version_event(payload: dict[str, Any]) -> None:
 
 async def _record_comment_created(payload: dict[str, Any]) -> None:
     """Record a comment.created event."""
+    reverse = _compute_reverse("comment.created", payload)
     event = FcEventLog(
         entity_type="comment",
         entity_uid=payload["comment_uid"],
         event_type="comment.created",
         payload=payload,
         actor_uid=payload.get("actor_uid"),
-        reversible=False,
-        reverse_payload=None,
+        reversible=reverse is not None,
+        reverse_payload=reverse,
     )
     _pending_events.append(event)
 
@@ -180,6 +212,52 @@ async def _record_move_rejected(payload: dict[str, Any]) -> None:
     await _record_move_event({**payload, "event_type": "move.rejected"})
 
 
+async def _record_node_event(payload: dict[str, Any], event_type: str) -> None:
+    """Record a node lifecycle event."""
+    reverse = _compute_reverse(event_type, payload)
+    event = FcEventLog(
+        entity_type="node",
+        entity_uid=payload["node_uid"],
+        event_type=event_type,
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        reversible=reverse is not None,
+        reverse_payload=reverse,
+    )
+    _pending_events.append(event)
+
+
+async def _record_node_created(payload: dict[str, Any]) -> None:
+    await _record_node_event(payload, "node.created")
+
+
+async def _record_node_archived(payload: dict[str, Any]) -> None:
+    await _record_node_event(payload, "node.archived")
+
+
+async def _record_grant_event(payload: dict[str, Any], event_type: str) -> None:
+    """Record a permission grant/revoke event."""
+    reverse = _compute_reverse(event_type, payload)
+    event = FcEventLog(
+        entity_type="permission",
+        entity_uid=payload["permission_uid"],
+        event_type=event_type,
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        reversible=reverse is not None,
+        reverse_payload=reverse,
+    )
+    _pending_events.append(event)
+
+
+async def _record_grant_created(payload: dict[str, Any]) -> None:
+    await _record_grant_event(payload, "grant.created")
+
+
+async def _record_grant_revoked(payload: dict[str, Any]) -> None:
+    await _record_grant_event(payload, "grant.revoked")
+
+
 async def _record_challenge_created(payload: dict[str, Any]) -> None:
     await _record_challenge_event(payload, "challenge.created")
 
@@ -207,6 +285,10 @@ def register_subscribers() -> None:
     subscribe("challenge.created", _record_challenge_created)
     subscribe("challenge.approved", _record_challenge_approved)
     subscribe("challenge.rejected", _record_challenge_rejected)
+    subscribe("node.created", _record_node_created)
+    subscribe("node.archived", _record_node_archived)
+    subscribe("grant.created", _record_grant_created)
+    subscribe("grant.revoked", _record_grant_revoked)
     subscribe("move.proposed", _record_move_proposed)
     subscribe("move.approved", _record_move_approved)
     subscribe("move.rejected", _record_move_rejected)

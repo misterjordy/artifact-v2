@@ -9,11 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.models import FcUser
-from artiFACT.modules.audit.schemas import EventOut, UndoResult
+from artiFACT.modules.audit.schemas import (
+    BulkUndoRequest,
+    EventOut,
+    UndoActionsResponse,
+    UndoResponse,
+)
 from artiFACT.modules.audit.service import get_all_events, get_events_for_entity
-from artiFACT.modules.audit.undo_engine import undo_event
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
+
+undo_router = APIRouter(prefix="/api/v1/undo", tags=["undo"])
+
+
+# ── Audit endpoints ──
 
 
 @router.get("/events")
@@ -70,13 +79,50 @@ async def entity_history(
     return {"data": [d.model_dump(mode="json") for d in data], "total": len(data)}
 
 
-@router.post("/undo/{event_uid}")
-async def undo(
+# ── Undo endpoints ──
+
+
+@undo_router.get("/actions")
+async def list_undo_actions(
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+    days: int = Query(30, ge=1, le=30),
+) -> UndoActionsResponse:
+    """Return the user's undoable actions within the time window."""
+    from artiFACT.modules.audit.undo_actions import get_undo_actions
+
+    actions = await get_undo_actions(db, user, days=days)
+    return UndoActionsResponse(actions=actions, total=len(actions))
+
+
+@undo_router.post("/{event_uid}")
+async def undo_single(
     event_uid: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
-) -> UndoResult:
-    """Undo a specific action."""
-    event = await undo_event(db, event_uid, user)
-    await db.commit()
-    return UndoResult(event_uid=event.event_uid, message="Action undone successfully")
+) -> UndoResponse:
+    """Undo a single event."""
+    from artiFACT.modules.audit.undo_engine import undo_event
+
+    result = await undo_event(db, event_uid, user)
+    await db.flush()
+    return UndoResponse(status=result["status"], detail=result["detail"])
+
+
+@undo_router.post("/bulk")
+async def undo_bulk_endpoint(
+    body: BulkUndoRequest,
+    db: AsyncSession = Depends(get_db),
+    user: FcUser = Depends(get_current_user),
+) -> UndoResponse:
+    """Undo a group of events atomically."""
+    from artiFACT.modules.audit.undo_engine import undo_bulk
+
+    result = await undo_bulk(db, body.event_uids, user)
+    await db.flush()
+    return UndoResponse(
+        status=result["status"],
+        detail=f"Undid {result['count']} actions",
+        count=result["count"],
+        details=result["details"],
+    )
