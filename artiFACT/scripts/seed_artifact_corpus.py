@@ -1710,6 +1710,1260 @@ FACT_COMMENTS: list[tuple[str, str]] = [
         " declarative code files. This means the entire production environment can be recreated"
         " from scratch by running one command \u2014 no manual console clicking.",
     ),
+
+    # === PASS 2: AGGRESSIVE COVERAGE (60% target) ===
+
+    # --- ACCESS CONTROL MODEL ---
+    (
+        "A grant on a parent applies to all descendants",
+        "Cascading grants eliminate the need to assign permissions on every leaf node"
+        " individually. An approver on \"System Identity\" automatically has approval rights"
+        " on all child nodes beneath it.",
+    ),
+    (
+        "Permissions are never checked by reading global_role directly",
+        "Directly reading global_role from the user record would bypass node-level permissions"
+        " entirely. All access decisions go through the kernel \"can\" function, which considers"
+        " node context, role hierarchy, and grant cascading.",
+    ),
+    (
+        "The can function checks user role node and action",
+        "The \"can\" function is the single entry point for all permission checks \u2014 it takes"
+        " (user, node, action) and returns a boolean. Centralizing this logic prevents scattered"
+        " role checks throughout the codebase.",
+    ),
+    (
+        "The role hierarchy is signatory then approver then subapprover then contributor"
+        " then viewer",
+        "Each role inherits all capabilities of the roles below it: signatory can do everything"
+        " an approver can, an approver can do everything a subapprover can, and so on down to"
+        " viewer.",
+    ),
+
+    # --- AI SAFETY CONTROLS ---
+    (
+        "AI usage is tracked in fc_ai_usage",
+        "fc_ai_usage logs every AI API call with provider, model, token count, and estimated"
+        " cost. This enables per-user cost attribution under the BYOK model and anomaly"
+        " detection for unusual usage patterns.",
+    ),
+    (
+        "Output filtering detects bulk fact dumps",
+        "Bulk fact dumps are a data exfiltration vector. If a user prompts the AI to \"list all"
+        " facts,\" the output filter detects the pattern and blocks it before the response"
+        " reaches the client.",
+    ),
+    (
+        "Rate limiting is applied per user",
+        "Per-user rate limiting prevents any single account from monopolizing AI resources or"
+        " running denial-of-service against the LLM provider. Limits are configurable via"
+        " fc_system_config.",
+    ),
+    (
+        "Tracked AI usage fields include provider and model",
+        "Tracking provider and model per request enables cost allocation, performance comparison"
+        " between models, and the ability to identify if a specific model version causes quality"
+        " regressions.",
+    ),
+
+    # --- APPROVAL WORKFLOW ---
+    (
+        "Approve publishes the version and sets published_at",
+        "Publishing sets published_at and transitions the version state to \"published.\" The"
+        " fact entity's published_version_uid pointer updates atomically in the same"
+        " transaction.",
+    ),
+    (
+        "Contributors propose facts which enter the approval queue",
+        "Contributors are the lowest role that can create content. Their proposals must be"
+        " reviewed and approved before becoming part of the published corpus \u2014 enforcing"
+        " four-eyes review on all fact content.",
+    ),
+    (
+        "Revise language rejects the original version",
+        "\"Revise language\" is a convenience action: the approver edits the text and publishes"
+        " the corrected version in one step, rather than rejecting and waiting for the"
+        " contributor to resubmit.",
+    ),
+
+    # --- ATO & RMF ---
+    (
+        "Application-level security is tested via OWASP ZAP",
+        "OWASP ZAP = Open Web Application Security Project Zed Attack Proxy. It runs automated"
+        " penetration testing against the live application, probing for SQL injection, XSS, and"
+        " other OWASP Top 10 vulnerabilities.",
+    ),
+    (
+        "Application-level security is tested via SBOM",
+        "SBOM = Software Bill of Materials. A machine-readable inventory of every dependency."
+        " Required by Executive Order 14028 for federal software and submitted as RMF evidence.",
+    ),
+    (
+        "Control implementation statements are maintained in the codebase",
+        "Maintaining control implementation statements in the codebase keeps them versioned"
+        " alongside the actual code. When a security control changes, the documentation updates"
+        " in the same commit.",
+    ),
+    (
+        "Test coverage exceeds 80 percent",
+        "80% overall coverage with 95% on the kernel ensures the most critical shared code is"
+        " thoroughly tested. The kernel handles auth, permissions, encryption, and events \u2014"
+        " a bug there affects every module.",
+    ),
+    (
+        "The incident response runbook is maintained in the codebase",
+        "An incident response runbook in the codebase means it's version-controlled,"
+        " peer-reviewed, and always co-located with the system it describes. Required for NIST"
+        " 800-53 IR controls.",
+    ),
+
+    # --- AUDIT & ACCOUNTABILITY ---
+    (
+        "Every mutation emits an event captured in fc_event_log",
+        "Every state change \u2014 fact created, approved, signed, retired, permission"
+        " granted \u2014 creates an immutable event record. This provides the evidence trail"
+        " required by NIST 800-53 AU controls and powers the undo system.",
+    ),
+    (
+        "The seq column serves as the Advana delta feed cursor",
+        "The seq column is a monotonic BIGINT that only increases. Advana stores the last seq"
+        " it pulled and asks for everything after it \u2014 more reliable than timestamps"
+        " because no two events share the same seq.",
+    ),
+
+    # --- AUTHENTICATION ---
+    (
+        "API authentication uses Authorization Bearer tokens",
+        "Bearer tokens are for machine-to-machine integrations (e.g., Advana sync). Human users"
+        " authenticate via CAC/SAML session cookies. Two distinct authentication paths serve"
+        " distinct use cases.",
+    ),
+
+    # --- BACKEND ---
+    (
+        "Alembic manages database schema migrations",
+        "Alembic is the standard database migration tool for SQLAlchemy. Each migration is a"
+        " versioned Python script that can upgrade or downgrade the schema, providing a"
+        " reproducible history of all database changes.",
+    ),
+    (
+        "Celery handles background task processing",
+        "Celery is a distributed task queue for Python. Long-running operations like document"
+        " generation, import analysis, and data retention cleanup run in Celery workers so the"
+        " web server remains responsive.",
+    ),
+    (
+        "FastAPI is the web framework",
+        "FastAPI is a modern Python web framework built on Starlette and Pydantic. It provides"
+        " automatic OpenAPI spec generation, async support, and type-based request validation"
+        " out of the box.",
+    ),
+    (
+        "mypy runs in strict mode for type checking",
+        "mypy is Python's static type checker. Strict mode requires type annotations on every"
+        " function parameter and return value, catching type errors at build time rather than at"
+        " runtime in production.",
+    ),
+    (
+        "Redis serves as the Celery message broker",
+        "Redis serves dual duty as both a cache/session store and the message broker for Celery"
+        " task distribution. Using one Redis instance for both eliminates a separate RabbitMQ"
+        " dependency.",
+    ),
+    (
+        "ruff format enforces code formatting",
+        "ruff is a Python linter and formatter written in Rust \u2014 orders of magnitude faster"
+        " than Black or flake8. Consistent formatting eliminates style debates in code reviews.",
+    ),
+    (
+        "structlog provides structured JSON logging",
+        "structlog produces JSON-formatted log entries with structured key-value fields. This"
+        " makes logs machine-parseable for CloudWatch queries and Grafana dashboards without"
+        " regex parsing.",
+    ),
+    (
+        "The backend uses Python 3.12",
+        "Python 3.12 provides performance improvements, better error messages, and native"
+        " support for the type syntax used throughout the codebase.",
+    ),
+    (
+        "Uvicorn serves as the ASGI server",
+        "Uvicorn is an ASGI (Asynchronous Server Gateway Interface) server. ASGI is the async"
+        " successor to WSGI, enabling concurrent request handling without threads \u2014"
+        " critical for SSE streaming and background task coordination.",
+    ),
+    (
+        "No file exceeds 300 lines",
+        "The 300-line file limit forces decomposition into focused, single-responsibility"
+        " modules. It is a hard rule enforced by ruff in CI \u2014 no exceptions.",
+    ),
+    (
+        "No function exceeds 50 lines",
+        "The 50-line function limit ensures every function does one thing and is easily"
+        " testable. Functions approaching the limit are a signal to extract helper functions.",
+    ),
+    (
+        "Every function has a type signature for parameters and return values",
+        "Full type signatures enable mypy to catch type mismatches at build time. Combined with"
+        " strict mode, this eliminates an entire class of runtime errors before code reaches"
+        " production.",
+    ),
+
+    # --- BACKUP & RECOVERY ---
+    (
+        "RDS has automated backups with 35-day retention",
+        "35-day retention means the database can be restored to any second in the past 5 weeks."
+        " Combined with Multi-AZ failover, this provides both high availability and disaster"
+        " recovery.",
+    ),
+    (
+        "S3 versioning retains deleted objects for 30 days",
+        "S3 versioning keeps prior versions of every object. If an export file is accidentally"
+        " overwritten or deleted, the previous version can be recovered within 30 days.",
+    ),
+
+    # --- BOUNDED CONTEXTS ---
+    (
+        "The 13 contexts are taxonomy facts auth_admin audit queue signing import_pipeline"
+        " export ai_chat search feedback presentation and admin",
+        "These 13 contexts map to the core business capabilities of artiFACT: managing"
+        " taxonomies, facts, auth, audit, queues, signing, import, export, AI chat, search,"
+        " feedback, presentation, and administration.",
+    ),
+    (
+        "The system has 13 bounded contexts",
+        "Bounded contexts are a Domain-Driven Design concept: each context owns its own"
+        " business logic and data access patterns. Modules interact through the kernel event"
+        " bus and shared database models only.",
+    ),
+    (
+        "The system contains approximately 108 internal components",
+        "108 components across 13 contexts averages about 8 components per context. Each"
+        " component is a focused Python module handling one responsibility (e.g., service.py,"
+        " schemas.py, router.py).",
+    ),
+    (
+        "Each bounded context is a top-level directory",
+        "Top-level directories make the module structure visible at a glance. No hunting"
+        " through nested packages \u2014 \"ls\" at the project root shows all 13 contexts"
+        " immediately.",
+    ),
+
+    # --- BUDGET & SUSTAINMENT ---
+    (
+        "Annual sustainment cost is approximately 2100 dollars",
+        "$2,100/year covers the COSMOS hosting consumption charge. Compare this to typical DoD"
+        " SaaS contracts that run $500K\u2013$2M/year. The system runs unattended between"
+        " deployments.",
+    ),
+    (
+        "Amazon Bedrock is used for AI features",
+        "Amazon Bedrock is a managed AI service in AWS GovCloud. It provides access to"
+        " foundation models (Claude, Titan) at IL-4/IL-5 without managing GPU infrastructure.",
+    ),
+    (
+        "Bedrock is not required for core operations",
+        "All core workflows \u2014 create, edit, approve, sign, export \u2014 function without"
+        " any AI provider. Bedrock powers optional features like chat, import analysis, and"
+        " document generation.",
+    ),
+    (
+        "COSMOS hosting requires no commitment",
+        "COSMOS = Cloud One SIPR/NIPR Management and Operations Services. Consumption-based"
+        " hosting means artiFACT pays only for what it uses \u2014 no reserved instances, no"
+        " long-term commitments.",
+    ),
+    (
+        "Each users organization pays for their own Bedrock usage",
+        "Each organization configures their own Bedrock access via BYOK (Bring Your Own Key)."
+        " artiFACT never holds a centralized AI budget \u2014 cost attribution is automatic.",
+    ),
+    (
+        "No contractor support is required for daily operations",
+        "The system runs unattended between deployments. No contractor staff needed to keep the"
+        " lights on \u2014 automated backups, health checks, and log forwarding handle"
+        " operations.",
+    ),
+    (
+        "There are zero license fees",
+        "Zero license fees because the entire stack is FOSS (Free and Open Source Software)"
+        " \u2014 Python, PostgreSQL, Redis, FastAPI, HTMX, Alpine.js, Tailwind CSS.",
+    ),
+    (
+        "There is no vendor dependency",
+        "No vendor dependency means the government can operate, modify, or fork the system"
+        " indefinitely without commercial agreements, renewals, or license negotiations.",
+    ),
+    (
+        "The source code is government-owned",
+        "Government-owned source code eliminates IP disputes, contractor lock-in, and the risk"
+        " of losing access when a contract ends. Any government employee can maintain the"
+        " system.",
+    ),
+    (
+        "Typical AI cost is 5 to 50 dollars per month per user",
+        "AI cost depends on usage volume \u2014 light users (occasional chat) trend toward"
+        " $5/month; heavy users (frequent document generation) trend toward $50/month. Each"
+        " organization pays their own Bedrock bill.",
+    ),
+    (
+        "The system runs unattended between deployments",
+        "Automated health checks, log forwarding, backups, and container restarts mean no human"
+        " intervention is needed for day-to-day operations. Deployments happen only when new"
+        " features ship.",
+    ),
+
+    # --- BYOK ARCHITECTURE ---
+    (
+        "Amazon Bedrock is planned for production",
+        "Amazon Bedrock in AWS GovCloud is authorized for IL-4/IL-5 data processing. Production"
+        " will use Bedrock instead of direct API calls to commercial providers.",
+    ),
+    (
+        "Encrypted keys are stored in fc_user_ai_key",
+        "API keys are encrypted with AES-256-GCM before storage. The encryption master key"
+        " lives in AWS Secrets Manager \u2014 the plaintext key never touches disk or"
+        " application code.",
+    ),
+    (
+        "Keys are never exposed to the browser",
+        "Keys are decrypted server-side only at the moment of an AI API call, then immediately"
+        " discarded from memory. The browser never sees the plaintext key \u2014 all AI requests"
+        " proxy through the backend.",
+    ),
+
+    # --- CHAT & CORPUS GROUNDING ---
+    (
+        "Only facts from the users accessible nodes are loaded",
+        "Permission-scoped fact loading ensures the AI cannot leak facts a user doesn't have"
+        " access to. The corpus grounding respects the same node-level permissions as the"
+        " browse UI.",
+    ),
+    (
+        "The actual loaded fact count is reported to the client",
+        "Reporting the actual fact count to the client provides transparency: users know exactly"
+        " how many facts ground the AI's response and can judge the completeness of the"
+        " context.",
+    ),
+
+    # --- CI/CD PIPELINE ---
+    (
+        "Coverage target is 80 percent overall",
+        "80% overall with 95% on the kernel is enforced in CI. The pipeline fails if coverage"
+        " drops below these thresholds \u2014 no code merges without meeting the coverage bar.",
+    ),
+    (
+        "Coverage target is 95 percent on kernel",
+        "The kernel handles auth, permissions, encryption, and events \u2014 a bug there affects"
+        " every module. 95% coverage ensures the most critical shared code is thoroughly"
+        " tested.",
+    ),
+    (
+        "The CI pipeline runs mypy in strict mode",
+        "mypy strict mode catches type errors before runtime. Combined with full type"
+        " annotations on every function, this eliminates an entire class of bugs at build time.",
+    ),
+    (
+        "The CI pipeline runs pip-audit",
+        "pip-audit checks every Python dependency against the OSV (Open Source Vulnerabilities)"
+        " database. A known-vulnerable dependency fails the build \u2014 no manual security"
+        " review needed.",
+    ),
+    (
+        "The CI pipeline runs pytest",
+        "pytest runs the full test suite including unit, integration, and API tests. All tests"
+        " execute inside Docker containers matching the production environment.",
+    ),
+    (
+        "The CI pipeline runs ruff check",
+        "ruff check is a Python linter written in Rust that replaces flake8, isort, and dozens"
+        " of other tools. It enforces code quality rules at build time.",
+    ),
+    (
+        "The CI pipeline runs SBOM generation",
+        "SBOM = Software Bill of Materials. Required by Executive Order 14028 for all federal"
+        " software. The CI pipeline generates it automatically on every build.",
+    ),
+
+    # --- COLLIBRA REGISTRATION ---
+    (
+        "Quality is high because every fact is human-reviewed and approved",
+        "Every fact in the corpus is human-reviewed and approved before publication. This means"
+        " Collibra can rate artiFACT's data quality as \"high\" \u2014 it's not raw data or"
+        " AI-generated content.",
+    ),
+    (
+        "The API spec follows OpenAPI 3.0",
+        "OpenAPI 3.0 is the industry standard for describing REST APIs. The spec is"
+        " auto-generated from FastAPI route definitions, so documentation never drifts from"
+        " implementation.",
+    ),
+    (
+        "The data refresh frequency is near-real-time via delta feed API",
+        "The delta feed API streams changes as they occur. Advana can poll for new data as"
+        " frequently as needed \u2014 near-real-time freshness without batch ETL processes.",
+    ),
+
+    # --- CONTAINER ARCHITECTURE ---
+    (
+        "The Docker Compose stack includes a certbot container",
+        "Certbot handles automatic TLS certificate provisioning and renewal via Let's Encrypt."
+        " Used in development and staging; production TLS terminates at the ALB.",
+    ),
+    (
+        "The Docker Compose stack includes a minio container",
+        "MinIO is an S3-compatible object store. In development, it stands in for AWS S3 so"
+        " file upload/download code works identically in both environments without conditionals.",
+    ),
+    (
+        "The Docker Compose stack includes an nginx container",
+        "Nginx serves as the reverse proxy in development \u2014 handling TLS termination,"
+        " static file serving, and request routing to the web container. Production replaces it"
+        " with the ALB.",
+    ),
+    (
+        "The Docker Compose stack includes a postgres container",
+        "PostgreSQL 16 runs as a container in development with the same major version as"
+        " production RDS. This ensures SQL compatibility between environments.",
+    ),
+    (
+        "The Docker Compose stack includes a redis container",
+        "The Redis container provides caching, session storage, rate limiting, and the Celery"
+        " message broker \u2014 matching the production ElastiCache configuration.",
+    ),
+    (
+        "The Docker Compose stack includes a web container",
+        "The web container runs Uvicorn serving the FastAPI application. In development it runs"
+        " with --reload for hot code reloading; in production it runs multiple workers behind"
+        " the ALB.",
+    ),
+    (
+        "The Docker Compose stack includes a worker container",
+        "The worker container runs Celery processes for background tasks \u2014 document"
+        " generation, import analysis, data retention cleanup. Separate from the web container"
+        " so long-running tasks don't block HTTP requests.",
+    ),
+    (
+        "The worker container runs Celery for background tasks",
+        "Celery workers process queued tasks asynchronously. Document generation can take 30+"
+        " seconds \u2014 running it in a worker prevents the web server from timing out.",
+    ),
+    (
+        "Uvicorn runs with reload in development",
+        "Uvicorn --reload watches for file changes and restarts the server automatically."
+        " Developers save a file and see the change immediately without manually restarting"
+        " the container.",
+    ),
+
+    # --- CORE TABLES ---
+    (
+        "fc_fact has pointers to current published and signed versions",
+        "fc_fact maintains pointers to the current (latest), published (approved), and signed"
+        " versions. This enables instant lookups without scanning the version history.",
+    ),
+    (
+        "fc_fact_version columns include state display_sentence metadata_tags and"
+        " classification",
+        "The display_sentence is the human-readable fact text. metadata_tags enable faceted"
+        " filtering. classification tracks CUI status per fact. State drives the approval"
+        " workflow.",
+    ),
+    (
+        "fc_fact_version stores each version of a fact",
+        "Each version is an immutable snapshot. Editing a fact creates a new version rather"
+        " than modifying the existing one \u2014 the complete history of every change is"
+        " preserved.",
+    ),
+    (
+        "fc_node columns include parent_node_uid node_depth and sort_order",
+        "parent_node_uid creates the tree structure. node_depth enables efficient ancestor"
+        " queries. sort_order controls the display sequence within a parent node.",
+    ),
+    (
+        "fc_node stores the hierarchical taxonomy",
+        "fc_node is the backbone of artiFACT's data model. The hierarchical taxonomy organizes"
+        " facts into a tree \u2014 programs contain branches, branches contain leaves, leaves"
+        " contain facts.",
+    ),
+    (
+        "Available node roles are signatory approver subapprover contributor and viewer",
+        "Five granular roles enable least-privilege access. A viewer can browse; a contributor"
+        " can propose; a subapprover helps review; an approver publishes; a signatory provides"
+        " official attestation.",
+    ),
+
+    # --- COSMOS DEPLOYMENT ---
+    (
+        "ECR stores Docker container images",
+        "ECR = Elastic Container Registry. AWS's Docker image registry. Container images are"
+        " pushed to ECR by CI/CD and pulled by ECS Fargate at deployment time.",
+    ),
+    (
+        "ElastiCache Redis runs as cache.t3.micro",
+        "cache.t3.micro is the smallest ElastiCache instance type \u2014 sufficient for"
+        " artiFACT's session, cache, and Celery broker workload. Keeps costs minimal while"
+        " providing sub-millisecond latency.",
+    ),
+    (
+        "Production runs 2 web tasks",
+        "2 web tasks provide high availability \u2014 if one task fails, the other continues"
+        " serving requests while ECS replaces the failed task automatically.",
+    ),
+    (
+        "RDS PostgreSQL 16 runs as db.t3.small",
+        "db.t3.small is a burstable instance type \u2014 sufficient for artiFACT's workload"
+        " with the ability to burst CPU for peak loads. PostgreSQL 16 matches the development"
+        " container version exactly.",
+    ),
+    (
+        "S3 buckets store exports",
+        "S3 buckets are organized by function: exports (generated documents), snapshots"
+        " (admin-triggered pg_dump backups), and uploads (document import files).",
+    ),
+    (
+        "Secrets Manager stores database credentials",
+        "AWS Secrets Manager provides hardware-backed storage with IAM-controlled access,"
+        " automatic rotation, and audit logging. Database credentials are never in config files"
+        " or environment variables.",
+    ),
+    (
+        "Secrets Manager stores the encryption master key",
+        "The encryption master key encrypts all user AI API keys (BYOK). Storing it in Secrets"
+        " Manager means the key is fetched at runtime and held only in memory \u2014 never"
+        " written to disk.",
+    ),
+    (
+        "S3 versioning is enabled",
+        "S3 versioning keeps previous versions of every object. Combined with 30-day retention"
+        " on deleted objects, this provides a safety net against accidental overwrites or"
+        " deletions.",
+    ),
+
+    # --- CUI HANDLING ---
+    (
+        "AI API calls via Bedrock do not transmit PII",
+        "Bedrock processes fact text for AI features but receives no user PII \u2014 no names,"
+        " emails, EDIPIs, or CAC DNs are included in AI prompts. Only fact content is sent.",
+    ),
+    (
+        "CUI banners appear when any included fact has CUI classification",
+        "CUI = Controlled Unclassified Information (32 CFR Part 2002). CUI banners appear"
+        " automatically when any fact included in a view or document carries CUI"
+        " classification \u2014 no manual marking needed.",
+    ),
+    (
+        "Per-fact classification fields enable granular CUI tracking",
+        "Per-fact classification enables granular CUI tracking. A node can contain both"
+        " unclassified and CUI facts \u2014 the system knows exactly which facts carry marking"
+        " requirements.",
+    ),
+    (
+        "Generated DOCX includes cover page classification marking",
+        "DOCX cover page markings comply with DoDI 5200.48 requirements for CUI document"
+        " marking. The highest classification of any included fact determines the"
+        " document-level marking.",
+    ),
+
+    # --- CUI TRAINING ---
+    (
+        "All artiFACT users must have current DoD CUI awareness training",
+        "DoD CUI awareness training is mandated by DoDI 5200.48. This is a personnel"
+        " requirement, not an application feature \u2014 each user's command is responsible for"
+        " tracking compliance.",
+    ),
+    (
+        "The login splash screen includes a certification statement",
+        "The login splash screen serves as a procedural control \u2014 users certify CUI"
+        " awareness before accessing the system. This is a standard DoD information system"
+        " access banner.",
+    ),
+
+    # --- DATA EXPORT & PORTABILITY ---
+    (
+        "GET api v1 sync full returns every audit event as JSON",
+        "The sync/full endpoint is artiFACT's data portability guarantee. It dumps the complete"
+        " corpus as structured JSON \u2014 facts, versions, signatures, audit events, user"
+        " records \u2014 for migration or archival.",
+    ),
+    (
+        "Signed S3 URLs expire after 24 hours",
+        "Signed S3 URLs grant temporary access to a specific file without requiring the user to"
+        " have AWS credentials. 24 hours is long enough to download but short enough to prevent"
+        " link sharing.",
+    ),
+
+    # --- DATA LAYER ---
+    (
+        "Every table has a UUID primary key generated by gen_random_uuid",
+        "gen_random_uuid() generates UUID v4 values at the database level, ensuring globally"
+        " unique identifiers regardless of which application instance creates the row.",
+    ),
+    (
+        "Every table has created_at TIMESTAMPTZ DEFAULT now",
+        "TIMESTAMPTZ DEFAULT now() means every row automatically records its creation time in"
+        " UTC. No application code needed to set the timestamp \u2014 it cannot be forgotten or"
+        " faked.",
+    ),
+    (
+        "MinIO provides S3-compatible object storage",
+        "MinIO provides an S3-compatible API for local development. Code that uses the S3 SDK"
+        " works identically against MinIO and AWS S3 \u2014 no environment-specific"
+        " conditionals.",
+    ),
+    (
+        "PostgreSQL 16 is the primary database",
+        "PostgreSQL 16 provides advanced features used throughout artiFACT: JSONB columns,"
+        " tsvector full-text search, gen_random_uuid(), CTEs, and window functions.",
+    ),
+    (
+        "Redis provides session storage",
+        "Redis session storage enables horizontal scaling \u2014 any web task can serve any"
+        " user's request because the session lives in Redis, not in the web process's memory.",
+    ),
+
+    # --- DATA RETENTION ---
+    (
+        "Audit trail retention is 6 years",
+        "Six-year audit trail retention aligns with NARA GRS 3.2 Item 031 for system access"
+        " and security audit trails. Celery beat automates the cleanup after the retention"
+        " period.",
+    ),
+    (
+        "Fact version retention is 3 years after superseded",
+        "Three-year retention per NARA GRS 5.2 Item 020. Old fact versions are kept 3 years"
+        " after being superseded, then eligible for automated cleanup.",
+    ),
+    (
+        "System config is deleted when superseded",
+        "Per NARA GRS 3.1 Item 010, superseded configuration records have no retention"
+        " requirement. When an admin updates a feature flag, the old value can be deleted"
+        " immediately.",
+    ),
+
+    # --- DITPR REGISTRATION ---
+    (
+        "DITPR is located at ditpr.osd.mil",
+        "DITPR = DoD IT Portfolio Repository. The authoritative registry of all DoD information"
+        " systems, required by DoDI 8510.01 for any system seeking an Authority to Operate.",
+    ),
+    (
+        "The classification is UNCLASSIFIED CUI",
+        "CUI = Controlled Unclassified Information. The classification level determines which"
+        " security controls apply and which hosting environments are authorized.",
+    ),
+    (
+        "The cloud service provider is AWS GovCloud",
+        "AWS GovCloud is an isolated AWS region designed for sensitive government workloads. It"
+        " meets FedRAMP High and DoD IL-4/IL-5 requirements.",
+    ),
+    (
+        "The hosting environment is COSMOS NIWC Pacific Cloud Service Center",
+        "COSMOS NIWC Pacific = Cloud One SIPR/NIPR Management and Operations Services at Naval"
+        " Information Warfare Center Pacific. A managed DoD cloud platform providing shared"
+        " infrastructure and ATO boundary.",
+    ),
+    (
+        "The impact level is IL-4",
+        "IL-4 = Impact Level 4. Covers Controlled Unclassified Information in commercial cloud"
+        " environments. Defined by the DoD Cloud Computing Security Requirements Guide.",
+    ),
+    (
+        "The impact level is IL-5",
+        "IL-5 = Impact Level 5. Covers CUI in DoD cloud and higher-sensitivity unclassified"
+        " data. Requires dedicated government infrastructure like AWS GovCloud.",
+    ),
+    (
+        "The system type is Major Application",
+        "\"Major Application\" is a DITPR classification for IT systems that require an"
+        " independent ATO assessment. It triggers specific documentation and oversight"
+        " requirements.",
+    ),
+
+    # --- DOCUMENT GENERATION ---
+    (
+        "Generation progress is streamed via SSE",
+        "SSE = Server-Sent Events. Progress updates stream to the browser in real time as each"
+        " document section is generated \u2014 users see live status without polling.",
+    ),
+    (
+        "Generation runs as a Celery background task",
+        "Running generation as a Celery background task prevents HTTP timeouts. The web server"
+        " returns immediately while the worker processes the AI calls, which can take 30+"
+        " seconds.",
+    ),
+    (
+        "The prefilter scores every published fact against all template sections simultaneously",
+        "Prefilter scores every published fact against all template sections simultaneously"
+        " using the LLM. This determines which facts belong in which document sections before"
+        " any prose is generated.",
+    ),
+    (
+        "The synthesizer generates prose for each section from the matched facts",
+        "The synthesizer takes the prefilter's fact-to-section assignments and generates"
+        " coherent prose. Separating this from prefilter lets users review which facts map to"
+        " which sections before spending AI tokens.",
+    ),
+    (
+        "The DOCX builder applies CUI markings when applicable",
+        "CUI markings in generated documents are applied automatically based on the"
+        " classification of included facts. Headers, footers, and cover pages carry the"
+        " appropriate markings per DoDI 5200.48.",
+    ),
+    (
+        "A views feature lets users run prefilter only",
+        "Views show users which facts the AI would assign to each template section without"
+        " generating prose. This preview saves AI token costs and lets users refine the corpus"
+        " before committing to full generation.",
+    ),
+    (
+        "The views feature shows which facts AI would assign per section",
+        "The views feature is like a dry run: it shows the fact-to-section mapping from"
+        " prefilter without running synthesis. Users can identify missing facts or"
+        " misassignments before incurring AI costs.",
+    ),
+
+    # --- ENCRYPTION & DATA PROTECTION ---
+    (
+        "AI processing uses Amazon Bedrock in AWS GovCloud",
+        "Amazon Bedrock in AWS GovCloud is authorized at IL-4/IL-5 for processing CUI data. AI"
+        " operations stay within the authorization boundary.",
+    ),
+    (
+        "All data at rest is encrypted using RDS AES-256",
+        "AES-256 encryption at rest is a baseline requirement for CUI data per CNSS Policy 15."
+        " RDS provides this transparently \u2014 no application-level encryption needed for"
+        " database rows.",
+    ),
+    (
+        "All data in transit uses TLS 1.2 or higher",
+        "TLS 1.2+ encrypts all data in transit between clients, services, and databases. Older"
+        " TLS versions are disabled as required by NIST SP 800-52 Rev 2.",
+    ),
+
+    # --- EXTERNAL DATA SHARING ---
+    (
+        "Sync API access requires an authenticated service account",
+        "Service accounts authenticate with scoped API keys \u2014 not user sessions. Each key"
+        " has explicit permissions (read, sync) and can be revoked independently.",
+    ),
+    (
+        "The Advana sync API includes display names and roles",
+        "The sync API includes display names and roles for attribution (who approved what) but"
+        " excludes EDIPI and email to follow minimum necessary disclosure principles.",
+    ),
+
+    # --- EXTERNAL INTEGRATIONS ---
+    (
+        "Advana Apigee gateway discovers the OpenAPI spec automatically",
+        "Apigee is Google's API gateway product used by Advana/Jupiter. It auto-discovers"
+        " artiFACT's OpenAPI spec for routing, authentication, and rate limiting at the"
+        " gateway level.",
+    ),
+    (
+        "The Advana delta feed endpoint is GET api v1 sync changes",
+        "The delta feed endpoint returns only events newer than the consumer's cursor position."
+        " Advana polls this to stay current without re-downloading the entire corpus each time.",
+    ),
+    (
+        "The delta feed uses a monotonic seq cursor",
+        "A monotonic seq cursor only increases \u2014 no two events share the same value."
+        " Unlike timestamps, it guarantees strict ordering without clock skew issues.",
+    ),
+    (
+        "The delta feed uses BIGINT seq not timestamps",
+        "BIGINT seq avoids the problems of timestamp-based cursors: clock skew,"
+        " sub-millisecond event collisions, and timezone ambiguity. Each event gets a unique,"
+        " ordered integer.",
+    ),
+    (
+        "The OpenAPI 3.0 spec is auto-generated at api v1 openapi.json",
+        "OpenAPI 3.0 spec auto-generation means the API documentation updates every time a"
+        " route changes. External consumers always have an accurate, machine-readable"
+        " contract.",
+    ),
+
+    # --- FACT LIFECYCLE ---
+    (
+        "A fact is created with an initial version in proposed state",
+        "The initial version starts in \"proposed\" state and enters the approval queue."
+        " Contributors cannot bypass the review process \u2014 all new content requires"
+        " approver sign-off.",
+    ),
+    (
+        "Approvers can create facts directly in published state",
+        "Approvers can bypass the proposal queue when creating facts directly. This streamlines"
+        " bulk data entry during initial corpus population.",
+    ),
+    (
+        "Facts can be retired",
+        "Retiring a fact removes it from the active corpus without deleting it. The fact and"
+        " its history remain in the database for retention compliance and audit purposes.",
+    ),
+    (
+        "Published facts can be signed by a signatory",
+        "Signing is an official attestation by a signatory that the published fact is accurate"
+        " and authoritative. It's the highest level of endorsement in the approval hierarchy.",
+    ),
+    (
+        "Retired facts can be unretired by an approver",
+        "Unretiring restores a fact to the active corpus. Only an approver or higher can"
+        " unretire, ensuring retired facts don't accidentally re-enter the corpus without"
+        " review.",
+    ),
+
+    # --- FRONTEND ---
+    (
+        "Alpine.js provides client-side interactivity",
+        "Alpine.js is a lightweight JavaScript framework (~15KB) for client-side interactivity."
+        " It handles dropdowns, modals, and form validation without the complexity of React or"
+        " Vue.",
+    ),
+    (
+        "HTMX provides dynamic updates without page reloads",
+        "HTMX enables dynamic updates by swapping HTML fragments from the server. No JSON API"
+        " layer needed \u2014 the server renders the final HTML and HTMX puts it on the page.",
+    ),
+    (
+        "Jinja2 autoescape is enabled",
+        "Jinja2 autoescape converts special characters like < and > into safe HTML entities"
+        " automatically. This prevents XSS (Cross-Site Scripting) attacks without requiring"
+        " developers to remember to escape each value.",
+    ),
+    (
+        "Tailwind CSS CDN provides utility-first styling",
+        "Tailwind CSS CDN means zero build step for styles. Utility classes are applied directly"
+        " in HTML templates \u2014 no separate CSS files to maintain or compile.",
+    ),
+    (
+        "The frontend requires zero build step",
+        "Zero build step means no webpack, no npm, no node_modules. The frontend ships as plain"
+        " HTML templates, CDN-loaded CSS/JS, and Jinja2 server-side rendering.",
+    ),
+    (
+        "The frontend uses server-rendered HTML via Jinja2",
+        "Server-rendered HTML via Jinja2 means the server does all the work \u2014 the browser"
+        " receives complete HTML pages. No client-side JavaScript framework required for"
+        " rendering.",
+    ),
+    (
+        "There is zero npm",
+        "Zero npm eliminates the node_modules dependency tree \u2014 often 500MB+ of transitive"
+        " dependencies with potential supply chain vulnerabilities. The frontend uses only"
+        " CDN-loaded libraries.",
+    ),
+    (
+        "There is zero webpack",
+        "Webpack is a JavaScript module bundler typically required for React/Vue apps."
+        " artiFACT's server-rendered architecture eliminates the need for any JavaScript build"
+        " pipeline.",
+    ),
+    (
+        "CSS variables in theme.css provide three theme modes",
+        "CSS variables in theme.css enable runtime theme switching without reloading. Three"
+        " modes support different user preferences and accessibility needs.",
+    ),
+
+    # --- GRACEFUL DEGRADATION ---
+    (
+        "When Redis is down the badge counter returns negative one",
+        "Returning -1 signals to the UI that the actual count is unavailable. The UI renders a"
+        " dash instead of a number, rather than showing a stale cached value or erroring out.",
+    ),
+    (
+        "When Redis is down the rate limiter logs a warning",
+        "Logging a warning when Redis is down (rather than blocking requests) is intentional"
+        " fail-open behavior. Rate limiting is defense-in-depth, not a primary security"
+        " control.",
+    ),
+
+    # --- IMPORT ANALYSIS ---
+    (
+        "Analysis runs as a Celery background task",
+        "Running analysis as a Celery background task prevents HTTP timeouts. AI-powered"
+        " document parsing can take minutes for large files \u2014 the user sees real-time"
+        " progress via SSE.",
+    ),
+    (
+        "Extracted facts are staged for human review before proposal",
+        "AI-extracted facts are staged, not auto-published. A human reviews each one before it"
+        " enters the proposal queue \u2014 maintaining the same four-eyes review standard as"
+        " manually created facts.",
+    ),
+    (
+        "Users can upload DOCX documents for AI-powered fact extraction",
+        "Document import is the on-ramp from traditional Word-based acquisition documentation."
+        " Users upload existing artifacts and the AI extracts atomic facts for review and"
+        " approval.",
+    ),
+
+    # --- INFRASTRUCTURE ---
+    (
+        "Docker Compose manages the local development stack",
+        "Docker Compose defines the complete local development stack: web, worker, postgres,"
+        " redis, minio, nginx, and certbot. One command (docker compose up) starts everything.",
+    ),
+    (
+        "Terraform manages infrastructure as code",
+        "Terraform = Infrastructure as Code tool. Every cloud resource (ECS tasks, RDS"
+        " instances, S3 buckets, IAM roles) is defined in declarative .tf files. The production"
+        " environment can be recreated from scratch.",
+    ),
+    (
+        "The production target is AWS GovCloud",
+        "AWS GovCloud is an isolated AWS region designed for sensitive government workloads. It"
+        " meets FedRAMP High and DoD IL-4/IL-5 requirements for CUI data handling.",
+    ),
+
+    # --- KERNEL SERVICES ---
+    (
+        "All shared code lives in the kernel",
+        "The kernel is the only code that can be imported across module boundaries. Shared"
+        " concerns like auth, permissions, events, and database sessions live here to prevent"
+        " cross-module coupling.",
+    ),
+    (
+        "Modules never import from each other",
+        "No inter-module imports is the fundamental architectural constraint. If module A needs"
+        " data from module B, it reads the shared database \u2014 never imports B's internal"
+        " code.",
+    ),
+    (
+        "The kernel is the only shared import allowed across modules",
+        "Making the kernel the sole shared import creates a clear dependency graph: modules"
+        " depend on kernel, kernel depends on nothing. This prevents circular dependencies and"
+        " keeps modules independently testable.",
+    ),
+
+    # --- MODULE COMMUNICATION ---
+    (
+        "Cross-module reads go through the database",
+        "Reading through the database prevents tight coupling. Module A doesn't need to know"
+        " module B's internal API \u2014 it queries the shared data model via SQLAlchemy.",
+    ),
+    (
+        "Cross-module writes go through the kernel event bus",
+        "Writes go through the event bus so that side effects (audit logging, cache"
+        " invalidation, badge updates) happen automatically. The writing module doesn't need to"
+        " know who reacts to its events.",
+    ),
+
+    # --- MONITORING & LOGGING ---
+    (
+        "Health check endpoints report database connectivity status",
+        "Health check endpoints verify that the application can actually reach its"
+        " dependencies \u2014 not just that the process is running. A healthy response means"
+        " database, Redis, and S3 are all reachable.",
+    ),
+    (
+        "Structured JSON logs via structlog forward to CloudWatch",
+        "CloudWatch is AWS's centralized logging service. Structured JSON logs from structlog"
+        " are machine-parseable, enabling queries like \"show all errors in the signing module"
+        " in the last hour.\"",
+    ),
+
+    # --- OWASP ZAP RESULTS ---
+    (
+        "HIGH findings must be resolved before deployment",
+        "HIGH findings indicate vulnerabilities that could be exploited remotely with"
+        " significant impact. These are deployment blockers \u2014 no exceptions.",
+    ),
+    (
+        "MEDIUM findings must be resolved before deployment",
+        "MEDIUM findings are tracked and remediated on a risk-based timeline. They indicate"
+        " real vulnerabilities but with limited exploitability or impact.",
+    ),
+
+    # --- PERMISSION MODEL ---
+    (
+        "Grants cascade to all descendant nodes in the taxonomy",
+        "Grant cascading means a permission on a parent node automatically applies to all"
+        " children. Granting \"approver\" on \"Architecture & Design\" gives approval rights on"
+        " every child node beneath it.",
+    ),
+    (
+        "Permission resolution checks the node and all ancestors up to root",
+        "Ancestor-walking permission resolution means the system checks the current node, then"
+        " its parent, then grandparent, up to root. The first matching grant determines the"
+        " user's effective role.",
+    ),
+    (
+        "The permission cache is invalidated on grant events",
+        "Cache invalidation on grant events ensures new permissions take effect promptly."
+        " Without this, a newly granted user would wait up to 5 minutes (the cache TTL) before"
+        " their access works.",
+    ),
+
+    # --- PII INVENTORY ---
+    (
+        "Admins can view the user list with name email and role",
+        "Admin-only user list visibility follows least-privilege principles. Non-admins see"
+        " display names only on approval and signature records where attribution is"
+        " operationally necessary.",
+    ),
+    (
+        "No user can see another users EDIPI",
+        "EDIPI = Electronic Data Interchange Personal Identifier. Concealing it from other"
+        " users prevents cross-system identity correlation without authorization.",
+    ),
+
+    # --- PILLAR 1 — USER IDENTITY ---
+    (
+        "Anomaly detection triggers force re-authentication",
+        "Anomaly detection triggers (export floods, off-hours bulk access, scope escalation)"
+        " force the user to re-authenticate via CAC. This ensures a compromised session cannot"
+        " continue operating.",
+    ),
+    (
+        "CAC multi-factor authentication is provided via COSMOS SAML",
+        "CAC = Common Access Card. SAML = Security Assertion Markup Language. COSMOS handles"
+        " the CAC validation and passes the verified identity to artiFACT via a signed SAML"
+        " assertion.",
+    ),
+
+    # --- PILLAR 5 — DATA ---
+    (
+        "AI keys are encrypted with AES-256-GCM",
+        "AES-256-GCM provides both encryption (confidentiality) and authentication (tamper"
+        " detection) in one operation. The 256-bit key length meets CNSS Policy 15"
+        " requirements.",
+    ),
+    (
+        "Supported classification values are UNCLASSIFIED CUI and CONFIDENTIAL",
+        "These three classification levels cover all data artiFACT handles. UNCLASSIFIED is the"
+        " default. CUI requires safeguarding per 32 CFR Part 2002. CONFIDENTIAL is the lowest"
+        " classification level.",
+    ),
+    (
+        "The encryption master key is stored in AWS Secrets Manager",
+        "AWS Secrets Manager provides hardware-backed storage, automatic rotation, and"
+        " IAM-controlled access. The master key is fetched at runtime and held only in memory.",
+    ),
+
+    # --- PILLAR 6 — VISIBILITY ---
+    (
+        "Anomaly detection monitors for AI corpus mining",
+        "AI corpus mining is a data exfiltration technique where a user uses iterative AI"
+        " queries to gradually extract the entire fact corpus. The anomaly detector tracks"
+        " query patterns to detect this.",
+    ),
+    (
+        "Structured JSON logs are produced via structlog",
+        "structlog produces structured JSON log entries with key-value fields."
+        " Machine-parseable logs enable CloudWatch Insights queries and Grafana dashboards"
+        " without regex-based parsing.",
+    ),
+    (
+        "Logs forward to CloudWatch",
+        "CloudWatch is AWS's centralized log aggregation and monitoring service. Forwarding"
+        " logs there enables alerting, querying, and long-term retention outside the"
+        " application.",
+    ),
+    (
+        "Grafana dashboards visualize active user count",
+        "Grafana is an open-source visualization platform. Dashboards for active users, AI"
+        " cost, error rates, latency, and request rates provide real-time operational"
+        " visibility.",
+    ),
+    (
+        "fc_event_log records every mutation",
+        "fc_event_log is the immutable audit trail. Every create, update, delete, approve,"
+        " sign, and permission change is recorded with actor, entity, and timestamp.",
+    ),
+
+    # --- PROGRAM OVERVIEW ---
+    (
+        "artiFACT decomposes traditional acquisition documents into atomic facts",
+        "Traditional acquisition documents contain overlapping content \u2014 the same fact"
+        " about a system's architecture might appear in 10 different artifacts. artiFACT stores"
+        " it once and assembles it into any required format.",
+    ),
+    (
+        "artiFACT is a taxonomy-driven atomic fact corpus platform",
+        "A taxonomy is a hierarchical classification system. artiFACT organizes facts into a"
+        " tree structure \u2014 programs at the top, branches for topic areas, leaves for"
+        " specific subjects.",
+    ),
+    (
+        "artiFACT replaces 71 engineering artifacts with a single source of truth",
+        "71 engineering artifacts include documents like the System Engineering Plan, Test and"
+        " Evaluation Master Plan, Software Development Plan, and dozens more. Many contain 30%+"
+        " overlapping content.",
+    ),
+    (
+        "Documents are generated on demand from the current corpus",
+        "On-demand generation from the current corpus guarantees every document reflects the"
+        " latest approved facts. No stale versions, no manual sync between documents.",
+    ),
+    (
+        "The system provides AI-assisted document generation",
+        "AI-assisted document generation uses a two-pass approach: prefilter assigns facts to"
+        " template sections, then synthesis generates prose. Users preview assignments before"
+        " spending AI tokens.",
+    ),
+    (
+        "Those 71 artifacts carry over 30 percent duplicative content",
+        "30%+ duplication means updating a single fact requires finding and updating it in"
+        " dozens of documents. artiFACT eliminates this by storing each fact exactly once.",
+    ),
+
+    # --- RECORDS RETENTION ---
+    (
+        "Approval decisions follow NARA GRS 5.2 Item 020 with 3-year retention",
+        "NARA = National Archives and Records Administration. GRS = General Records Schedule."
+        " 5.2/020 covers transitory records superseded by new versions \u2014 3-year retention"
+        " after supersession.",
+    ),
+    (
+        "User feedback follows NARA GRS 5.7 Item 010 with 1-year retention after resolved",
+        "NARA GRS 5.7/010 covers miscellaneous communications including user feedback. Destroy"
+        " 1 year after resolution \u2014 Celery beat automates the cleanup.",
+    ),
+
+    # --- REST CONVENTIONS ---
+    (
+        "All endpoints are under the api v1 prefix",
+        "The /api/v1 prefix enables API versioning. If a breaking change is needed, a /api/v2"
+        " can be introduced while v1 continues serving existing clients.",
+    ),
+    (
+        "CSRF tokens are passed via the X-CSRF-Token header",
+        "CSRF = Cross-Site Request Forgery. The X-CSRF-Token header proves the request came"
+        " from artiFACT's own pages, not a malicious third-party site.",
+    ),
+    (
+        "Error responses follow the format detail message code error_code",
+        "A consistent error format means client code has one pattern for handling all errors"
+        " \u2014 parse detail, message, and error_code regardless of which endpoint returned"
+        " the error.",
+    ),
+    (
+        "Responses follow the format data array total offset limit",
+        "Consistent response envelopes (data, total, offset, limit) enable generic pagination"
+        " handling on the client. Every list endpoint returns the same structure.",
+    ),
+    (
+        "The API uses RESTful nouns not verbs",
+        "RESTful nouns (e.g., /api/v1/facts, /api/v1/nodes) follow HTTP semantics: GET reads,"
+        " POST creates, PUT updates, DELETE removes. No verb-based endpoints like"
+        " /api/v1/createFact.",
+    ),
+
+    # --- ROLE HIERARCHY ---
+    (
+        "A higher role inherits all capabilities of lower roles on the same node",
+        "Role inheritance means a signatory automatically has all approver, subapprover,"
+        " contributor, and viewer capabilities. No need to grant multiple roles \u2014 one"
+        " grant covers everything below it.",
+    ),
+    (
+        "Node-level roles are signatory approver subapprover contributor and viewer",
+        "Five node-level roles provide fine-grained access control. A signatory can attest, an"
+        " approver can publish, a subapprover helps review, a contributor can propose, and a"
+        " viewer can read.",
+    ),
+
+    # --- SIGNING WORKFLOW ---
+    (
+        "A signature record can have an optional expiration",
+        "Signature expiration supports scenarios where facts require periodic re-attestation."
+        " If a signature expires, the signatory must re-sign to confirm the facts are still"
+        " accurate.",
+    ),
+    (
+        "A signature record is created with fact count",
+        "Recording fact_count at signing time provides an audit trail of exactly how many facts"
+        " were attested. If facts are later added, the signature's scope is clear.",
+    ),
+
+    # --- STAKEHOLDERS ---
+    (
+        "Advana consumes data via the delta feed API",
+        "Advana = Advanced Analytics platform. DoD's enterprise data and analytics environment."
+        " It consumes artiFACT data via the delta feed for cross-program analytics.",
+    ),
+    (
+        "artiFACT is accessible on commercial internet",
+        "Commercial internet accessibility (via COSMOS CNAP) means users don't need to be on a"
+        " military network. Any CAC-enabled browser on a CNAP-enrolled device can reach"
+        " artiFACT.",
+    ),
+
+    # --- SYSTEM TABLES ---
+    (
+        "fc_ai_usage tracks estimated costs per user per AI action",
+        "fc_ai_usage enables per-user cost attribution under the BYOK model. Each organization"
+        " can see exactly how much their users spend on AI features.",
+    ),
+    (
+        "fc_document_template stores semantic document templates",
+        "Semantic document templates define the structure of acquisition documents \u2014"
+        " sections with prompts and guidance. The AI uses these to map facts to the correct"
+        " document sections.",
+    ),
+    (
+        "fc_system_config stores feature flags as key-value JSONB",
+        "JSONB feature flags enable runtime capability toggling. An admin can disable AI chat,"
+        " document generation, or any feature instantly without redeploying the application.",
+    ),
+    (
+        "fc_system_config stores rate limit configuration as key-value JSONB",
+        "Rate limit configuration in fc_system_config allows admins to adjust per-user request"
+        " limits without code changes. Stored as JSONB for flexible schema.",
+    ),
+    (
+        "fc_user_preference stores per-user settings as key-value JSONB",
+        "Per-user preferences (theme, default node, notification settings) are stored as"
+        " flexible JSONB. New preferences can be added without schema migrations.",
+    ),
+
+    # --- WORKFLOW TABLES ---
+    (
+        "fc_fact_comment supports challenges and resolutions",
+        "Challenges are formal disagreements with a fact's content. The challenge/resolution"
+        " workflow provides a structured review process \u2014 not just comments, but tracked"
+        " disputes with resolution states.",
+    ),
+    (
+        "fc_fact_comment supports threaded comments on fact versions",
+        "Threaded comments on fact versions enable contextual discussion. parent_comment_uid"
+        " creates reply chains so conversations stay organized and traceable.",
+    ),
+    (
+        "fc_import_session tracks document upload and AI analysis progress",
+        "fc_import_session tracks the lifecycle of a document upload: file received, AI analysis"
+        " in progress, facts extracted, human review pending. SSE streams progress to the user"
+        " in real time.",
+    ),
+    (
+        "fc_signature records batch signing operations per node",
+        "fc_signature records batch signing operations per taxonomy node. A signatory signs all"
+        " published facts under a node in one operation \u2014 the record captures who signed,"
+        " when, and the fact count.",
+    ),
+
+    # --- MISSION NEED ---
+    (
+        "A typical DoD acquisition program has 71 engineering artifacts",
+        "These 71 artifacts span the full acquisition lifecycle: requirements, design, test,"
+        " deployment, sustainment, and retirement. Many share 30%+ overlapping content.",
+    ),
+    (
+        "The system addresses the DON need for authoritative atomic data",
+        "DON = Department of the Navy (Navy + Marine Corps). \"Authoritative atomic data\" means"
+        " each fact is the single approved source \u2014 no conflicting versions in different"
+        " documents.",
+    ),
+    (
+        "When a single fact changes a human must manually find every document containing"
+        " that fact",
+        "This is the core problem artiFACT solves. A single fact change triggers a manual hunt"
+        " through dozens of documents \u2014 error-prone, time-consuming, and often incomplete.",
+    ),
+    (
+        "Users can continue using Word documents while gradually building their corpus",
+        "artiFACT's import feature lets users upload existing Word documents and extract facts"
+        " from them. Teams can transition gradually without disrupting current workflows.",
+    ),
 ]
 
 
