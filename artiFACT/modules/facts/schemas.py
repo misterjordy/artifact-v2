@@ -116,12 +116,15 @@ class EventSummaryOut(BaseModel):
 
 
 class MoveEventOut(BaseModel):
+    timeline_type: str = "move"
     event_uid: UUID
     event_type: str
     actor: dict[str, Any]
     occurred_at: datetime
     source_node_uid: str | None = None
+    source_node_title: str | None = None
     target_node_uid: str | None = None
+    target_node_title: str | None = None
     comment: str | None = None
     correlation_id: str | None = None
     note: str | None = None
@@ -144,6 +147,11 @@ class VersionHistoryOut(BaseModel):
     events: list[EventSummaryOut] = []
 
 
+class TimelineEntryOut(BaseModel):
+    """Union type for timeline: either a version or a move event."""
+    timeline_type: str = "version"
+
+
 class FactHistoryOut(BaseModel):
     fact_uid: UUID
     node_uid: UUID
@@ -151,3 +159,4 @@ class FactHistoryOut(BaseModel):
     is_retired: bool
     versions: list[VersionHistoryOut] = []
     move_events: list[MoveEventOut] = []
+    timeline: list[dict[str, Any]] = []

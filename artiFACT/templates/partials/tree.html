@@ -1,7 +1,10 @@
 {% macro render_node(node, level=0, breadcrumb_path="") %}
 {% set current_breadcrumb = (breadcrumb_path + " > " + node.title) if breadcrumb_path else node.title %}
-<div x-data="{ open: true }">
-  <div class="group flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors">
+<div class="dnd-node-wrapper" x-data="{ open: true }">
+  <div class="group flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors"
+       data-node-uid="{{ node.node_uid }}"
+       data-node-title="{{ node.title | e }}"
+       {% if node.node_depth is defined and node.node_depth > 0 %}draggable="true"{% endif %}>
     {% if node.children %}
     <button class="tree-toggle flex-shrink-0 w-4 h-4 flex items-center justify-center text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]"
             @click="open = !open" aria-label="Toggle">
@@ -20,7 +23,7 @@
             :class="$store.favorites.isFavorite('{{ node.node_uid }}') ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-sidebar)] opacity-0 group-hover:opacity-100'"
             @click="$store.favorites.toggle('{{ node.node_uid }}', '{{ node.title | e }}', '{{ breadcrumb_path | e }}')"
             title="Toggle favorite">
-      <span x-text="$store.favorites.isFavorite('{{ node.node_uid }}') ? '★' : '☆'"></span>
+      <span x-text="$store.favorites.isFavorite('{{ node.node_uid }}') ? '\u2605' : '\u2606'"></span>
     </button>
 
     {% set nuid = node.node_uid | string %}
@@ -53,6 +56,11 @@
   {% endif %}
 </div>
 {% endmacro %}
+
+{# Inject writable UIDs for drag-drop permission checks #}
+<script>
+window.__writableNodeUids = [{% if can_contribute_uids %}{% for uid in can_contribute_uids %}"{{ uid }}"{% if not loop.last %},{% endif %}{% endfor %}{% endif %}];
+</script>
 
 {% if nodes %}
 {% for node in nodes %}

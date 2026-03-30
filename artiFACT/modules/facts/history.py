@@ -14,6 +14,7 @@ from artiFACT.kernel.models import (
     FcFact,
     FcFactComment,
     FcFactVersion,
+    FcNode,
     FcUser,
 )
 from artiFACT.kernel.permissions.resolver import can
@@ -40,6 +41,17 @@ async def _load_user_map(
     stmt = select(FcUser).where(FcUser.user_uid.in_(user_uids))
     result = await db.execute(stmt)
     return {u.user_uid: u for u in result.scalars().all()}
+
+
+async def _load_node_map(
+    db: AsyncSession, node_uids: set[UUID],
+) -> dict[UUID, FcNode]:
+    """Batch-load nodes by uid for title resolution."""
+    if not node_uids:
+        return {}
+    stmt = select(FcNode).where(FcNode.node_uid.in_(node_uids))
+    result = await db.execute(stmt)
+    return {n.node_uid: n for n in result.scalars().all()}
 
 
 async def get_fact_history(
@@ -121,25 +133,38 @@ async def get_fact_history(
             user_uids.add(me.actor_uid)
     user_map = await _load_user_map(db, user_uids)
 
+    # 4b. Batch-load referenced nodes for move event titles
+    node_uids_to_load: set[UUID] = set()
+    for me in move_events:
+        payload = me.payload or {}
+        for key in ("source_node_uid", "target_node_uid"):
+            val = payload.get(key)
+            if val:
+                try:
+                    node_uids_to_load.add(UUID(val))
+                except (ValueError, AttributeError):
+                    pass
+    node_map = await _load_node_map(db, node_uids_to_load)
+
     unknown = {"user_uid": "", "display_name": "Unknown", "username": "unknown"}
 
     # 5. Determine current sentence
     current_sentence = _resolve_current_sentence(fact, versions)
 
-    # 6. Assemble
+    # 6. Assemble version entries
     now = datetime.now(timezone.utc)
     challenge_cutoff = now - timedelta(days=CHALLENGE_WINDOW_DAYS)
 
     version_dicts = []
     for v in versions:
         author = user_map.get(v.created_by_uid, None) if v.created_by_uid else None
-        # A version is challengeable if published/rejected/proposed within the last 30 days
         pub_ts = v.published_at or v.created_at
         challengeable = (
             v.state in ("published", "rejected", "proposed")
             and pub_ts >= challenge_cutoff
         )
         version_dicts.append({
+            "timeline_type": "version",
             "version_uid": v.version_uid,
             "state": v.state,
             "display_sentence": v.display_sentence,
@@ -157,7 +182,12 @@ async def get_fact_history(
             "events": _build_events(events_by_version[v.version_uid], user_map, unknown),
         })
 
-    move_dicts = _build_move_events(move_events, user_map, unknown)
+    # 7. Assemble move entries with resolved node titles
+    move_dicts = _build_move_events(move_events, user_map, node_map, unknown)
+
+    # 8. Merge into unified timeline (newest-first by timestamp)
+    timeline = version_dicts + move_dicts
+    timeline.sort(key=lambda e: e.get("created_at") or e.get("occurred_at"), reverse=True)
 
     return {
         "fact_uid": fact.fact_uid,
@@ -166,6 +196,7 @@ async def get_fact_history(
         "is_retired": fact.is_retired,
         "versions": version_dicts,
         "move_events": move_dicts,
+        "timeline": timeline,
     }
 
 
@@ -275,23 +306,42 @@ def _build_events(
     return out
 
 
+def _resolve_node_title(
+    uid_str: str | None, node_map: dict[UUID, FcNode],
+) -> str:
+    """Resolve a node UID string to its title, or return the UID as fallback."""
+    if not uid_str:
+        return ""
+    try:
+        node = node_map.get(UUID(uid_str))
+        return node.title if node else uid_str
+    except (ValueError, AttributeError):
+        return uid_str
+
+
 def _build_move_events(
     events: list[FcEventLog],
     user_map: dict[UUID, FcUser],
+    node_map: dict[UUID, FcNode],
     unknown: dict[str, str],
 ) -> list[dict[str, Any]]:
-    """Serialise move events for fact history."""
+    """Serialise move events for fact history with resolved node titles."""
     out = []
     for e in events:
         actor = user_map.get(e.actor_uid) if e.actor_uid else None
         payload = e.payload or {}
+        source_uid = payload.get("source_node_uid")
+        target_uid = payload.get("target_node_uid")
         out.append({
+            "timeline_type": "move",
             "event_uid": e.event_uid,
             "event_type": e.event_type,
             "actor": _user_dict(actor) if actor else unknown,
             "occurred_at": e.occurred_at,
-            "source_node_uid": payload.get("source_node_uid"),
-            "target_node_uid": payload.get("target_node_uid"),
+            "source_node_uid": source_uid,
+            "source_node_title": _resolve_node_title(source_uid, node_map),
+            "target_node_uid": target_uid,
+            "target_node_title": _resolve_node_title(target_uid, node_map),
             "comment": payload.get("comment"),
             "correlation_id": payload.get("correlation_id"),
             "note": e.note or payload.get("note"),

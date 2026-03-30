@@ -36,6 +36,9 @@
   <div class="space-y-2">
     {% for item in facts %}
     <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 hover:shadow-sm transition-shadow cursor-pointer hover:border-[var(--color-accent)]"
+         draggable="true"
+         data-fact-uid="{{ item.fact_uid }}"
+         data-fact-sentence="{{ item.sentence | e }}"
          hx-get="/partials/fact-history/{{ item.fact_uid }}"
          hx-target="#right-pane-content"
          hx-swap="innerHTML"
@@ -75,6 +78,9 @@
     </h3>
     {% for item in child_group.facts %}
     <div class="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-3 ml-4 mb-2 hover:shadow-sm transition-shadow cursor-pointer hover:border-[var(--color-accent)]"
+         draggable="true"
+         data-fact-uid="{{ item.fact_uid }}"
+         data-fact-sentence="{{ item.sentence | e }}"
          hx-get="/partials/fact-history/{{ item.fact_uid }}"
          hx-target="#right-pane-content"
          hx-swap="innerHTML"

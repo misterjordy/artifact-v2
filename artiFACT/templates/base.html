@@ -15,6 +15,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/static/js/tailwind-config.js"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="/static/js/utils.js" defer></script>
+  <script src="/static/js/auto_approve.js" defer></script>
   <script src="/static/js/settings.js" defer></script>
   <script src="/static/js/right-pane.js" defer></script>
   {% block head_scripts %}{% endblock %}
@@ -91,6 +93,48 @@
         </div>
         <div class="flex items-center gap-3">
           {% block header_actions %}{% endblock %}
+
+          {# Auto-approve toggle — fetches eligibility via JS #}
+          <div x-data="autoApproveToggle()" x-show="eligible && !loading" x-cloak class="flex items-center">
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-[var(--color-text-sidebar)]">
+              <span>Auto-approve</span>
+              <div class="relative inline-flex items-center w-8 h-4 rounded-full transition-colors"
+                   :class="active ? 'bg-amber-500' : 'bg-[var(--color-border)]'">
+                <input type="checkbox" :checked="active"
+                       @change="toggle($event.target.checked)"
+                       class="sr-only">
+                <div class="absolute left-0.5 w-3 h-3 rounded-full bg-[var(--color-bg-card)] shadow transition-transform"
+                     :class="active ? 'translate-x-4' : ''"></div>
+              </div>
+            </label>
+
+            {# Confirmation popup #}
+            <div x-show="confirming" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="cancelConfirm()">
+              <div class="bg-[var(--color-bg-card)] rounded-lg shadow-xl p-6 w-full max-w-md" @click.stop>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-amber-500 text-lg">&#9888;&#65039;</span>
+                  <h2 class="text-sm font-semibold text-[var(--color-text)]">Auto-approve mode</h2>
+                </div>
+                <div class="text-xs text-[var(--color-text-muted)] space-y-2 mb-4">
+                  <p>When active, ALL your actions that would normally go to the approval queue will execute immediately instead &mdash; including fact creates, edits, and moves.</p>
+                  <p>This applies to any node where you have approval authority. Auto-approved changes are difficult to undo.</p>
+                  <p>This setting is active only for this browser tab and will reset when you close the tab or log out.</p>
+                </div>
+                <div class="flex justify-end gap-2">
+                  <button @click="cancelConfirm()"
+                          class="px-4 py-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+                    Cancel
+                  </button>
+                  <button @click="confirmEnable()"
+                          class="px-4 py-2 text-xs font-medium rounded bg-amber-500 text-[var(--color-text-on-accent)] hover:bg-amber-600 transition-colors">
+                    I understand, enable
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <button class="text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors"
                   title="Settings"
                   hx-get="/partials/settings"

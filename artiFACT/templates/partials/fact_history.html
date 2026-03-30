@@ -1,15 +1,19 @@
 {# Fact version history timeline — rendered inside #right-pane-content #}
-{% if versions %}
+{% if timeline %}
 <div class="space-y-1 mb-4">
   <p class="text-xs text-[var(--color-text-muted)]">
-    {% if is_retired %}<span class="text-[var(--color-danger)] font-medium">Retired</span> · {% endif %}
-    {{ versions | length }} version{{ 's' if versions | length != 1 else '' }}
+    {% if is_retired %}<span class="text-[var(--color-danger)] font-medium">Retired</span> &middot; {% endif %}
+    {{ versions | length }} version{{ 's' if versions | length != 1 else '' }}{% if move_events %} &middot; {{ move_events | length }} move{{ 's' if move_events | length != 1 else '' }}{% endif %}
   </p>
 </div>
 
-{# Vertical timeline #}
+{# Vertical timeline — unified: versions + moves interleaved by date #}
 <div class="relative border-l-2 border-[var(--color-border)] ml-3 pl-5 space-y-6 pb-4">
-  {% for v in versions %}
+  {% for entry in timeline %}
+
+  {# ═══ VERSION ENTRY ═══ #}
+  {% if entry.timeline_type == 'version' %}
+  {% set v = entry %}
   <div class="relative">
     {# Timeline dot #}
     <div class="absolute -left-[1.625rem] top-1 w-3 h-3 rounded-full border-2 border-[var(--color-bg-card)]
@@ -112,9 +116,9 @@
         <p class="text-2xs text-[var(--color-text-muted)] mt-0.5">
           {{ c.created_by.display_name }}
           <span class="opacity-60">@{{ c.created_by.username }}</span>
-          · {{ c.created_at.strftime('%Y-%m-%d %H:%M') }}
+          &middot; {{ c.created_at.strftime('%Y-%m-%d %H:%M') }}
           {% if c.comment_type != 'comment' and c.comment_type != 'challenge' %}
-          · <span class="font-medium
+          &middot; <span class="font-medium
             {% if c.comment_type == 'challenge' %}text-amber-600{% else %}text-green-600{% endif %}">
             {{ c.comment_type }}
           </span>
@@ -129,7 +133,7 @@
         {% elif c.comment_type == 'challenge' and c.resolution_state == 'approved' %}
         <div class="mt-1 px-2 py-1.5 rounded border border-green-200 bg-green-50 text-xs text-green-800">
           Approved by {{ c.resolved_by.display_name if c.resolved_by else 'Approver' }}
-          {% if c.resolved_at %} · {{ c.resolved_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+          {% if c.resolved_at %} &middot; {{ c.resolved_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
         </div>
         {% endif %}
 
@@ -299,6 +303,65 @@
     </div>
     {% endif %}
   </div>
+
+  {# ═══ MOVE ENTRY ═══ #}
+  {% elif entry.timeline_type == 'move' %}
+  {% set me = entry %}
+  <div class="relative">
+    {# Timeline dot — move-specific colors #}
+    <div class="absolute -left-[1.625rem] top-1 w-3 h-3 rounded-full border-2 border-[var(--color-bg-card)]
+      {% if me.event_type == 'move.approved' %}bg-green-500
+      {% elif me.event_type == 'move.rejected' %}bg-red-500
+      {% else %}bg-blue-500
+      {% endif %}"></div>
+
+    {# Badge + timestamp #}
+    <div class="flex items-center gap-2 flex-wrap mb-1">
+      {% if me.event_type == 'move.proposed' %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium uppercase bg-blue-100 text-blue-800">Proposed Move</span>
+      {% elif me.event_type == 'move.approved' %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium uppercase bg-green-100 text-green-800">Moved</span>
+      {% elif me.event_type == 'move.rejected' %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium uppercase bg-red-100 text-red-800">Rejected Move</span>
+      {% endif %}
+      <span class="text-2xs text-[var(--color-text-muted)] ml-auto whitespace-nowrap">
+        {{ me.occurred_at.strftime('%Y-%m-%d %H:%M') }} UTC
+      </span>
+    </div>
+
+    {# Source → Target with resolved names #}
+    {% if me.source_node_title or me.target_node_title %}
+    <div class="text-sm text-[var(--color-text)] mt-1">
+      {% if me.source_node_title %}from <strong>{{ me.source_node_title }}</strong>{% endif %}
+      {% if me.source_node_title and me.target_node_title %} &rarr; {% endif %}
+      {% if me.target_node_title %}<strong>{{ me.target_node_title }}</strong>{% endif %}
+    </div>
+    {% endif %}
+
+    {# Proposer's comment #}
+    {% if me.comment %}
+    <p class="text-xs italic text-[var(--color-text-muted)] mt-1">&ldquo;{{ me.comment }}&rdquo;</p>
+    {% endif %}
+
+    {# Rejection note #}
+    {% if me.note %}
+    <div class="mt-1 px-3 py-2 rounded border border-red-200 bg-red-50 text-xs text-red-800">
+      {{ me.note }}
+    </div>
+    {% endif %}
+
+    {# Subtree indicator #}
+    {% if me.correlation_id %}
+    <p class="text-2xs text-[var(--color-text-muted)] mt-1 opacity-60">Part of subtree move</p>
+    {% endif %}
+
+    {# Actor #}
+    <p class="text-2xs text-[var(--color-text-muted)] mt-1">
+      by {{ me.actor.display_name }} <span class="opacity-60">@{{ me.actor.username }}</span>
+    </p>
+  </div>
+  {% endif %}
+
   {% endfor %}
 </div>
 

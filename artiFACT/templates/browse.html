@@ -6,6 +6,7 @@
 <script src="/static/js/sidebar-resize.js" defer></script>
 <script src="/static/js/favorites.js" defer></script>
 <script src="/static/js/sidebar-search.js" defer></script>
+<script src="/static/js/browse_dnd.js" defer></script>
 {% endblock %}
 
 {% block head %}
@@ -15,6 +16,13 @@
 {% block page_heading %}Browse{% endblock %}
 
 {% block sidebar_top %}
+<!-- Close all comment panes button (only visible when >1 pane open) -->
+<button id="dnd-close-all-btn" style="display:none"
+        onclick="window._dndCloseAllPanes && window._dndCloseAllPanes()"
+        class="w-full mb-1 px-2 py-1 text-2xs font-medium rounded bg-[var(--color-danger)] text-[var(--color-text-on-accent)] hover:opacity-90 transition-opacity">
+  Close all comments
+</button>
+
 <!-- Search bar + collapse button (sticky) -->
 <div class="sticky top-0 z-10 flex items-center gap-1 px-1 pb-2 pt-0 bg-[var(--color-bg-sidebar)]">
   <input id="sidebar-search-input"

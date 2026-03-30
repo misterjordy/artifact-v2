@@ -305,3 +305,134 @@ html.eyecare button.border-red-400:hover {
   background-color: #a33030;
   border-color: #a33030;
 }
+
+/* ── Drag-and-drop ── */
+
+.dnd-dragging {
+  opacity: 0.5;
+}
+
+.dnd-drag-over {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.dnd-invalid {
+  cursor: not-allowed;
+}
+
+/* ── Move comment pane ── */
+
+.move-comment-pane {
+  margin: 4px 0 4px 1rem;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-card);
+  font-size: 0.75rem;
+}
+
+.move-comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.move-comment-label {
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.move-comment-close {
+  flex-shrink: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+}
+
+.move-comment-close:hover {
+  color: var(--color-text);
+}
+
+.move-comment-textarea {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border-input, var(--color-border));
+  border-radius: 4px;
+  background: var(--color-bg-input, var(--color-bg));
+  color: var(--color-text);
+  font-size: 0.7rem;
+  resize: vertical;
+}
+
+.move-comment-textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.move-comment-error {
+  color: var(--color-danger);
+  font-size: 0.65rem;
+  min-height: 0;
+}
+
+.move-comment-actions {
+  margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.move-comment-submit {
+  padding: 3px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 4px;
+  background: var(--color-accent);
+  color: var(--color-text-on-accent, #fff);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.move-comment-submit:hover {
+  opacity: 0.9;
+}
+
+.move-comment-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Toast notification ── */
+
+.dnd-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 8px 20px;
+  border-radius: 6px;
+  background: var(--color-success, #22c55e);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.dnd-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
