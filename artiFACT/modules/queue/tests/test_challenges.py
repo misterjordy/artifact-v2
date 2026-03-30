@@ -210,14 +210,14 @@ async def test_challenge_requires_proposed_sentence(
     assert resp.status_code == 409
 
 
-async def test_challenge_only_on_published_version(
+async def test_challenge_on_proposed_version(
     db: AsyncSession,
     contributor: FcUser,
     test_node: FcNode,
     contributor_perm: FcNodePermission,
 ) -> None:
-    """Challenge on a non-published (proposed) version returns 409."""
-    sentence = f"Non-published challenge test {uuid.uuid4().hex}"
+    """Challenge on a proposed version is allowed."""
+    sentence = f"Proposed challenge test {uuid.uuid4().hex}"
     fact, ver = await create_fact(db, test_node.node_uid, sentence, contributor)
     await flush_pending_events(db)
     await db.flush()
@@ -228,14 +228,14 @@ async def test_challenge_only_on_published_version(
         resp = await client.post(
             f"/api/v1/facts/{fact.fact_uid}/versions/{ver.version_uid}/comments",
             json={
-                "body": "Trying to challenge a proposal.",
+                "body": "I think this should be worded differently.",
                 "comment_type": "challenge",
                 "proposed_sentence": "Alternative wording for proposed version",
             },
         )
     app.dependency_overrides.clear()
 
-    assert resp.status_code == 409
+    assert resp.status_code == 201
 
 
 # ── Tests: Challenge Approval ──

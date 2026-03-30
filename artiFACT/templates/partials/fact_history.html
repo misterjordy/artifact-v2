@@ -178,23 +178,33 @@
     </div>
     {% endif %}
 
-    {# Add comment / Challenge forms — only on published versions for challenges #}
-    {% if can_contribute %}
-    <div x-data="{ mode: null, body: '', proposedSentence: '{{ v.display_sentence | e }}', posting: false }" class="mt-2">
+    {# Comment / Challenge / Reject actions #}
+    {% if can_contribute or (v.state == 'proposed' and can_approve) %}
+    <div x-data="{ mode: null, body: '', proposedSentence: '{{ v.display_sentence | e }}', rejectNote: '', posting: false }" class="mt-2">
       <div class="flex items-center gap-2">
+        {% if can_contribute %}
         <button @click="mode = mode === 'comment' ? null : 'comment'"
                 class="px-2.5 py-1 text-2xs font-medium rounded border transition-colors"
                 :class="mode === 'comment'
                   ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] border-[var(--color-accent)]'
                   : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)]'"
-                x-text="mode === 'comment' ? 'Cancel' : 'Add Comment'"></button>
-        {% if v.state == 'published' and v.is_current_published and v.challengeable %}
+                x-text="mode === 'comment' ? 'Cancel' : 'Comment'"></button>
+        {% if v.challengeable %}
         <button @click="mode = mode === 'challenge' ? null : 'challenge'"
                 class="px-2.5 py-1 text-2xs font-medium rounded border transition-colors"
                 :class="mode === 'challenge'
                   ? 'bg-amber-600 text-[var(--color-text-on-accent)] border-amber-600'
                   : 'border-amber-400 text-amber-600 hover:bg-amber-50 hover:border-amber-500'"
                 x-text="mode === 'challenge' ? 'Cancel' : 'Challenge'"></button>
+        {% endif %}
+        {% endif %}
+        {% if v.state == 'proposed' and can_approve %}
+        <button @click="mode = mode === 'reject' ? null : 'reject'"
+                class="px-2.5 py-1 text-2xs font-medium rounded border transition-colors"
+                :class="mode === 'reject'
+                  ? 'bg-red-600 text-[var(--color-text-on-accent)] border-red-600'
+                  : 'border-red-400 text-red-600 hover:bg-red-50 hover:border-red-500'"
+                x-text="mode === 'reject' ? 'Cancel' : 'Reject'"></button>
         {% endif %}
       </div>
 
@@ -258,6 +268,31 @@
                   :disabled="posting || !body.trim() || !proposedSentence.trim()"
                   class="px-3 py-1 text-2xs font-medium rounded bg-amber-600 text-[var(--color-text-on-accent)] hover:bg-amber-700 transition-colors disabled:opacity-50">
             Submit Challenge
+          </button>
+        </div>
+      </div>
+      {# Reject form #}
+      <div x-show="mode === 'reject'" x-collapse class="mt-2">
+        <textarea x-model="rejectNote" rows="2" placeholder="Reason for rejection (optional)"
+                  class="w-full px-2 py-1.5 text-xs rounded border border-[var(--color-border-input)] bg-[var(--color-bg-input)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-y"></textarea>
+        <div class="flex items-center gap-2 mt-1">
+          <button @click="
+            posting = true;
+            var token = document.cookie.match(/csrf_token=([^;]+)/);
+            fetch('/api/v1/queue/reject/{{ v.version_uid }}', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': token ? token[1] : ''
+              },
+              body: JSON.stringify({note: rejectNote.trim() || null})
+            }).then(function() {
+              htmx.ajax('GET', '/partials/fact-history/{{ fact_uid }}', {target: '#right-pane-content', swap: 'innerHTML'});
+            }).finally(function() { posting = false; });
+          "
+                  :disabled="posting"
+                  class="px-3 py-1 text-2xs font-medium rounded bg-red-600 text-[var(--color-text-on-accent)] hover:bg-red-700 transition-colors disabled:opacity-50">
+            Reject
           </button>
         </div>
       </div>

@@ -258,3 +258,50 @@ textarea:focus-visible,
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* ── Eyecare: heavier font weight + bold solid buttons ──────── */
+html.eyecare body {
+  font-weight: 500;
+}
+html.eyecare h1, html.eyecare h2, html.eyecare h3,
+html.eyecare h4, html.eyecare h5, html.eyecare h6 {
+  font-weight: 700;
+}
+
+html.eyecare button,
+html.eyecare [type="submit"],
+html.eyecare [type="button"],
+html.eyecare [role="button"] {
+  font-weight: 600;
+}
+
+/* Solid background + white text for outline/ghost-style buttons in eyecare */
+html.eyecare button.border-\[var\(--color-border\)\] {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #FFFFFF;
+}
+html.eyecare button.border-\[var\(--color-border\)\]:hover {
+  background-color: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+html.eyecare button.border-amber-400 {
+  background-color: #b45309;
+  border-color: #b45309;
+  color: #FFFFFF;
+}
+html.eyecare button.border-amber-400:hover {
+  background-color: #92400e;
+  border-color: #92400e;
+}
+
+html.eyecare button.border-red-400 {
+  background-color: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #FFFFFF;
+}
+html.eyecare button.border-red-400:hover {
+  background-color: #a33030;
+  border-color: #a33030;
+}

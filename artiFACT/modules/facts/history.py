@@ -117,11 +117,10 @@ async def get_fact_history(
     version_dicts = []
     for v in versions:
         author = user_map.get(v.created_by_uid, None) if v.created_by_uid else None
-        # A version is challengeable if published within the last 30 days
+        # A version is challengeable if published/rejected/proposed within the last 30 days
         pub_ts = v.published_at or v.created_at
         challengeable = (
-            v.state == "published"
-            and v.version_uid == fact.current_published_version_uid
+            v.state in ("published", "rejected", "proposed")
             and pub_ts >= challenge_cutoff
         )
         version_dicts.append({
@@ -299,10 +298,10 @@ async def add_comment(
     if not version or version.fact_uid != fact_uid:
         raise NotFound("Version not found for this fact", code="VERSION_NOT_FOUND")
 
-    if comment_type == "challenge" and version.state != "published":
+    if comment_type == "challenge" and version.state not in ("published", "rejected", "proposed"):
         raise Conflict(
-            "Can only challenge a published version",
-            code="CHALLENGE_NOT_PUBLISHED",
+            "Can only challenge a published, rejected, or proposed version",
+            code="CHALLENGE_NOT_CHALLENGEABLE",
         )
 
     if comment_type == "challenge":
