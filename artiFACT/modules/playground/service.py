@@ -18,6 +18,7 @@ DELETE_STATEMENTS = [
     "DELETE FROM fc_fact_version",
     "DELETE FROM fc_fact",
     "DELETE FROM fc_node",
+    "DELETE FROM fc_document_template",
     "DELETE FROM fc_user WHERE cac_dn IN ('jallred', 'dwallace', 'omartinez', 'pbeesly')",
 ]
 
@@ -37,7 +38,13 @@ async def reset_to_golden(db: AsyncSession) -> None:
         await db.execute(text(stmt))
     log.info("playground_tables_cleared")
 
-    # 2. Load and execute golden snapshot
+    # 2. Disable FK trigger checks during restore — pg_dump --inserts
+    # doesn't guarantee FK-safe order for self-referencing tables
+    # (fc_node.parent_node_uid, fc_fact_version.supersedes_version_uid)
+    # or circular FKs (fc_fact ↔ fc_fact_version).
+    await db.execute(text("SET session_replication_role = 'replica'"))
+
+    # 3. Load and execute golden snapshot
     if not GOLDEN_SNAPSHOT_PATH.exists():
         log.error("golden_snapshot_not_found", path=str(GOLDEN_SNAPSHOT_PATH))
         raise FileNotFoundError(f"Golden snapshot not found: {GOLDEN_SNAPSHOT_PATH}")
@@ -67,7 +74,8 @@ async def reset_to_golden(db: AsyncSession) -> None:
             await db.execute(text(line))
             executed += 1
 
-    # Restore search_path in case any SET statement changed it
+    # 4. Re-enable FK triggers and restore search_path
+    await db.execute(text("SET session_replication_role = 'origin'"))
     await db.execute(text("SET search_path = public"))
 
     log.info("playground_reset_complete", statements_executed=executed)

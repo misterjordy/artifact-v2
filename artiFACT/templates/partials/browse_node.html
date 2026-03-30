@@ -11,7 +11,8 @@
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-lg font-semibold text-[var(--color-text)]">{{ node.title }}</h2>
-        <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ facts | length }} fact{{ 's' if facts | length != 1 else '' }} in this node</p>
+        {% set total_facts = facts | length + children_with_facts | sum(attribute='facts', default=[]) | length if false else (facts | length + children_with_facts | map(attribute='facts') | map('length') | sum) %}
+        <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ total_facts }} fact{{ 's' if total_facts != 1 else '' }}{% if children_with_facts %} across {{ children_with_facts | length + 1 }} node{{ 's' if children_with_facts | length > 0 else '' }}{% endif %}</p>
       </div>
       <div class="flex items-center gap-2">
         {% if can_manage %}
@@ -65,7 +66,7 @@
   <div class="mt-6">
     <h3 class="text-sm font-semibold text-[var(--color-text)] mb-2 flex items-center gap-2">
       <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"></span>
-      {{ child_group.node.title }}
+      {{ child_group.rel_path or child_group.node.title }}
       <span class="text-[10px] text-[var(--color-text-muted)] font-normal">{{ child_group.facts | length }}</span>
     </h3>
     {% for item in child_group.facts %}

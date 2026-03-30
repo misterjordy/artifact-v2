@@ -145,6 +145,36 @@ async def browse_page(
     return HTMLResponse(html)
 
 
+def _dfs_descendants(all_nodes: list, root_uid: uuid.UUID) -> list:
+    """Return all descendants of root_uid in depth-first pre-order (matching tree render)."""
+    children_map: dict[uuid.UUID, list] = {}
+    for n in all_nodes:
+        pid = n.parent_node_uid
+        if pid is not None:
+            children_map.setdefault(pid, []).append(n)
+    # children already sorted by (sort_order, title) from the query
+    result: list = []
+    stack = list(reversed(children_map.get(root_uid, [])))
+    while stack:
+        node = stack.pop()
+        result.append(node)
+        for child in reversed(children_map.get(node.node_uid, [])):
+            stack.append(child)
+    return result
+
+
+def _relative_path(all_nodes: list, root_uid: uuid.UUID, target_uid: uuid.UUID) -> str:
+    """Build a slash-separated path from root's child down to target node."""
+    uid_to_node = {n.node_uid: n for n in all_nodes}
+    parts: list[str] = []
+    current = uid_to_node.get(target_uid)
+    while current and current.node_uid != root_uid:
+        parts.append(current.title)
+        current = uid_to_node.get(current.parent_node_uid)
+    parts.reverse()
+    return " / ".join(parts)
+
+
 async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dict[str, Any]]:
     """Load non-retired facts for a node with their current version info."""
     stmt = (
@@ -211,22 +241,19 @@ async def browse_node_partial(
 
     facts = await _get_facts_for_node(db, node_uid)
 
-    children_stmt = (
-        select(FcNode)
-        .where(FcNode.parent_node_uid == node_uid, FcNode.is_archived.is_(False))
-        .order_by(FcNode.sort_order, FcNode.title)
-    )
-    children_result = await db.execute(children_stmt)
-    children = children_result.scalars().all()
+    # Walk all descendants in DFS pre-order (matches left-pane tree order)
+    descendant_nodes = _dfs_descendants(all_nodes, node_uid)
 
     children_with_facts = []
-    for child in children:
-        child_facts = await _get_facts_for_node(db, child.node_uid)
-        if child_facts:
+    for desc_node in descendant_nodes:
+        desc_facts = await _get_facts_for_node(db, desc_node.node_uid)
+        if desc_facts:
+            rel_path = _relative_path(all_nodes, node_uid, desc_node.node_uid)
             children_with_facts.append(
                 {
-                    "node": NodeOut.model_validate(child),
-                    "facts": child_facts,
+                    "node": NodeOut.model_validate(desc_node),
+                    "facts": desc_facts,
+                    "rel_path": rel_path,
                 }
             )
 
