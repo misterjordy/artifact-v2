@@ -24,8 +24,13 @@ async def create_version(
     effective_date: str | None = None,
     classification: str = "UNCLASSIFIED",
     change_summary: str | None = None,
+    auto_approve: bool = False,
 ) -> FcFactVersion:
-    """Create a new fact version. Auto-publishes if actor can approve."""
+    """Create a new fact version.
+
+    Auto-publishes only when auto_approve=True AND actor has approve
+    permission. Default is proposed for all users.
+    """
     version = FcFactVersion(
         fact_uid=fact.fact_uid,
         display_sentence=sentence,
@@ -38,8 +43,7 @@ async def create_version(
         created_by_uid=actor.user_uid,
     )
 
-    is_approver = await can(actor, "approve", fact.node_uid, db)
-    if is_approver:
+    if auto_approve and await can(actor, "approve", fact.node_uid, db):
         version.state = "published"
         version.published_at = _utcnow()
     else:
@@ -48,7 +52,7 @@ async def create_version(
     db.add(version)
     await db.flush()
 
-    if is_approver:
+    if version.state == "published":
         fact.current_published_version_uid = version.version_uid
 
     return version

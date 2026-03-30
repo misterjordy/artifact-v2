@@ -142,8 +142,8 @@ async def _make_client(
 async def _create_published_fact(
     db: AsyncSession, node: FcNode, actor: FcUser, sentence: str,
 ) -> tuple[FcFact, FcFactVersion]:
-    """Create a fact that auto-publishes (actor is approver)."""
-    fact, ver = await create_fact(db, node.node_uid, sentence, actor)
+    """Create a fact that auto-publishes (actor is approver with auto_approve)."""
+    fact, ver = await create_fact(db, node.node_uid, sentence, actor, auto_approve=True)
     await flush_pending_events(db)
     await db.flush()
     return fact, ver

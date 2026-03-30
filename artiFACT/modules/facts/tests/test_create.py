@@ -27,10 +27,23 @@ async def test_contributor_creates_proposed(db: AsyncSession, contributor_user, 
     assert version.published_at is None
 
 
-async def test_approver_creates_published(db: AsyncSession, approver_user, child_node):
-    """An approver should auto-publish facts they create."""
+async def test_approver_creates_proposed_by_default(db: AsyncSession, approver_user, child_node):
+    """An approver without auto_approve creates facts as proposed (default OFF)."""
     fact, version = await create_fact(
-        db, child_node.node_uid, f"Approver creates published fact {uuid.uuid4().hex[:8]}.", approver_user
+        db, child_node.node_uid, f"Approver creates proposed fact {uuid.uuid4().hex[:8]}.", approver_user
+    )
+    assert version.state == "proposed"
+    assert version.published_at is None
+
+
+async def test_approver_creates_published_with_auto_approve(
+    db: AsyncSession, approver_user, child_node,
+):
+    """An approver with auto_approve=True auto-publishes facts they create."""
+    fact, version = await create_fact(
+        db, child_node.node_uid,
+        f"Approver creates published fact {uuid.uuid4().hex[:8]}.", approver_user,
+        auto_approve=True,
     )
     assert version.state == "published"
     assert version.published_at is not None

@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.middleware import get_current_user
-from artiFACT.kernel.auth.session import validate_session
+from artiFACT.kernel.auth.session import get_session_data, is_auto_approve_active, validate_session
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.exceptions import Forbidden
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
@@ -386,6 +386,7 @@ async def fact_form_get(
 async def fact_form_post(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
+    session_id: str | None = Cookie(None, alias="session_id"),
     node_uid: str = Form(""),
     sentence: str = Form(""),
     effective_date: str = Form(""),
@@ -408,11 +409,15 @@ async def fact_form_post(
         )
         return HTMLResponse(html)
 
+    session_data = await get_session_data(session_id) if session_id else None
+    auto_approve = is_auto_approve_active(session_data)
+
     try:
         fact, version = await create_fact(
             db, nuid, sentence, user,
             effective_date=effective_date,
             classification=classification,
+            auto_approve=auto_approve,
         )
         await flush_pending_events(db)
         await db.commit()

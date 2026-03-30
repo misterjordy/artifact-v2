@@ -15,6 +15,7 @@ from artiFACT.kernel.security_headers import SecurityHeadersMiddleware
 from artiFACT.modules.audit.recorder import register_subscribers as register_audit_subscribers
 from artiFACT.modules.audit.router import router as audit_router
 from artiFACT.modules.auth_admin.router import router as auth_router
+from artiFACT.modules.facts.move_router import router as move_router
 from artiFACT.modules.facts.router import router as facts_router
 from artiFACT.modules.queue.badge_counter import register_badge_subscribers
 from artiFACT.modules.queue.router import router as queue_router
@@ -48,6 +49,7 @@ app.include_router(auth_router)
 app.include_router(taxonomy_router)
 app.include_router(taxonomy_partials_router)
 app.include_router(facts_router)
+app.include_router(move_router)
 app.include_router(audit_router)
 app.include_router(queue_router)
 app.include_router(search_router)

@@ -25,6 +25,16 @@ def _compute_reverse(event_type: str, payload: dict[str, Any]) -> dict[str, Any]
             "fact_uid": payload["fact_uid"],
             "target_node_uid": payload["old_node_uid"],
         }
+    if event_type == "move.approved":
+        source = payload.get("source_node_uid")
+        if source:
+            return {
+                "action": "move",
+                "entity_type": payload.get("entity_type", "fact"),
+                "entity_uid": payload.get("entity_uid"),
+                "target_node_uid": source,
+            }
+        return None
     if event_type in ("version.rejected",):
         return {
             "action": "unreject",
@@ -133,6 +143,43 @@ async def _record_challenge_event(payload: dict[str, Any], event_type: str) -> N
     _pending_events.append(event)
 
 
+async def _record_move_event(payload: dict[str, Any]) -> None:
+    """Record a move lifecycle event (proposed/approved/rejected)."""
+    event_type = payload.get("event_type", "move.proposed")
+    # Derive event_type from the publish channel name if not in payload
+    entity_type = payload.get("entity_type", "fact")
+    entity_uid = payload.get("entity_uid", "")
+    reverse = _compute_reverse(event_type, payload)
+    import uuid as _uuid
+
+    event = FcEventLog(
+        entity_type=entity_type,
+        entity_uid=entity_uid,
+        event_type=event_type,
+        payload=payload,
+        actor_uid=payload.get("actor_uid"),
+        note=payload.get("note"),
+        reversible=reverse is not None,
+        reverse_payload=reverse,
+    )
+    # Use deterministic event_uid when provided (for propose → approve flow)
+    if "event_uid" in payload:
+        event.event_uid = _uuid.UUID(payload["event_uid"])
+    _pending_events.append(event)
+
+
+async def _record_move_proposed(payload: dict[str, Any]) -> None:
+    await _record_move_event({**payload, "event_type": "move.proposed"})
+
+
+async def _record_move_approved(payload: dict[str, Any]) -> None:
+    await _record_move_event({**payload, "event_type": "move.approved"})
+
+
+async def _record_move_rejected(payload: dict[str, Any]) -> None:
+    await _record_move_event({**payload, "event_type": "move.rejected"})
+
+
 async def _record_challenge_created(payload: dict[str, Any]) -> None:
     await _record_challenge_event(payload, "challenge.created")
 
@@ -160,3 +207,6 @@ def register_subscribers() -> None:
     subscribe("challenge.created", _record_challenge_created)
     subscribe("challenge.approved", _record_challenge_approved)
     subscribe("challenge.rejected", _record_challenge_rejected)
+    subscribe("move.proposed", _record_move_proposed)
+    subscribe("move.approved", _record_move_approved)
+    subscribe("move.rejected", _record_move_rejected)

@@ -3,6 +3,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -36,6 +37,7 @@ async def create_session(user: FcUser) -> str:
         "user_uid": str(user.user_uid),
         "cac_dn": user.cac_dn,
         "last_validated_at": datetime.now(timezone.utc).isoformat(),
+        "auto_approve": False,
     }
     await r.setex(_session_key(session_id), SESSION_TTL, json.dumps(data))
     return session_id
@@ -73,6 +75,40 @@ async def destroy_session(session_id: str) -> None:
     """Redis delete session."""
     r = await get_redis()
     await r.delete(_session_key(session_id))
+
+
+async def get_session_data(session_id: str) -> dict[str, Any] | None:
+    """Return raw session dict from Redis, or None."""
+    r = await get_redis()
+    raw = await r.get(_session_key(session_id))
+    if not raw:
+        return None
+    return json.loads(raw)
+
+
+async def update_session_field(session_id: str, field: str, value: Any) -> bool:
+    """Update a single field in the session data. Returns True on success."""
+    r = await get_redis()
+    raw = await r.get(_session_key(session_id))
+    if not raw:
+        return False
+    data = json.loads(raw)
+    data[field] = value
+    ttl = await r.ttl(_session_key(session_id))
+    if ttl > 0:
+        await r.setex(_session_key(session_id), ttl, json.dumps(data))
+    return True
+
+
+def is_auto_approve_active(session_data: dict[str, Any] | None) -> bool:
+    """Check if auto-approve is toggled ON in session data.
+
+    Returns False if session_data is None or field is missing
+    (backward compat with old sessions).
+    """
+    if not session_data:
+        return False
+    return bool(session_data.get("auto_approve", False))
 
 
 async def force_destroy_user_sessions(user_uid: uuid.UUID) -> int:

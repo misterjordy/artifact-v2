@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.csrf import generate_csrf_token
-from artiFACT.kernel.auth.session import create_session
+from artiFACT.kernel.auth.session import create_session, update_session_field
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.models import (
     FcEventLog,
@@ -180,10 +180,13 @@ async def david_root_perm(
 
 
 async def _make_client(
-    db: AsyncSession, user: FcUser, *, with_csrf: bool = True
+    db: AsyncSession, user: FcUser, *, with_csrf: bool = True,
+    auto_approve: bool = False,
 ) -> AsyncClient:
     """Build an authenticated AsyncClient for the given user."""
     session_id = await create_session(user)
+    if auto_approve:
+        await update_session_field(session_id, "auto_approve", True)
     csrf_token = generate_csrf_token()
 
     async def override_get_db() -> AsyncIterator[AsyncSession]:
@@ -313,9 +316,9 @@ async def test_approver_creates_published(
     test_node: FcNode,
     oscar_permission: FcNodePermission,
 ) -> None:
-    """Approver Oscar auto-publishes facts on creation."""
+    """Approver Oscar auto-publishes facts on creation when auto_approve is ON."""
     sentence = f"Approver publish test {uuid.uuid4().hex}"
-    client = await _make_client(db, oscar)
+    client = await _make_client(db, oscar, auto_approve=True)
     async with client:
         resp = await client.post(
             "/partials/fact-form",

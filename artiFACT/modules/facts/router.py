@@ -3,11 +3,12 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Cookie, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.middleware import get_current_user
+from artiFACT.kernel.auth.session import get_session_data, is_auto_approve_active
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcUser
 from artiFACT.modules.audit.service import flush_pending_events
@@ -125,8 +126,11 @@ async def create(
     body: FactCreate,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> FactWithVersionOut:
     """Create a new fact with its initial version."""
+    session_data = await get_session_data(session_id) if session_id else None
+    auto_approve = is_auto_approve_active(session_data)
     fact, version = await create_fact(
         db,
         body.node_uid,
@@ -136,6 +140,7 @@ async def create(
         source_reference=body.source_reference,
         effective_date=body.effective_date,
         classification=body.classification,
+        auto_approve=auto_approve,
     )
     await flush_pending_events(db)
     await db.commit()
@@ -154,8 +159,11 @@ async def update(
     body: FactUpdate,
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> FactWithVersionOut:
     """Edit a fact (creates a new version superseding the current one)."""
+    session_data = await get_session_data(session_id) if session_id else None
+    auto_approve = is_auto_approve_active(session_data)
     fact, version = await edit_fact(
         db,
         fact_uid,
@@ -166,6 +174,7 @@ async def update(
         effective_date=body.effective_date,
         classification=body.classification,
         change_summary=body.change_summary,
+        auto_approve=auto_approve,
     )
     await flush_pending_events(db)
     await db.commit()

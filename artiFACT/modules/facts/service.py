@@ -33,6 +33,7 @@ async def create_fact(
     source_reference: dict[str, Any] | None = None,
     effective_date: str | None = None,
     classification: str = "UNCLASSIFIED",
+    auto_approve: bool = False,
 ) -> tuple[FcFact, FcFactVersion]:
     """Create a new fact with its initial version."""
     if not await can(actor, "contribute", node_uid, db):
@@ -62,6 +63,7 @@ async def create_fact(
         source_reference=source_reference,
         effective_date=effective_date,
         classification=classification,
+        auto_approve=auto_approve,
     )
     await db.flush()
 
@@ -91,6 +93,7 @@ async def edit_fact(
     effective_date: str | None = None,
     classification: str = "UNCLASSIFIED",
     change_summary: str | None = None,
+    auto_approve: bool = False,
 ) -> tuple[FcFact, FcFactVersion]:
     """Edit a fact by creating a new version that supersedes the current one."""
     fact = await db.get(FcFact, fact_uid)
@@ -115,6 +118,7 @@ async def edit_fact(
         effective_date=effective_date,
         classification=classification,
         change_summary=change_summary,
+        auto_approve=auto_approve,
     )
     await db.flush()
 

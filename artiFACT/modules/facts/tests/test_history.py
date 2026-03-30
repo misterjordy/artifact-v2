@@ -30,7 +30,7 @@ from artiFACT.modules.facts.service import create_fact, edit_fact
 
 @pytest_asyncio.fixture
 async def actor(db: AsyncSession) -> FcUser:
-    """Approver user (auto-publishes facts)."""
+    """Approver user (auto-publishes facts when auto_approve=True)."""
     user = FcUser(
         user_uid=uuid.uuid4(),
         cac_dn=f"approver-{uuid.uuid4().hex[:8]}",
@@ -198,8 +198,9 @@ async def _make_unauthed_client(db: AsyncSession) -> AsyncClient:
 
 async def _create_fact(
     db: AsyncSession, node: FcNode, actor: FcUser, sentence: str,
+    *, auto_approve: bool = True,
 ) -> tuple[FcFact, FcFactVersion]:
-    fact, ver = await create_fact(db, node.node_uid, sentence, actor)
+    fact, ver = await create_fact(db, node.node_uid, sentence, actor, auto_approve=auto_approve)
     await flush_pending_events(db)
     await db.flush()
     return fact, ver
@@ -216,12 +217,12 @@ async def test_history_returns_all_versions(
     fact, _ = await _create_fact(db, test_node, actor, s1)
 
     s2 = f"First edit of history test {uuid.uuid4().hex}"
-    await edit_fact(db, fact.fact_uid, s2, actor, change_summary="edit 1")
+    await edit_fact(db, fact.fact_uid, s2, actor, change_summary="edit 1", auto_approve=True)
     await flush_pending_events(db)
     await db.flush()
 
     s3 = f"Second edit of history test {uuid.uuid4().hex}"
-    await edit_fact(db, fact.fact_uid, s3, actor, change_summary="edit 2")
+    await edit_fact(db, fact.fact_uid, s3, actor, change_summary="edit 2", auto_approve=True)
     await flush_pending_events(db)
     await db.flush()
 
@@ -253,7 +254,7 @@ async def test_history_marks_current_published_version(
     fact, _ = await _create_fact(db, test_node, actor, s1)
 
     s2 = f"Edited published test {uuid.uuid4().hex}"
-    await edit_fact(db, fact.fact_uid, s2, actor)
+    await edit_fact(db, fact.fact_uid, s2, actor, auto_approve=True)
     await flush_pending_events(db)
     await db.flush()
 

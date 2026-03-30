@@ -115,6 +115,18 @@ class EventSummaryOut(BaseModel):
     note: str | None = None
 
 
+class MoveEventOut(BaseModel):
+    event_uid: UUID
+    event_type: str
+    actor: dict[str, Any]
+    occurred_at: datetime
+    source_node_uid: str | None = None
+    target_node_uid: str | None = None
+    comment: str | None = None
+    correlation_id: str | None = None
+    note: str | None = None
+
+
 class VersionHistoryOut(BaseModel):
     version_uid: UUID
     state: str
@@ -138,3 +150,4 @@ class FactHistoryOut(BaseModel):
     current_sentence: str
     is_retired: bool
     versions: list[VersionHistoryOut] = []
+    move_events: list[MoveEventOut] = []

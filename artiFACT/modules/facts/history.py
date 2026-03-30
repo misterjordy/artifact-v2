@@ -74,8 +74,9 @@ async def get_fact_history(
         for c in (await db.execute(c_stmt)).scalars().all():
             comments_by_version[c.version_uid].append(c)
 
-    # 3. Batch events
+    # 3. Batch events (version events + move events for this fact)
     events_by_version: dict[UUID, list[FcEventLog]] = {uid: [] for uid in version_uids}
+    move_events: list[FcEventLog] = []
     if version_uids:
         e_stmt = (
             select(FcEventLog)
@@ -87,6 +88,18 @@ async def get_fact_history(
         )
         for e in (await db.execute(e_stmt)).scalars().all():
             events_by_version[e.entity_uid].append(e)
+
+    # Move events for this fact
+    move_stmt = (
+        select(FcEventLog)
+        .where(
+            FcEventLog.entity_type == "fact",
+            FcEventLog.entity_uid == fact_uid,
+            FcEventLog.event_type.in_(["move.proposed", "move.approved", "move.rejected"]),
+        )
+        .order_by(FcEventLog.occurred_at.asc())
+    )
+    move_events = list((await db.execute(move_stmt)).scalars().all())
 
     # 4. Batch-load all referenced users
     user_uids: set[UUID] = set()
@@ -103,6 +116,9 @@ async def get_fact_history(
         for e in elist:
             if e.actor_uid:
                 user_uids.add(e.actor_uid)
+    for me in move_events:
+        if me.actor_uid:
+            user_uids.add(me.actor_uid)
     user_map = await _load_user_map(db, user_uids)
 
     unknown = {"user_uid": "", "display_name": "Unknown", "username": "unknown"}
@@ -141,12 +157,15 @@ async def get_fact_history(
             "events": _build_events(events_by_version[v.version_uid], user_map, unknown),
         })
 
+    move_dicts = _build_move_events(move_events, user_map, unknown)
+
     return {
         "fact_uid": fact.fact_uid,
         "node_uid": fact.node_uid,
         "current_sentence": current_sentence,
         "is_retired": fact.is_retired,
         "versions": version_dicts,
+        "move_events": move_dicts,
     }
 
 
@@ -252,6 +271,30 @@ def _build_events(
             "actor": _user_dict(actor) if actor else unknown,
             "occurred_at": e.occurred_at,
             "note": note,
+        })
+    return out
+
+
+def _build_move_events(
+    events: list[FcEventLog],
+    user_map: dict[UUID, FcUser],
+    unknown: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Serialise move events for fact history."""
+    out = []
+    for e in events:
+        actor = user_map.get(e.actor_uid) if e.actor_uid else None
+        payload = e.payload or {}
+        out.append({
+            "event_uid": e.event_uid,
+            "event_type": e.event_type,
+            "actor": _user_dict(actor) if actor else unknown,
+            "occurred_at": e.occurred_at,
+            "source_node_uid": payload.get("source_node_uid"),
+            "target_node_uid": payload.get("target_node_uid"),
+            "comment": payload.get("comment"),
+            "correlation_id": payload.get("correlation_id"),
+            "note": e.note or payload.get("note"),
         })
     return out
 

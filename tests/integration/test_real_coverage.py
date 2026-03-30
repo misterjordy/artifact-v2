@@ -195,7 +195,8 @@ async def test_get_unsigned_returns_published(
 ) -> None:
     """get_unsigned returns published (not yet signed) facts."""
     fact, version = await create_fact(
-        db, child_node.node_uid, f"Unsigned fact test {uuid.uuid4().hex[:8]}.", admin_user
+        db, child_node.node_uid, f"Unsigned fact test {uuid.uuid4().hex[:8]}.", admin_user,
+        auto_approve=True,
     )
     await db.flush()
 
