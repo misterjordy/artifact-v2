@@ -109,12 +109,10 @@ function importApp() {
     // === Computed ===
 
     get estimatedTokens() {
-      // Linear model based on measured pipeline runs:
-      // total ≈ 1200 (fixed overhead) + chars * rate_multiplier
-      var rates = { brief: 1.5, standard: 2.2, overkill: 3.5 };
-      var mult = rates[this.granularity] || 2.2;
+      // Floor estimate from measured runs (550c→2392t, 1485c→2037t).
+      // Framed as "exceeds" since actual varies by taxonomy size + fact count.
       var chars = this.activeTab === "paste" ? this.pasteText.length : 0;
-      return Math.round(1200 + chars * mult);
+      return Math.round(1500 + chars * 0.5);
     },
 
     get canStart() {
