@@ -56,24 +56,62 @@
   </div>
 
   <!-- Search results (replaces tree when active) -->
-  <div x-show="hasResults" class="px-1 space-y-1 mb-3">
+  <div x-show="hasResults" class="px-1 space-y-0.5 mb-3">
     <div class="text-2xs text-[var(--color-text-sidebar-heading)] px-1 mb-1"
          x-text="results.length + ' results'"></div>
     <template x-for="r in results" :key="r.uid">
-      <div class="rounded px-2 py-1.5 hover:bg-[var(--color-bg-hover)] transition-colors cursor-default"
-           :data-node-uid="r.type === 'node' ? r.uid : ''"
-           :data-node-title="r.type === 'node' ? r.text : ''"
-           :draggable="r.type === 'node' ? 'true' : 'false'">
-        <div class="flex items-center gap-1.5">
+      <div>
+        <div class="flex items-center gap-1.5 rounded px-2 py-1.5 hover:bg-[var(--color-bg-hover)] transition-colors"
+             :data-node-uid="r.type === 'node' ? r.uid : ''"
+             :data-node-title="r.type === 'node' ? r.text : ''"
+             :draggable="r.type === 'node' ? 'true' : 'false'">
+          <button x-show="r.type === 'node' && r.child_count > 0"
+                  @click.stop="toggleDrillDown(r)"
+                  class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]">
+            <span class="text-xs" x-text="r._open ? '\u25BE' : '\u25B8'"></span>
+          </button>
+          <span x-show="r.type !== 'node' || !r.child_count" class="flex-shrink-0 w-4"></span>
           <span class="flex-shrink-0 text-2xs px-1 rounded font-medium"
                 :class="r.type === 'node'
                   ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]'
                   : 'bg-[var(--color-bg-hover)] text-[var(--color-text-muted)]'"
                 x-text="r.type === 'node' ? 'node' : 'fact'"></span>
-          <span class="text-xs text-[var(--color-text-sidebar)] truncate" x-text="r.text"></span>
+          <span class="text-xs text-[var(--color-text-sidebar)] truncate flex-1" x-text="r.text"></span>
         </div>
-        <div x-show="r.node_title" class="text-2xs text-[var(--color-text-sidebar-heading)] pl-8 truncate"
+        <!-- Fact: show parent node -->
+        <div x-show="r.node_title && r.type === 'fact'" class="text-2xs text-[var(--color-text-sidebar-heading)] pl-10 truncate"
              x-text="r.node_title"></div>
+        <!-- Drill-down children -->
+        <div x-show="r._open && r._children" class="ml-4 space-y-0.5 mt-0.5">
+          <template x-for="child in (r._children || [])" :key="child.uid">
+            <div>
+              <div class="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors"
+                   :data-node-uid="child.uid"
+                   :data-node-title="child.text"
+                   draggable="true">
+                <button x-show="child.child_count > 0"
+                        @click.stop="toggleChildDrillDown(child)"
+                        class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]">
+                  <span class="text-xs" x-text="child._open ? '\u25BE' : '\u25B8'"></span>
+                </button>
+                <span x-show="!child.child_count" class="flex-shrink-0 w-4"></span>
+                <span class="text-xs text-[var(--color-text-sidebar)] truncate" x-text="child.text"></span>
+              </div>
+              <!-- Second-level drill-down -->
+              <div x-show="child._open && child._children" class="ml-4 space-y-0.5 mt-0.5">
+                <template x-for="gc in (child._children || [])" :key="gc.uid">
+                  <div class="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors"
+                       :data-node-uid="gc.uid"
+                       :data-node-title="gc.text"
+                       draggable="true">
+                    <span class="flex-shrink-0 w-4"></span>
+                    <span class="text-xs text-[var(--color-text-sidebar)] truncate" x-text="gc.text"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
     </template>
   </div>

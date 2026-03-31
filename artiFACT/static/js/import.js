@@ -83,6 +83,43 @@ function importSearch() {
       this._pending = false;
     },
 
+    async toggleDrillDown(r) {
+      if (r._open) {
+        r._open = false;
+        return;
+      }
+      if (!r._children) {
+        r._children = await this._fetchChildren(r.uid);
+      }
+      r._open = true;
+    },
+
+    async toggleChildDrillDown(child) {
+      if (child._open) {
+        child._open = false;
+        return;
+      }
+      if (!child._children) {
+        child._children = await this._fetchChildren(child.uid);
+      }
+      child._open = true;
+    },
+
+    async _fetchChildren(nodeUid) {
+      try {
+        var resp = await fetch("/api/v1/import/node-children?node_uid=" + nodeUid);
+        if (resp.ok) {
+          var data = await resp.json();
+          return data.children.map(function (c) {
+            c._open = false;
+            c._children = null;
+            return c;
+          });
+        }
+      } catch (e) { /* silent */ }
+      return [];
+    },
+
     clearSearch() {
       this.query = "";
       this.results = [];

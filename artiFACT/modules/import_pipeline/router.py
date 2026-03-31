@@ -90,8 +90,10 @@ async def search_tree(
                 "  SELECT n.node_uid, n.title FROM fc_node n"
                 "  JOIN tree t ON n.parent_node_uid = t.node_uid"
                 "  WHERE n.is_archived = false"
-                ") SELECT node_uid, title FROM tree"
-                " WHERE lower(title) LIKE lower(:q)"
+                ") SELECT t.node_uid, t.title,"
+                "  (SELECT count(*) FROM fc_node c WHERE c.parent_node_uid = t.node_uid AND c.is_archived = false) AS child_count"
+                " FROM tree t"
+                " WHERE lower(t.title) LIKE lower(:q)"
                 " LIMIT 30"
             ),
             {"uid": str(program_node_uid), "q": query_like},
@@ -101,6 +103,7 @@ async def search_tree(
                 "type": "node",
                 "uid": str(row[0]),
                 "text": row[1],
+                "child_count": row[2],
             })
 
     if mode in ("facts", "both"):
@@ -132,6 +135,31 @@ async def search_tree(
             })
 
     return {"results": results, "total": len(results)}
+
+
+@router.get("/node-children")
+async def get_node_children(
+    node_uid: UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get immediate children of a node for drill-down in import search."""
+    from sqlalchemy import text as sa_text
+
+    rows = (await db.execute(
+        sa_text(
+            "SELECT n.node_uid, n.title,"
+            "  (SELECT count(*) FROM fc_node c WHERE c.parent_node_uid = n.node_uid AND c.is_archived = false) AS child_count"
+            " FROM fc_node n"
+            " WHERE n.parent_node_uid = :uid AND n.is_archived = false"
+            " ORDER BY n.sort_order, n.title"
+        ),
+        {"uid": str(node_uid)},
+    )).fetchall()
+
+    return {"children": [
+        {"uid": str(r[0]), "text": r[1], "child_count": r[2]} for r in rows
+    ]}
 
 
 @router.get("/estimate-tokens")
