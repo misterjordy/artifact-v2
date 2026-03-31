@@ -240,10 +240,14 @@ def _relative_path(all_nodes: list, root_uid: uuid.UUID, target_uid: uuid.UUID) 
 
 
 async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dict[str, Any]]:
-    """Load non-retired facts for a node with their current version info."""
+    """Load published facts for a node. Proposed-only facts live in the queue, not here."""
     stmt = (
         select(FcFact)
-        .where(FcFact.node_uid == node_uid, FcFact.is_retired.is_(False))
+        .where(
+            FcFact.node_uid == node_uid,
+            FcFact.is_retired.is_(False),
+            FcFact.current_published_version_uid.isnot(None),
+        )
         .order_by(FcFact.created_at.asc())
     )
     result = await db.execute(stmt)
@@ -251,34 +255,15 @@ async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dic
 
     items = []
     for fact in facts:
-        sentence = ""
-        state = "proposed"
-        classification = "UNCLASSIFIED"
-        if fact.current_published_version_uid:
-            ver = await db.get(FcFactVersion, fact.current_published_version_uid)
-            if ver:
-                sentence = ver.display_sentence
-                state = ver.state
-                classification = ver.classification or "UNCLASSIFIED"
-        else:
-            ver_stmt = (
-                select(FcFactVersion)
-                .where(FcFactVersion.fact_uid == fact.fact_uid)
-                .order_by(FcFactVersion.created_at.desc())
-                .limit(1)
-            )
-            ver_result = await db.execute(ver_stmt)
-            ver = ver_result.scalar_one_or_none()
-            if ver:
-                sentence = ver.display_sentence
-                state = ver.state
-                classification = ver.classification or "UNCLASSIFIED"
+        ver = await db.get(FcFactVersion, fact.current_published_version_uid)
+        if not ver:
+            continue
         items.append(
             {
                 "fact_uid": str(fact.fact_uid),
-                "sentence": sentence,
-                "state": state,
-                "classification": classification,
+                "sentence": ver.display_sentence,
+                "state": ver.state,
+                "classification": ver.classification or "UNCLASSIFIED",
             }
         )
     return items

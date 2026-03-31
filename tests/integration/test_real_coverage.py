@@ -285,9 +285,11 @@ async def test_admin_page(authed_client: AsyncClient) -> None:
 async def test_browse_node_partial(
     db: AsyncSession, authed_client: AsyncClient, admin_user: FcUser, child_node: FcNode
 ) -> None:
-    """GET /partials/browse/{node_uid} returns facts for a node (HTMX partial)."""
+    """GET /partials/browse/{node_uid} returns published facts for a node."""
+    # auto_approve=True for admin creates a published fact directly
     await create_fact(
-        db, child_node.node_uid, f"Browse partial test fact {uuid.uuid4().hex[:8]}.", admin_user
+        db, child_node.node_uid, f"Browse partial test fact {uuid.uuid4().hex[:8]}.", admin_user,
+        auto_approve=True,
     )
     await flush_pending_events(db)
     await db.flush()
