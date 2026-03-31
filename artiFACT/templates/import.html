@@ -56,10 +56,13 @@
 
       <!-- Paste Text tab -->
       <div x-show="activeTab === 'paste'" class="space-y-4">
-        <div x-show="estimatedTokens > 5000"
-             class="px-3 py-2 rounded text-xs bg-amber-50 border border-amber-300 text-amber-800">
-          Estimated to exceed <strong x-text="estimatedTokens.toLocaleString() + ' tokens'"></strong> &mdash;
-          consider pasting smaller sections for faster, cheaper results.
+        <div x-show="pasteText.length > 20"
+             class="px-3 py-2 rounded text-xs"
+             :class="estimatedTokens > 5000
+               ? 'bg-amber-50 border border-amber-300 text-amber-800'
+               : 'text-[var(--color-text-muted)]'">
+          <span x-text="'~' + estimatedTokens.toLocaleString() + ' tokens'"></span>
+          <span x-show="estimatedTokens > 5000"> &mdash; consider pasting smaller sections for faster, cheaper results.</span>
         </div>
         <textarea x-model="pasteText"
                   placeholder="Paste your text here..."
