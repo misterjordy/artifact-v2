@@ -457,6 +457,22 @@ html.eyecare button.border-red-400:hover {
 
 /* ── Import pipeline ── */
 
+/* Puzzle piece stacking animation — 2s total, loops */
+.import-puzzle-piece {
+  animation: puzzle-drop 2s ease-out infinite;
+  opacity: 0;
+}
+.import-puzzle-1 { animation-delay: 0s; }
+.import-puzzle-2 { animation-delay: 0.5s; }
+.import-puzzle-3 { animation-delay: 1s; }
+
+@keyframes puzzle-drop {
+  0%   { transform: translateY(-30px); opacity: 0; }
+  25%  { transform: translateY(0); opacity: 1; }
+  75%  { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0; }
+}
+
 .import-spinner {
   width: 40px;
   height: 40px;

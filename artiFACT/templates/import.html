@@ -195,12 +195,35 @@
   <!-- ═══ PROGRESS STEP ═══ -->
   <div x-show="step === 'analyzing'" class="flex-1 flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="import-spinner flex-shrink-0"></div>
-        <div>
-          <h2 class="text-sm font-semibold">Analyzing&hellip;</h2>
-          <p class="text-xs text-[var(--color-text-muted)]" x-text="sourceName"></p>
-        </div>
+      <!-- Animated puzzle pieces: atomicfact → nodesort → finddup -->
+      <svg viewBox="0 0 300 120" class="w-64 mx-auto mb-6" xmlns="http://www.w3.org/2000/svg">
+        <!-- Piece 1: atomicfact (left) -->
+        <g class="import-puzzle-piece import-puzzle-1">
+          <rect x="10" y="30" width="70" height="55" rx="6" fill="var(--color-accent)" opacity="0.85"/>
+          <path d="M80 45 q10 0 10 12 q0 12 -10 12" fill="var(--color-accent)" opacity="0.85"/>
+          <text x="45" y="55" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">atomic</text>
+          <text x="45" y="65" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">fact</text>
+        </g>
+        <!-- Piece 2: nodesort (center) -->
+        <g class="import-puzzle-piece import-puzzle-2">
+          <rect x="100" y="30" width="70" height="55" rx="6" fill="var(--color-accent)" opacity="0.7"/>
+          <path d="M100 45 q-10 0 -10 12 q0 12 10 12" fill="var(--color-accent)" opacity="0.7"/>
+          <path d="M170 45 q10 0 10 12 q0 12 -10 12" fill="var(--color-accent)" opacity="0.7"/>
+          <text x="135" y="55" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">node</text>
+          <text x="135" y="65" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">sort</text>
+        </g>
+        <!-- Piece 3: finddup (right) -->
+        <g class="import-puzzle-piece import-puzzle-3">
+          <rect x="190" y="30" width="70" height="55" rx="6" fill="var(--color-accent)" opacity="0.55"/>
+          <path d="M190 45 q-10 0 -10 12 q0 12 10 12" fill="var(--color-accent)" opacity="0.55"/>
+          <text x="225" y="55" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">find</text>
+          <text x="225" y="65" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">dup</text>
+        </g>
+      </svg>
+
+      <div class="flex items-center justify-center gap-3 mb-4">
+        <h2 class="text-sm font-semibold">Analyzing&hellip;</h2>
+        <p class="text-xs text-[var(--color-text-muted)]" x-text="sourceName"></p>
       </div>
       <div class="w-full bg-[var(--color-border)] rounded-full h-2 mb-4">
         <div class="bg-[var(--color-accent)] h-2 rounded-full transition-all duration-500"
