@@ -77,11 +77,19 @@ async def classify_batch(
     constraint_hint = ""
     if constraint_node_uids:
         reverse_map = {v: k for k, v in id_mapping.items()}
-        hint_parts = [str(reverse_map[u]) for u in constraint_node_uids if u in reverse_map]
-        if hint_parts:
+        # Collect the dropped nodes AND all their descendants from the taxonomy
+        all_hint_ids: list[str] = []
+        for uid_str in constraint_node_uids:
+            parent_id = reverse_map.get(uid_str)
+            if parent_id is not None:
+                all_hint_ids.append(str(parent_id))
+                # Find descendants: any node whose taxonomy line is more indented
+                # and appears after the parent in the tree-walk order
+                _collect_descendants(parent_id, id_mapping, taxonomy_text, all_hint_ids)
+        if all_hint_ids:
             constraint_hint = (
-                f"\nCONSTRAINT: STRONGLY prefer nodes {', '.join(hint_parts)} "
-                "and their children. Only go outside if nothing fits."
+                f"\nCONSTRAINT: STRONGLY prefer these nodes: {', '.join(all_hint_ids)}. "
+                "Only go outside this set if nothing fits."
             )
 
     user_msg = user_template.format(
@@ -142,6 +150,37 @@ async def classify_batch(
         })
 
     return results
+
+
+def _collect_descendants(
+    parent_id: int,
+    id_mapping: dict[int, str],
+    taxonomy_text: str,
+    result: list[str],
+) -> None:
+    """Find all descendant IDs of a parent node from the taxonomy text."""
+    lines = taxonomy_text.split("\n")
+    parent_indent = -1
+    collecting = False
+    for line in lines:
+        # Parse "N  Title" format — count leading spaces after the number
+        parts = line.split(" ", 1)
+        if len(parts) < 2:
+            continue
+        try:
+            node_id = int(parts[0])
+        except ValueError:
+            continue
+        indent = len(parts[1]) - len(parts[1].lstrip())
+        if node_id == parent_id:
+            parent_indent = indent
+            collecting = True
+            continue
+        if collecting:
+            if indent > parent_indent:
+                result.append(str(node_id))
+            else:
+                collecting = False
 
 
 async def classify_all(
