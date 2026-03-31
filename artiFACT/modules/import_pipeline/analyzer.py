@@ -175,7 +175,7 @@ def _detect_conflicts_sync(
 
 
 def _get_existing_facts(db: Session, program_node_uid: UUID) -> list[tuple[str, UUID]]:
-    """Get existing facts for a program node and ALL descendants."""
+    """Get current published version of each fact under a program node and all descendants."""
     rows = db.execute(
         sa_text(
             "WITH RECURSIVE tree AS ("
@@ -184,10 +184,11 @@ def _get_existing_facts(db: Session, program_node_uid: UUID) -> list[tuple[str, 
             "  SELECT n.node_uid FROM fc_node n JOIN tree t ON n.parent_node_uid = t.node_uid"
             ") "
             "SELECT fv.display_sentence, fv.version_uid "
-            "FROM fc_fact_version fv "
-            "JOIN fc_fact f ON fv.fact_uid = f.fact_uid "
+            "FROM fc_fact f "
             "JOIN tree t ON f.node_uid = t.node_uid "
-            "WHERE f.is_retired = false"
+            "JOIN fc_fact_version fv ON fv.version_uid = f.current_published_version_uid "
+            "WHERE f.is_retired = false "
+            "AND f.current_published_version_uid IS NOT NULL"
         ),
         {"node_uid": str(program_node_uid)},
     ).fetchall()
