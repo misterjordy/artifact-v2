@@ -414,7 +414,7 @@ class FcImportSession(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "granularity IN ('brief','standard','exhaustive')",
+            "granularity IN ('brief','standard','exhaustive','overkill')",
             name="ck_import_granularity",
         ),
         CheckConstraint(

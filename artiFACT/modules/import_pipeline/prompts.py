@@ -46,9 +46,25 @@ def _extract_section(text: str, heading: str) -> str:
     return text[start:end].strip()
 
 
-# Granularity -> max facts per chunk (not a prompt, just config)
-GRANULARITY_MAP: dict[str, int] = {
+# Granularity -> facts per 500 words
+GRANULARITY_RATES: dict[str, int] = {
     "brief": 10,
-    "standard": 25,
-    "exhaustive": 50,
+    "standard": 20,
+    "overkill": 40,
 }
+
+# Legacy alias
+GRANULARITY_MAP = GRANULARITY_RATES
+
+
+def compute_max_facts(text: str, granularity: str) -> int:
+    """Compute max_facts based on word count and granularity.
+
+    brief = 10 facts per 500 words
+    standard = 20 facts per 500 words
+    overkill = 40 facts per 500 words
+    """
+    word_count = len(text.split())
+    rate = GRANULARITY_RATES.get(granularity, 20)
+    max_facts = max(5, round(word_count / 500 * rate))
+    return min(max_facts, 100)  # cap at 100 per chunk

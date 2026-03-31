@@ -580,12 +580,18 @@ async def test_conflict_detected_sets_fields():
 
 @pytest.mark.asyncio
 async def test_granularity_controls_max_facts_per_chunk():
-    """Granularity 'brief' should use max_facts=10 in extractor prompt."""
-    from artiFACT.modules.import_pipeline.prompts import GRANULARITY_MAP
+    """compute_max_facts scales with word count and granularity."""
+    from artiFACT.modules.import_pipeline.prompts import compute_max_facts
 
-    assert GRANULARITY_MAP["brief"] == 10
-    assert GRANULARITY_MAP["standard"] == 25
-    assert GRANULARITY_MAP["exhaustive"] == 50
+    # 500 words at brief = 10, standard = 20, overkill = 40
+    text_500w = " ".join(["word"] * 500)
+    assert compute_max_facts(text_500w, "brief") == 10
+    assert compute_max_facts(text_500w, "standard") == 20
+    assert compute_max_facts(text_500w, "overkill") == 40
+
+    # 100 words at standard = max(5, round(100/500*20)) = max(5, 4) = 5
+    text_100w = " ".join(["word"] * 100)
+    assert compute_max_facts(text_100w, "standard") == 5
 
 
 # === Rerun ===

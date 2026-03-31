@@ -19,7 +19,7 @@ from artiFACT.kernel.models import FcImportSession, FcImportStagedFact, FcUser, 
 from artiFACT.kernel.s3 import download_bytes
 from artiFACT.modules.import_pipeline.deduplicator import deduplicate, jaccard, tokenize
 from artiFACT.modules.import_pipeline.extractors import get_extractor
-from artiFACT.modules.import_pipeline.prompts import GRANULARITY_MAP, load_skill
+from artiFACT.modules.import_pipeline.prompts import compute_max_facts, load_skill
 from artiFACT.modules.import_pipeline.stager import stage_facts_postgres, stage_facts_s3
 
 log = structlog.get_logger()
@@ -200,7 +200,7 @@ def _extract_facts_from_document(
     provider: str,
     model: str,
     session_uid_str: str,
-    max_facts: int,
+    granularity: str,
 ) -> list[dict[str, Any]]:
     """Extract facts from an uploaded document via S3."""
     if not session.source_s3_key:
@@ -218,6 +218,7 @@ def _extract_facts_from_document(
 
     all_facts: list[dict[str, Any]] = []
     for i, chunk in enumerate(chunks):
+        max_facts = compute_max_facts(chunk, granularity)
         user_msg = user_template.format(max_facts=max_facts, chunk_text=chunk)
         response = _call_ai(
             plaintext_key, provider, model,
@@ -237,7 +238,7 @@ def _extract_facts_from_text(
     provider: str,
     model: str,
     session_uid_str: str,
-    max_facts: int,
+    granularity: str,
 ) -> list[dict[str, Any]]:
     """Extract facts from pasted text (skip S3 + file extractor)."""
     _publish_progress(session_uid_str, "Processing pasted text", 10)
@@ -249,6 +250,7 @@ def _extract_facts_from_text(
 
     all_facts: list[dict[str, Any]] = []
     for i, chunk in enumerate(chunks):
+        max_facts = compute_max_facts(chunk, granularity)
         user_msg = user_template.format(max_facts=max_facts, chunk_text=chunk)
         response = _call_ai(
             plaintext_key, provider, model,
@@ -294,20 +296,20 @@ def _run_analysis(db: Session, session: FcImportSession, session_uid_str: str) -
         raise RuntimeError("No AI key configured for user")
 
     plaintext_key = decrypt(ai_key.encrypted_key)
-    model = ai_key.model_override or DEFAULT_MODELS.get(ai_key.provider, "gpt-4o")
-    max_facts = GRANULARITY_MAP.get(session.granularity, 25)
+    model = ai_key.model_override or DEFAULT_MODELS.get(ai_key.provider, "gpt-4.1")
+    granularity = session.granularity or "standard"
 
     # Step 1: Extract facts
     _publish_progress(session_uid_str, "Extracting facts...", 10)
     if session.input_type == "text" and session.source_text:
         all_facts = _extract_facts_from_text(
             session.source_text, plaintext_key, ai_key.provider, model,
-            session_uid_str, max_facts,
+            session_uid_str, granularity,
         )
     else:
         all_facts = _extract_facts_from_document(
             session, plaintext_key, ai_key.provider, model,
-            session_uid_str, max_facts,
+            session_uid_str, granularity,
         )
 
     sentences = [f.get("sentence", "") for f in all_facts if f.get("sentence")]

@@ -56,6 +56,11 @@
 
       <!-- Paste Text tab -->
       <div x-show="activeTab === 'paste'" class="space-y-4">
+        <div x-show="pasteText.length > 1000"
+             class="px-3 py-2 rounded text-xs bg-amber-50 border border-amber-300 text-amber-800">
+          <span x-text="'~' + Math.round(pasteText.length / 4) + ' tokens'"></span> &mdash;
+          this may use significant AI credits. Consider pasting smaller sections for faster, cheaper results.
+        </div>
         <textarea x-model="pasteText"
                   placeholder="Paste your text here..."
                   rows="10"
@@ -161,12 +166,12 @@
               <div class="text-sm font-semibold">Standard</div>
               <div class="text-xs text-[var(--color-text-muted)]">Balanced extraction</div>
             </button>
-            <button @click="granularity = 'exhaustive'"
+            <button @click="granularity = 'overkill'"
                     class="flex-1 p-3 rounded-lg border-2 text-center transition-colors"
-                    :class="granularity === 'exhaustive'
+                    :class="granularity === 'overkill'
                       ? 'border-[var(--color-accent)] bg-[var(--color-accent-light)]'
                       : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'">
-              <div class="text-sm font-semibold">Exhaustive</div>
+              <div class="text-sm font-semibold">Overkill</div>
               <div class="text-xs text-[var(--color-text-muted)]">Maximum fact density</div>
             </button>
           </div>
