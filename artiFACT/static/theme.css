@@ -484,16 +484,9 @@ html.eyecare button.border-red-400:hover {
   border-radius: 4px;
 }
 
-.import-constraint-active {
-  background-color: var(--color-accent) !important;
-  color: var(--color-text-on-accent) !important;
-  border-radius: 4px;
-}
-
-.import-constraint-active a,
-.import-constraint-active span,
-.import-constraint-active button {
-  color: var(--color-text-on-accent) !important;
+.import-drop-target.dnd-drag-over {
+  border-color: var(--color-accent) !important;
+  background-color: var(--color-accent-light) !important;
 }
 
 /* Small text helper */

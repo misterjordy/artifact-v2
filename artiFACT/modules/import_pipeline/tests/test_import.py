@@ -196,26 +196,7 @@ async def test_propose_all_or_nothing_transaction(
     root_node: FcNode,
 ):
     """Propose creates facts in an all-or-nothing transaction."""
-    staged_facts = [
-        {
-            "index": 0,
-            "sentence": "Fact alpha from import test one two three.",
-            "metadata_tags": ["test"],
-            "source_reference": None,
-            "duplicate_of": None,
-            "similarity": None,
-            "accepted": True,
-        },
-        {
-            "index": 1,
-            "sentence": "Fact beta from import test four five six.",
-            "metadata_tags": [],
-            "source_reference": None,
-            "duplicate_of": None,
-            "similarity": None,
-            "accepted": True,
-        },
-    ]
+    from artiFACT.kernel.models import FcImportStagedFact
 
     session = FcImportSession(
         session_uid=uuid.uuid4(),
@@ -224,25 +205,36 @@ async def test_propose_all_or_nothing_transaction(
         source_hash=uuid.uuid4().hex + uuid.uuid4().hex,
         effective_date=date(2026, 1, 15),
         status="staged",
-        staged_facts_s3=f"imports/{uuid.uuid4()}/staged.json",
         created_by_uid=import_contributor.user_uid,
     )
     db.add(session)
     await db.flush()
 
-    # Mock only the S3 download for staged facts
-    with patch(
-        "artiFACT.modules.import_pipeline.stager.download_json",
-        return_value=json.dumps(staged_facts),
-    ):
-        resp = await authed_client.post(
-            f"/api/v1/import/sessions/{session.session_uid}/propose",
-            json={"accepted_indices": [0, 1]},
+    # Create staged facts in Postgres (new flow)
+    for i, sentence in enumerate([
+        "Fact alpha from import test one two three.",
+        "Fact beta from import test four five six.",
+    ]):
+        sf = FcImportStagedFact(
+            staged_fact_uid=uuid.uuid4(),
+            session_uid=session.session_uid,
+            display_sentence=sentence,
+            suggested_node_uid=root_node.node_uid,
+            status="pending",
+            source_chunk_index=i,
+            node_alternatives=[],
+            metadata_tags=["test"] if i == 0 else [],
         )
+        db.add(sf)
+    await db.flush()
+
+    resp = await authed_client.post(
+        f"/api/v1/import/sessions/{session.session_uid}/propose",
+    )
 
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["created_count"] == 2
+    data = resp.json()["data"]
+    assert data["created"] == 2
 
     # Verify session status updated
     await db.refresh(session)

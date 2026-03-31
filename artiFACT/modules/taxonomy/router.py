@@ -153,6 +153,7 @@ async def archive(
 async def tree_partial(
     db: AsyncSession = Depends(get_db),
     user: FcUser = Depends(get_current_user),
+    max_open_depth: int | None = None,
 ) -> HTMLResponse:
     """HTMX partial: collapsible tree for the left pane."""
     nodes = await get_all_nodes(db)
@@ -167,6 +168,7 @@ async def tree_partial(
         nodes=nested,
         can_contribute_uids=can_contribute_uids,
         can_manage_uids=can_manage_uids,
+        max_open_depth=max_open_depth,
     )
     return HTMLResponse(html)
 

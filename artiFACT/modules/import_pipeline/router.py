@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.auth.session import update_session_field
 from artiFACT.kernel.db import get_db
-from artiFACT.kernel.exceptions import Forbidden, NotFound
+from artiFACT.kernel.exceptions import Conflict, Forbidden, NotFound
 from artiFACT.kernel.models import FcImportSession, FcImportStagedFact, FcUser
 from artiFACT.kernel.permissions.resolver import can
 from artiFACT.kernel.rate_limiter import check_rate
@@ -338,19 +338,57 @@ async def rerun_session(
     return {"status": "analyzing"}
 
 
-@router.post("/sessions/{session_uid}/propose", response_model=ProposeOut)
+@router.post("/sessions/{session_uid}/propose")
 async def propose_staged(
     session_uid: UUID,
-    body: ProposeRequest,
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> ProposeOut:
-    """Accept staged facts and create real facts (all-or-nothing transaction)."""
-    from artiFACT.modules.import_pipeline.proposer import propose_facts
+) -> dict[str, Any]:
+    """Propose all staged facts into the real corpus (all-or-nothing)."""
+    from artiFACT.modules.audit.service import flush_pending_events
+    from artiFACT.modules.import_pipeline.proposer import (
+        count_ready_facts,
+        count_unassigned_facts,
+        propose_import,
+    )
 
-    created = await propose_facts(db, session_uid, body.accepted_indices, user)
-    await db.commit()
-    return ProposeOut(created_count=created, session_uid=session_uid)
+    session = await db.get(FcImportSession, session_uid)
+    if not session:
+        raise NotFound("Import session not found", code="SESSION_NOT_FOUND")
+    if session.created_by_uid != user.user_uid:
+        raise Forbidden("Not your import session", code="FORBIDDEN")
+    if session.status != "staged":
+        raise Conflict(
+            f"Session is {session.status}, not staged", code="INVALID_STATUS"
+        )
+
+    ready = await count_ready_facts(db, session_uid)
+    if ready == 0:
+        raise Conflict("No facts ready to propose", code="NO_FACTS_READY")
+
+    unassigned = await count_unassigned_facts(db, session_uid)
+    if unassigned > 0:
+        raise Conflict(
+            f"{unassigned} facts have no target node assigned",
+            code="UNASSIGNED_FACTS",
+        )
+
+    try:
+        result = await propose_import(db, session_uid, user)
+        await flush_pending_events(db)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        # Mark session as failed
+        session_reload = await db.get(FcImportSession, session_uid)
+        if session_reload:
+            session_reload.status = "failed"
+            session_reload.error_message = str(e)
+            await db.commit()
+        log.error("propose_failed", session_uid=str(session_uid), error=str(e))
+        raise
+
+    return {"data": result}
 
 
 @router.post("/sessions/{session_uid}/discard")
@@ -367,6 +405,52 @@ async def discard_staged(
     session.status = "rejected"
     await db.commit()
     return {"status": "rejected", "session_uid": str(session_uid)}
+
+
+@router.get("/sessions")
+async def list_sessions(
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    mine: bool = True,
+) -> dict[str, Any]:
+    """List import sessions, optionally filtered to current user."""
+    from sqlalchemy import func as sa_func
+
+    query = select(FcImportSession).order_by(FcImportSession.created_at.desc()).limit(50)
+    if mine:
+        query = query.where(FcImportSession.created_by_uid == user.user_uid)
+
+    sessions = (await db.execute(query)).scalars().all()
+
+    result = []
+    for s in sessions:
+        # Count staged facts by status
+        counts_result = await db.execute(
+            select(
+                FcImportStagedFact.status,
+                sa_func.count(),
+            )
+            .where(FcImportStagedFact.session_uid == s.session_uid)
+            .group_by(FcImportStagedFact.status)
+        )
+        counts = {row[0]: row[1] for row in counts_result.all()}
+        total = sum(counts.values())
+        proposed = counts.get("accepted", 0) + counts.get("pending", 0)
+        skipped = total - proposed
+
+        result.append({
+            "session_uid": str(s.session_uid),
+            "source_filename": s.source_filename,
+            "input_type": s.input_type,
+            "status": s.status,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+            "total": total,
+            "proposed": proposed,
+            "skipped": skipped,
+        })
+
+    return {"data": result, "total": len(result)}
 
 
 @router.post("/recommend-location", response_model=RecommendLocationOut)

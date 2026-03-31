@@ -16,7 +16,7 @@ from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.auth.session import get_session_data, is_auto_approve_active, validate_session
 from artiFACT.kernel.db import get_db
 from artiFACT.kernel.exceptions import Forbidden
-from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
+from artiFACT.kernel.models import FcFact, FcFactVersion, FcImportSession, FcNode, FcUser
 from artiFACT.kernel.permissions.resolver import can
 from artiFACT.kernel.schemas import NodeOut
 from artiFACT.modules.audit.service import flush_pending_events
@@ -139,12 +139,34 @@ async def import_page(
         if user.global_role == "admin" or await can(user, "contribute", node.node_uid, db):
             programs.append({"node_uid": str(node.node_uid), "title": node.title})
 
+    # Detect active import session (resume on page load)
+    active_result = await db.execute(
+        select(FcImportSession)
+        .where(
+            FcImportSession.created_by_uid == user.user_uid,
+            FcImportSession.status.in_(["analyzing", "staged"]),
+        )
+        .order_by(FcImportSession.created_at.desc())
+        .limit(1)
+    )
+    active_session = active_result.scalar_one_or_none()
+
+    active_session_data = None
+    if active_session:
+        active_session_data = {
+            "session_uid": str(active_session.session_uid),
+            "status": active_session.status,
+            "source_filename": active_session.source_filename,
+            "input_type": active_session.input_type,
+        }
+
     html = _jinja.get_template("import.html").render(
         user=user,
         active_nav="import",
         playground_mode=(playground_mode == "true"),
         programs=programs,
         today=date.today().isoformat(),
+        active_session=active_session_data,
     )
     return HTMLResponse(html)
 

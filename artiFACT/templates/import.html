@@ -1,19 +1,23 @@
 {% extends "base.html" %}
-{% block head_scripts %}<script src="/static/js/import.js" defer></script>{% endblock %}
+{% block head_scripts %}
+<script src="/static/js/sidebar-resize.js" defer></script>
+<script src="/static/js/favorites.js" defer></script>
+<script src="/static/js/import.js" defer></script>
+{% endblock %}
 
 {% block title %}Import | artiFACT{% endblock %}
 
 {% block sidebar_top %}
-<!-- Import tree: reuse the browse tree partial with constraint toggling -->
+<!-- Import tree with drag-drop zones -->
 <div class="px-1 pb-2">
   <div class="text-label font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)] px-2 mb-2">
     Taxonomy Tree
   </div>
-  <div id="import-constraint-display" class="px-2 mb-2 text-2xs text-[var(--color-text-sidebar-heading)]">
-    No constraints — AI will suggest from entire taxonomy
-  </div>
+  <p class="px-2 mb-2 text-2xs text-[var(--color-text-sidebar-heading)] leading-relaxed">
+    Drag a program node into the target box below. Optionally drag sections to help the AI focus.
+  </p>
   <div id="import-tree-container"
-       hx-get="/partials/tree" hx-trigger="load" hx-swap="innerHTML">
+       hx-get="/partials/tree?max_open_depth=3" hx-trigger="load" hx-swap="innerHTML">
     <div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">Loading tree&hellip;</div>
   </div>
 </div>
@@ -26,7 +30,7 @@
      x-data="importApp()"
      data-programs='{{ (programs or []) | tojson }}'
      data-today="{{ today or '' }}"
-     @constraint-changed.window="updateConstraintDisplay()">
+     data-active-session='{{ (active_session or {}) | tojson }}'>
 
   <!-- ═══ ENTRY STEP ═══ -->
   <div x-show="step === 'entry'" class="flex-1 overflow-y-auto p-6">
@@ -90,15 +94,48 @@
 
       <!-- Shared config fields -->
       <div class="mt-6 space-y-4 bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] p-5">
+        <!-- Program drop target -->
         <div>
           <label class="block text-sm font-medium mb-1">Program</label>
-          <select x-model="programNodeUid"
-                  class="block w-full text-sm border border-[var(--color-border-input)] rounded px-3 py-2 bg-[var(--color-bg-input)] text-[var(--color-text)]">
-            <option value="">Select a program...</option>
-            <template x-for="p in programs" :key="p.node_uid">
-              <option :value="p.node_uid" x-text="p.title"></option>
-            </template>
-          </select>
+          <p class="text-xs text-[var(--color-text-muted)] mb-2">Drag the program from the tree into this box. <span class="text-[var(--color-text-muted)] italic">e.g. Boatwing H-12</span></p>
+          <div id="program-drop-zone"
+               class="import-drop-target rounded-lg border-2 border-dashed px-4 py-3 text-sm transition-colors"
+               :class="programNodeUid
+                 ? 'border-[var(--color-accent)] bg-[var(--color-accent-light)]'
+                 : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+               @dragover.prevent="$el.classList.add('dnd-drag-over')"
+               @dragleave.prevent="$el.classList.remove('dnd-drag-over')"
+               @drop.prevent="handleProgramDrop($event)">
+            <span x-show="!programNodeUid" class="text-[var(--color-text-muted)]">Drop a program node here&hellip;</span>
+            <div x-show="programNodeUid" class="flex items-center justify-between">
+              <span class="font-medium text-[var(--color-accent)]" x-text="programNodeTitle"></span>
+              <button @click.stop="programNodeUid = ''; programNodeTitle = ''"
+                      class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">&#10005;</button>
+            </div>
+          </div>
+        </div>
+        <!-- Sections to consider (constraint) drop target -->
+        <div>
+          <label class="block text-sm font-medium mb-1">Sections to consider <span class="font-normal text-[var(--color-text-muted)]">(optional)</span></label>
+          <p class="text-xs text-[var(--color-text-muted)] mb-2">Drag taxonomy sections here to focus the AI classifier. Leave empty to consider the entire taxonomy. <span class="italic">e.g. Program Identity &amp; Authority</span></p>
+          <div id="constraint-drop-zone"
+               class="import-drop-target rounded-lg border-2 border-dashed px-4 py-3 text-sm min-h-[3rem] transition-colors"
+               :class="constraintNodeUids.length > 0
+                 ? 'border-[var(--color-accent)] bg-[var(--color-accent-light)]'
+                 : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+               @dragover.prevent="$el.classList.add('dnd-drag-over')"
+               @dragleave.prevent="$el.classList.remove('dnd-drag-over')"
+               @drop.prevent="handleConstraintDrop($event)">
+            <span x-show="constraintNodeUids.length === 0" class="text-[var(--color-text-muted)]">Drop sections here&hellip;</span>
+            <div x-show="constraintNodeUids.length > 0" class="flex flex-wrap gap-1.5">
+              <template x-for="(c, i) in constraintNodes" :key="c.uid">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">
+                  <span x-text="c.title"></span>
+                  <button @click.stop="removeConstraint(i)" class="hover:opacity-70">&#10005;</button>
+                </span>
+              </template>
+            </div>
+          </div>
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Fact Date</label>
@@ -149,14 +186,34 @@
 
   <!-- ═══ PROGRESS STEP ═══ -->
   <div x-show="step === 'analyzing'" class="flex-1 flex items-center justify-center p-6">
-    <div class="max-w-md w-full text-center">
-      <!-- CSS spinner -->
-      <div class="import-spinner mx-auto mb-6"></div>
-      <div class="w-full bg-[var(--color-border)] rounded-full h-2.5 mb-3">
-        <div class="bg-[var(--color-accent)] h-2.5 rounded-full transition-all duration-500"
+    <div class="max-w-lg w-full">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="import-spinner flex-shrink-0"></div>
+        <div>
+          <h2 class="text-sm font-semibold">Analyzing&hellip;</h2>
+          <p class="text-xs text-[var(--color-text-muted)]" x-text="sourceName"></p>
+        </div>
+      </div>
+      <div class="w-full bg-[var(--color-border)] rounded-full h-2 mb-4">
+        <div class="bg-[var(--color-accent)] h-2 rounded-full transition-all duration-500"
              :style="'width: ' + progress + '%'"></div>
       </div>
-      <p class="text-sm text-[var(--color-text-muted)]" x-text="progressMessage"></p>
+      <!-- Step-by-step status log -->
+      <div class="space-y-1.5">
+        <template x-for="(msg, i) in progressLog" :key="i">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="flex-shrink-0"
+                  :class="i === progressLog.length - 1
+                    ? 'text-[var(--color-accent)]'
+                    : 'text-[var(--color-success)]'"
+                  x-text="i === progressLog.length - 1 ? '\u25B6' : '\u2713'"></span>
+            <span :class="i === progressLog.length - 1
+                    ? 'text-[var(--color-text)]'
+                    : 'text-[var(--color-text-muted)]'"
+                  x-text="msg"></span>
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 
@@ -377,9 +434,10 @@
           &#8635; Rerun Analysis
         </button>
         <button @click="proposeImport()"
-                :disabled="readyCount === 0"
+                :disabled="readyCount === 0 || proposing"
                 class="bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-5 py-1.5 rounded text-sm font-semibold hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          Propose Import &rarr;
+          <span x-show="!proposing">Propose Import &rarr;</span>
+          <span x-show="proposing">Proposing&hellip;</span>
         </button>
       </div>
     </div>
@@ -394,6 +452,31 @@
               class="bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-5 py-2 rounded text-sm font-semibold hover:bg-[var(--color-accent-hover)] transition-colors">
         Import Another
       </button>
+    </div>
+  </div>
+
+  <!-- ═══ IMPORT HISTORY ═══ -->
+  <div x-show="step === 'entry' || step === 'done'"
+       class="border-t border-[var(--color-border)] mt-4 mx-6 pt-4 pb-6">
+    <h3 class="text-sm font-semibold mb-3">Past Imports</h3>
+    <div id="import-history" class="space-y-2">
+      <template x-for="h in history" :key="h.session_uid">
+        <div class="flex items-center gap-3 px-3 py-2 rounded border border-[var(--color-border)] text-xs">
+          <span class="font-medium truncate flex-1"
+                x-text="h.input_type === 'text' ? 'Pasted text' : h.source_filename"></span>
+          <span class="px-1.5 py-0.5 rounded text-2xs font-medium"
+                :class="{
+                  'bg-green-100 text-green-800': h.status === 'proposed',
+                  'bg-red-100 text-red-800': h.status === 'failed',
+                  'bg-[var(--color-border)] text-[var(--color-text-muted)]': h.status === 'discarded' || h.status === 'rejected'
+                }"
+                x-text="h.status"></span>
+          <span class="text-[var(--color-text-muted)]" x-text="h.total + ' facts'"></span>
+          <span class="text-[var(--color-text-muted)]"
+                x-text="h.created_at ? new Date(h.created_at).toLocaleDateString() : ''"></span>
+        </div>
+      </template>
+      <p x-show="history.length === 0" class="text-xs text-[var(--color-text-muted)]">No past imports.</p>
     </div>
   </div>
 

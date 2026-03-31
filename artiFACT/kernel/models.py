@@ -467,7 +467,7 @@ class FcImportStagedFact(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending','accepted','rejected','duplicate','conflict','orphaned')",
+            "status IN ('pending','accepted','rejected','duplicate','conflict','orphaned','deleted')",
             name="ck_staged_fact_status",
         ),
         CheckConstraint(

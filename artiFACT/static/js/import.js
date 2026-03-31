@@ -14,6 +14,7 @@ function importApp() {
     sessionUid: null,
     programs: [],
     programNodeUid: "",
+    programNodeTitle: "",
     effectiveDate: "",
     granularity: "standard",
     pasteText: "",
@@ -25,6 +26,7 @@ function importApp() {
     // Progress
     progress: 0,
     progressMessage: "",
+    progressLog: [],
 
     // Staging
     stagedFacts: [],
@@ -47,11 +49,16 @@ function importApp() {
     relocateOpen: false,
     relocateGroup: null,
 
-    // Node constraints
+    // Node constraints (drag-drop)
     constraintNodeUids: [],
+    constraintNodes: [],   // [{uid, title}]
 
     // Done
     doneMessage: "",
+    proposing: false,
+
+    // History
+    history: [],
 
     init() {
       // Read server data from data-* attributes (safe from HTML escaping issues)
@@ -64,6 +71,38 @@ function importApp() {
       this.effectiveDate = el.dataset.today || new Date().toISOString().slice(0, 10);
       if (this.programs.length === 1) {
         this.programNodeUid = this.programs[0].node_uid;
+      }
+
+      // Resume active session if one exists
+      var activeRaw = el.dataset.activeSession || "{}";
+      try {
+        var active = JSON.parse(activeRaw);
+        if (active && active.session_uid) {
+          this.sessionUid = active.session_uid;
+          this.sourceName = active.input_type === "text" ? "Pasted text" : active.source_filename;
+          if (active.status === "analyzing") {
+            this.step = "analyzing";
+            this.listenProgress();
+          } else if (active.status === "staged") {
+            this.loadStaged();
+          }
+        }
+      } catch (e) {
+        // No active session, show entry form
+      }
+
+      this.loadHistory();
+    },
+
+    async loadHistory() {
+      try {
+        var resp = await fetch("/api/v1/import/sessions?mine=true");
+        if (resp.ok) {
+          var data = await resp.json();
+          this.history = data.data || [];
+        }
+      } catch (e) {
+        // silently fail
       }
     },
 
@@ -225,11 +264,16 @@ function importApp() {
 
     listenProgress() {
       var self = this;
+      this.progressLog = ["Connecting to analysis pipeline\u2026"];
       var source = new EventSource("/api/v1/import/sessions/" + this.sessionUid + "/progress");
       source.onmessage = function (event) {
         var data = JSON.parse(event.data);
         self.progress = Math.max(0, Math.min(100, data.percent));
         self.progressMessage = data.message;
+        // Add new message to log if it's different from the last one
+        if (data.message && (self.progressLog.length === 0 || self.progressLog[self.progressLog.length - 1] !== data.message)) {
+          self.progressLog.push(data.message);
+        }
         if (data.percent >= 100) {
           source.close();
           self.loadStaged();
@@ -241,8 +285,38 @@ function importApp() {
       };
       source.onerror = function () {
         source.close();
-        self.loadStaged();
+        // Don't immediately load staged — poll the session status first
+        self._pollSessionStatus();
       };
+    },
+
+    async _pollSessionStatus() {
+      // When SSE disconnects, check actual session status before deciding what to do
+      try {
+        var resp = await fetch("/api/v1/import/sessions/" + this.sessionUid);
+        if (!resp.ok) {
+          this.entryError = "Lost connection to analysis pipeline";
+          this.step = "entry";
+          return;
+        }
+        var data = await resp.json();
+        if (data.status === "staged") {
+          this.loadStaged();
+        } else if (data.status === "failed") {
+          this.entryError = data.error_message || "Analysis failed";
+          this.step = "entry";
+        } else if (data.status === "analyzing") {
+          // Still analyzing — reconnect SSE after a brief pause
+          var self = this;
+          setTimeout(function () { self.listenProgress(); }, 2000);
+        } else {
+          this.entryError = "Unexpected session status: " + data.status;
+          this.step = "entry";
+        }
+      } catch (e) {
+        this.entryError = "Lost connection. Refresh the page to check status.";
+        this.step = "entry";
+      }
     },
 
     // === Load staged facts ===
@@ -387,26 +461,36 @@ function importApp() {
       }
     },
 
-    // === Node constraint toggle (called from tree click) ===
+    // === Drag-drop handlers for program + constraint zones ===
 
-    toggleConstraint(nodeUid) {
-      var idx = this.constraintNodeUids.indexOf(nodeUid);
-      if (idx > -1) {
-        this.constraintNodeUids.splice(idx, 1);
-      } else {
-        this.constraintNodeUids.push(nodeUid);
+    handleProgramDrop(event) {
+      event.currentTarget.classList.remove("dnd-drag-over");
+      var uid = event.dataTransfer.getData("text/plain");
+      var title = event.dataTransfer.getData("text/x-node-title") || this._getNodeTitleFromDom(uid);
+      if (uid) {
+        this.programNodeUid = uid;
+        this.programNodeTitle = title || uid;
       }
-      this.$dispatch("constraint-changed");
     },
 
-    updateConstraintDisplay() {
-      var el = document.getElementById("import-constraint-display");
-      if (!el) return;
-      if (this.constraintNodeUids.length === 0) {
-        el.textContent = "No constraints \u2014 AI will suggest from entire taxonomy";
-      } else {
-        el.textContent = "Constraining to: " + this.constraintNodeUids.length + " node(s)";
+    handleConstraintDrop(event) {
+      event.currentTarget.classList.remove("dnd-drag-over");
+      var uid = event.dataTransfer.getData("text/plain");
+      var title = event.dataTransfer.getData("text/x-node-title") || this._getNodeTitleFromDom(uid);
+      if (uid && this.constraintNodeUids.indexOf(uid) === -1) {
+        this.constraintNodeUids.push(uid);
+        this.constraintNodes.push({ uid: uid, title: title || uid });
       }
+    },
+
+    removeConstraint(index) {
+      this.constraintNodeUids.splice(index, 1);
+      this.constraintNodes.splice(index, 1);
+    },
+
+    _getNodeTitleFromDom(uid) {
+      var el = document.querySelector('[data-node-uid="' + uid + '"]');
+      return el ? (el.dataset.nodeTitle || "") : "";
     },
 
     // === Reset / Rerun / Propose ===
@@ -434,33 +518,31 @@ function importApp() {
     },
 
     async proposeImport() {
+      if (this.proposing) return;
+      this.proposing = true;
       var csrf = getCsrfToken();
-      // Collect indices of accepted/pending facts
-      var accepted = [];
-      this.stagedFacts.forEach(function (f, i) {
-        if (f.status === "pending" || f.status === "accepted") {
-          accepted.push(i);
-        }
-      });
-      if (accepted.length === 0) return;
 
       try {
         var resp = await fetch("/api/v1/import/sessions/" + this.sessionUid + "/propose", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-          body: JSON.stringify({ accepted_indices: accepted }),
         });
         if (!resp.ok) {
           var err = await resp.json();
           alert(err.detail || "Propose failed");
+          this.proposing = false;
           return;
         }
         var data = await resp.json();
-        this.doneMessage = data.created_count + " facts imported successfully.";
+        var r = data.data || {};
+        var total = (r.created || 0) + (r.edited || 0);
+        this.doneMessage = total + " facts proposed (" + (r.created || 0) + " new, " + (r.edited || 0) + " corrections, " + (r.skipped || 0) + " skipped).";
         this.step = "done";
+        this.loadHistory();
       } catch (e) {
         alert(e.message || "Network error");
       }
+      this.proposing = false;
     },
 
     async downloadUnresolved() {
@@ -472,6 +554,7 @@ function importApp() {
       this.sessionUid = null;
       this.progress = 0;
       this.progressMessage = "";
+      this.progressLog = [];
       this.stagedFacts = [];
       this.entryError = "";
       this.doneMessage = "";
@@ -528,7 +611,17 @@ function importApp() {
 // After DOM load, attach import-specific behaviors to the tree
 
 document.addEventListener("DOMContentLoaded", function () {
-  // Intercept tree node clicks for import page (constraint toggle + assign)
+  // Set node title in dragstart so drop zones can read it
+  document.addEventListener("dragstart", function (e) {
+    var nodeEl = e.target.closest("[data-node-uid]");
+    if (nodeEl) {
+      e.dataTransfer.setData("text/plain", nodeEl.dataset.nodeUid);
+      e.dataTransfer.setData("text/x-node-title", nodeEl.dataset.nodeTitle || "");
+      e.dataTransfer.effectAllowed = "copyMove";
+    }
+  });
+
+  // Tree node clicks: in review step, assign selected fact / relocate group
   document.addEventListener("click", function (e) {
     var nodeEl = e.target.closest("[data-node-uid]");
     if (!nodeEl) return;
@@ -542,17 +635,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var nodeUid = nodeEl.dataset.nodeUid;
     var nodeTitle = nodeEl.dataset.nodeTitle || "Unknown";
 
-    // If in entry step, toggle constraint
-    if (appData.step === "entry") {
-      e.preventDefault();
-      e.stopPropagation();
-      appData.toggleConstraint(nodeUid);
-      // Visual toggle
-      nodeEl.classList.toggle("import-constraint-active");
-      return;
-    }
-
-    // If in review step and a fact is selected or relocating, assign
+    // In review step and a fact is selected or relocating, assign
     if (appData.step === "review" && (appData.selectedFactUid || appData.relocateOpen)) {
       e.preventDefault();
       e.stopPropagation();
@@ -560,7 +643,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Handle drop of facts onto tree nodes
+  // Handle drop of staged facts onto tree nodes (review step)
   document.addEventListener("dragover", function (e) {
     var nodeEl = e.target.closest("[data-node-uid]");
     if (nodeEl) {
@@ -584,13 +667,16 @@ document.addEventListener("DOMContentLoaded", function () {
     var stagedUid = e.dataTransfer.getData("text/plain");
     if (!stagedUid) return;
 
-    e.preventDefault();
+    // Only handle staged fact drops onto tree (UUID format check)
+    if (stagedUid.length < 30) return;
+
     var importRoot = document.getElementById("import-root");
     if (!importRoot) return;
 
     var appData = Alpine.$data(importRoot);
-    if (!appData) return;
+    if (!appData || appData.step !== "review") return;
 
+    e.preventDefault();
     var nodeUid = nodeEl.dataset.nodeUid;
     var nodeTitle = nodeEl.dataset.nodeTitle || "Unknown";
 

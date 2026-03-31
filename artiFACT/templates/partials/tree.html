@@ -1,6 +1,7 @@
 {% macro render_node(node, level=0, breadcrumb_path="") %}
 {% set current_breadcrumb = (breadcrumb_path + " > " + node.title) if breadcrumb_path else node.title %}
-<div class="dnd-node-wrapper" x-data="{ open: true }">
+{% set should_open = (max_open_depth is not defined) or (level < (max_open_depth | default(999) | int)) %}
+<div class="dnd-node-wrapper" x-data="{ open: {{ 'true' if should_open else 'false' }} }">
   <div class="group flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors"
        data-node-uid="{{ node.node_uid }}"
        data-node-title="{{ node.title | e }}"
