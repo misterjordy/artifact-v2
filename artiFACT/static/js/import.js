@@ -21,6 +21,9 @@ function importSearch() {
       var self = this;
       window.addEventListener("import-program-changed", function (e) {
         self.programReady = !!e.detail.uid;
+        if (!e.detail.uid) {
+          self.clearSearch();
+        }
       });
     },
 
