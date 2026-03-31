@@ -19,24 +19,14 @@ from artiFACT.kernel.models import FcImportSession, FcImportStagedFact, FcUser, 
 from artiFACT.kernel.s3 import download_bytes
 from artiFACT.modules.import_pipeline.deduplicator import deduplicate, jaccard, tokenize
 from artiFACT.modules.import_pipeline.extractors import get_extractor
-from artiFACT.modules.import_pipeline.prompts import (
-    EXTRACTOR_USER_TEMPLATE,
-    GRANULARITY_MAP,
-)
+from artiFACT.modules.import_pipeline.prompts import GRANULARITY_MAP, load_skill
 from artiFACT.modules.import_pipeline.stager import stage_facts_postgres, stage_facts_s3
 
 log = structlog.get_logger()
 
-# Keep the existing extraction prompt — DO NOT modify (load-bearing rules)
-EXTRACTION_PROMPT = (
-    "You are a fact extraction engine. Given a document chunk, extract discrete factual "
-    "statements.\n\nReturn a JSON object with a \"facts\" array. Each fact has:\n"
-    "- \"sentence\": a single factual statement (10-2000 chars)\n"
-    "- \"metadata_tags\": array of relevant tags\n"
-    "- \"source_reference\": {\"section\": \"...\", \"page\": \"...\"} if identifiable\n\n"
-    "Extract ONLY factual statements. Do not include opinions, instructions, or metadata.\n"
-    "Be precise and preserve technical details."
-)
+def _get_extraction_prompts() -> tuple[str, str]:
+    """Load atomicfact skill prompts (cached after first call)."""
+    return load_skill("atomicfact")
 
 _SYNC_DB_URL = os.getenv(
     "DATABASE_URL", "postgresql+asyncpg://artifact:artifact_dev@postgres:5432/artifact_db"
@@ -118,10 +108,20 @@ DEFAULT_MODELS = {"openai": "gpt-4.1", "anthropic": "claude-sonnet-4-20250514"}
 
 
 def _parse_extracted_facts(response_text: str) -> list[dict[str, Any]]:
-    """Parse AI response into list of fact dicts."""
+    """Parse AI response into list of fact dicts with 'sentence' key."""
     try:
         data = json.loads(response_text)
-        return data.get("facts", [])  # type: ignore[no-any-return]
+        raw = data.get("facts", [])
+        results: list[dict[str, Any]] = []
+        for item in raw:
+            if isinstance(item, str):
+                results.append({"sentence": item, "metadata_tags": []})
+            elif isinstance(item, dict):
+                if "sentence" not in item and len(item) == 1:
+                    # Handle {"fact": "text"} variants
+                    item["sentence"] = next(iter(item.values()))
+                results.append(item)
+        return results
     except json.JSONDecodeError:
         return []
 
@@ -214,22 +214,19 @@ def _extract_facts_from_document(
     chunks = _chunk_text(text)
     _publish_progress(session_uid_str, f"Split into {len(chunks)} chunks", 20)
 
+    system_prompt, user_template = _get_extraction_prompts()
+
     all_facts: list[dict[str, Any]] = []
     for i, chunk in enumerate(chunks):
-        user_msg = EXTRACTOR_USER_TEMPLATE.format(max_facts=max_facts, chunk_text=chunk)
+        user_msg = user_template.format(max_facts=max_facts, chunk_text=chunk)
         response = _call_ai(
-            plaintext_key,
-            provider,
-            model,
-            [
-                {"role": "system", "content": EXTRACTION_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
+            plaintext_key, provider, model,
+            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_msg}],
         )
         facts = _parse_extracted_facts(response)
         all_facts.extend(facts)
         pct = 10 + (70 * (i + 1) / len(chunks))
-        _publish_progress(session_uid_str, f"Extracted from chunk {i + 1}/{len(chunks)}", pct)
+        _publish_progress(session_uid_str, f"Extracting atomic facts... chunk {i + 1}/{len(chunks)}", pct)
 
     return all_facts
 
@@ -248,22 +245,19 @@ def _extract_facts_from_text(
     chunks = _chunk_text(source_text)
     _publish_progress(session_uid_str, f"Split into {len(chunks)} chunks", 20)
 
+    system_prompt, user_template = _get_extraction_prompts()
+
     all_facts: list[dict[str, Any]] = []
     for i, chunk in enumerate(chunks):
-        user_msg = EXTRACTOR_USER_TEMPLATE.format(max_facts=max_facts, chunk_text=chunk)
+        user_msg = user_template.format(max_facts=max_facts, chunk_text=chunk)
         response = _call_ai(
-            plaintext_key,
-            provider,
-            model,
-            [
-                {"role": "system", "content": EXTRACTION_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
+            plaintext_key, provider, model,
+            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_msg}],
         )
         facts = _parse_extracted_facts(response)
         all_facts.extend(facts)
         pct = 10 + (70 * (i + 1) / len(chunks))
-        _publish_progress(session_uid_str, f"Extracted from chunk {i + 1}/{len(chunks)}", pct)
+        _publish_progress(session_uid_str, f"Extracting atomic facts... chunk {i + 1}/{len(chunks)}", pct)
 
     return all_facts
 

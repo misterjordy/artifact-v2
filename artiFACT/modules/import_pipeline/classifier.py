@@ -8,10 +8,7 @@ import structlog
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.modules.import_pipeline.prompts import (
-    CLASSIFIER_SYSTEM_PROMPT,
-    CLASSIFIER_USER_TEMPLATE,
-)
+from artiFACT.modules.import_pipeline.prompts import load_skill
 
 log = structlog.get_logger()
 
@@ -24,8 +21,8 @@ async def build_taxonomy_index(
 ) -> tuple[str, dict[int, str]]:
     """Build integer-indexed taxonomy string and mapping dict.
 
-    Uses a recursive CTE to get all descendant nodes under the program node.
-    Numbers them sequentially. Saves ~2,700 tokens per classifier call vs UUIDs.
+    Uses a recursive CTE with tree-walk ordering (depth-first).
+    Numbers nodes sequentially. Saves ~2,700 tokens per call vs UUIDs.
     """
     rows = (
         await db.execute(
@@ -71,28 +68,23 @@ async def classify_batch(
 ) -> list[dict]:
     """Classify up to 8 facts at once against the taxonomy.
 
-    Sends one AI call with all facts + taxonomy. Maps integer IDs back to UUIDs.
+    Uses nodesort skill. Response format: {"a":[[fact#,node#,confidence],...]}
     """
+    system_prompt, user_template = load_skill("nodesort")
+
     numbered_facts = "\n".join(f"{i + 1}. {fact}" for i, fact in enumerate(facts))
 
     constraint_hint = ""
     if constraint_node_uids:
-        # Build hint from constraint nodes and their descendants
         reverse_map = {v: k for k, v in id_mapping.items()}
-        hint_parts: list[str] = []
-        for uid_str in constraint_node_uids:
-            int_id = reverse_map.get(uid_str)
-            if int_id is not None:
-                hint_parts.append(str(int_id))
+        hint_parts = [str(reverse_map[u]) for u in constraint_node_uids if u in reverse_map]
         if hint_parts:
             constraint_hint = (
-                f"\nCONSTRAINT: The user selected nodes {', '.join(hint_parts)} "
-                "and their children as the target area. STRONGLY prefer these nodes "
-                "and their descendants. Only use nodes outside this subtree if "
-                "no constrained node fits at all."
+                f"\nCONSTRAINT: STRONGLY prefer nodes {', '.join(hint_parts)} "
+                "and their children. Only go outside if nothing fits."
             )
 
-    user_msg = CLASSIFIER_USER_TEMPLATE.format(
+    user_msg = user_template.format(
         numbered_facts=numbered_facts,
         taxonomy_text=taxonomy_text,
         constraint_hint=constraint_hint,
@@ -108,7 +100,7 @@ async def classify_batch(
             json={
                 "model": AI_MODEL,
                 "messages": [
-                    {"role": "system", "content": CLASSIFIER_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg},
                 ],
                 "max_tokens": 4096,
@@ -120,12 +112,16 @@ async def classify_batch(
     content = resp.json()["choices"][0]["message"]["content"]
     data = json.loads(content)
 
+    # Parse v1-style compact format: {"a":[[fact#, node#, confidence], ...]}
+    assignments = data.get("a", [])
+
     results: list[dict] = []
     for i, fact in enumerate(facts):
         fact_num = i + 1
-        fact_result = _find_fact_result(data.get("results", []), fact_num)
+        # Find all assignments for this fact number
+        matches = [a for a in assignments if len(a) >= 2 and a[0] == fact_num]
 
-        if not fact_result or not fact_result.get("nodes"):
+        if not matches:
             results.append({
                 "sentence": fact,
                 "suggested_node_uid": None,
@@ -134,36 +130,18 @@ async def classify_batch(
             })
             continue
 
-        nodes = fact_result["nodes"]
-        top = nodes[0]
-        top_uid = id_mapping.get(top["id"])
-
-        alternatives = []
-        for alt in nodes[1:3]:
-            alt_uid = id_mapping.get(alt["id"])
-            if alt_uid:
-                alternatives.append({
-                    "node_uid": alt_uid,
-                    "confidence": alt.get("confidence", 0),
-                    "reason": alt.get("reason", ""),
-                })
+        top = matches[0]
+        top_uid = id_mapping.get(top[1])
+        top_conf = top[2] if len(top) > 2 else 0.8
 
         results.append({
             "sentence": fact,
             "suggested_node_uid": top_uid,
-            "node_confidence": top.get("confidence", 0),
-            "node_alternatives": alternatives,
+            "node_confidence": top_conf,
+            "node_alternatives": [],
         })
 
     return results
-
-
-def _find_fact_result(results: list[dict], fact_num: int) -> dict | None:
-    """Find the result entry for a given fact number."""
-    for r in results:
-        if r.get("fact") == fact_num:
-            return r
-    return None
 
 
 async def classify_all(

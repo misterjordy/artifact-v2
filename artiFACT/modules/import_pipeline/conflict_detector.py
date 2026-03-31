@@ -1,4 +1,4 @@
-"""AI-powered duplicate + conflict detection (D/C/X) — Jaccard 0.2-0.85 range."""
+"""AI-powered duplicate + conflict detection (D/C/X) — uses finddup skill."""
 
 import json
 from collections.abc import Callable
@@ -8,10 +8,7 @@ import httpx
 import structlog
 
 from artiFACT.kernel.models import FcImportStagedFact
-from artiFACT.modules.import_pipeline.prompts import (
-    CONFLICT_SYSTEM_PROMPT,
-    CONFLICT_USER_TEMPLATE,
-)
+from artiFACT.modules.import_pipeline.prompts import load_skill
 
 log = structlog.get_logger()
 
@@ -25,12 +22,10 @@ async def detect_conflicts(
     jaccard_fn: Callable[[set[str], set[str]], float],
     tokenize_fn: Callable[[str], set[str]],
 ) -> list[dict]:
-    """Detect duplicates AND contradictions between staged and existing facts.
+    """Detect duplicates AND contradictions using finddup skill.
 
-    Checks pairs with Jaccard similarity between 0.2 and 0.85.
-    Above 0.85 = exact duplicate (flagged mechanically). Below 0.2 = too different.
-    Uses AI D/C/X classification for the middle range.
-    Returns list of dicts with type='duplicate' or type='conflict'.
+    Checks pairs with Jaccard 0.2-0.85. Uses v1-style D/C/X classification.
+    Batches multiple new facts with their candidates in one AI call.
     """
     existing_tokenized = [
         (sentence, version_uid, tokenize_fn(sentence))
@@ -51,11 +46,10 @@ async def detect_conflicts(
         if not candidates:
             continue
 
-        # Take top 5 by similarity
         candidates.sort(key=lambda c: c[2], reverse=True)
         candidates = candidates[:5]
 
-        match = await _check_dcx_batch(
+        match = await _check_dcx(
             staged.display_sentence,
             [(s, uid) for s, uid, _ in candidates],
             ai_key,
@@ -72,20 +66,20 @@ async def detect_conflicts(
     return results
 
 
-async def _check_dcx_batch(
+async def _check_dcx(
     new_fact: str,
     candidates: list[tuple[str, UUID]],
     ai_key: str,
 ) -> dict | None:
-    """Ask AI to classify each candidate as D (duplicate), C (conflict), or X."""
-    numbered_existing = "\n".join(
-        f"{i + 1}. {sentence}" for i, (sentence, _) in enumerate(candidates)
-    )
+    """Ask AI to classify candidates as D/C/X using finddup skill."""
+    system_prompt, user_template = load_skill("finddup")
 
-    user_msg = CONFLICT_USER_TEMPLATE.format(
-        new_fact=new_fact,
-        numbered_existing=numbered_existing,
-    )
+    # Build v1-style comparison block
+    lines: list[str] = [f"N1: {new_fact}"]
+    for i, (sentence, _) in enumerate(candidates):
+        lines.append(f"e{i + 1}: {sentence}")
+
+    user_msg = user_template.format(comparisons="\n".join(lines))
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
@@ -97,7 +91,7 @@ async def _check_dcx_batch(
             json={
                 "model": AI_MODEL,
                 "messages": [
-                    {"role": "system", "content": CONFLICT_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg},
                 ],
                 "max_tokens": 2048,
@@ -109,12 +103,14 @@ async def _check_dcx_batch(
     content = resp.json()["choices"][0]["message"]["content"]
     data = json.loads(content)
 
-    # Find first D or C result
-    for entry in data.get("results", []):
-        entry_type = entry.get("type", "X").upper()
+    # Parse v1-style: {"r":[{"n":1,"t":"D|C|X","e":"e1","reason":"..."},...]}
+    for entry in data.get("r", data.get("results", [])):
+        entry_type = entry.get("t", entry.get("type", "X")).upper()
         if entry_type in ("D", "C"):
-            idx = entry.get("existing", 1) - 1
-            if 0 <= idx < len(candidates):
+            # Extract candidate index from e field ("e1" -> 0, "e2" -> 1, etc.)
+            e_val = str(entry.get("e", "e1"))
+            idx = _parse_candidate_idx(e_val, len(candidates))
+            if idx is not None and 0 <= idx < len(candidates):
                 return {
                     "type": "duplicate" if entry_type == "D" else "conflict",
                     "version_uid": candidates[idx][1],
@@ -122,3 +118,13 @@ async def _check_dcx_batch(
                 }
 
     return None
+
+
+def _parse_candidate_idx(e_val: str, num_candidates: int) -> int | None:
+    """Parse candidate index from e field: 'e1'->0, 'e2'->1, '1'->0, etc."""
+    cleaned = e_val.replace("e", "").strip()
+    try:
+        idx = int(cleaned) - 1
+        return idx if 0 <= idx < num_candidates else None
+    except (ValueError, TypeError):
+        return None

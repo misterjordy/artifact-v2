@@ -329,33 +329,22 @@ async def test_classifier_batches_8_facts():
 
     call_count = 0
 
-    def _make_response(batch_facts: list[str]) -> dict:
+    def _make_response(batch_size: int) -> dict:
         nonlocal call_count
         call_count += 1
-        results = []
-        for i in range(len(batch_facts)):
-            results.append({
-                "fact": i + 1,
-                "nodes": [
-                    {"id": 1, "confidence": 0.9, "reason": "top match"},
-                    {"id": 2, "confidence": 0.7, "reason": "alt 1"},
-                    {"id": 3, "confidence": 0.5, "reason": "alt 2"},
-                ],
-            })
-        return {"results": results}
+        return {"a": [[i + 1, 1, 0.9] for i in range(batch_size)]}
 
     async def _mock_post(self, url, **kwargs):
         msgs = kwargs.get("json", {}).get("messages", [])
         user_msg = msgs[-1]["content"] if msgs else ""
-        # Count facts in user message
-        fact_lines = [l for l in user_msg.split("\n") if l.strip().startswith(("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8."))]
+        fact_lines = [l for l in user_msg.split("\n") if l.strip()[:2].rstrip(".") .isdigit()]
         batch_size = max(len(fact_lines), 1)
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps(_make_response(facts[:batch_size]))}}]
+            "choices": [{"message": {"content": json.dumps(_make_response(batch_size))}}]
         }
         return mock_resp
 
@@ -398,16 +387,7 @@ async def test_classifier_top1_becomes_suggested_node():
     node_uid_3 = str(uuid.uuid4())
     id_mapping = {1: node_uid_1, 2: node_uid_2, 3: node_uid_3}
 
-    mock_response = {
-        "results": [{
-            "fact": 1,
-            "nodes": [
-                {"id": 1, "confidence": 0.92, "reason": "best match"},
-                {"id": 2, "confidence": 0.78, "reason": "second"},
-                {"id": 3, "confidence": 0.65, "reason": "third"},
-            ],
-        }]
-    }
+    mock_response = {"a": [[1, 1, 0.92]]}
 
     async def _mock_post(self, url, **kwargs):
         mock_resp = MagicMock()
@@ -428,22 +408,13 @@ async def test_classifier_top1_becomes_suggested_node():
 
 
 @pytest.mark.asyncio
-async def test_classifier_ranks_2_3_in_alternatives():
-    """Ranks 2-3 from classifier go into node_alternatives."""
+async def test_classifier_assigns_single_node_per_fact():
+    """Compact format assigns one node per fact with confidence."""
     from artiFACT.modules.import_pipeline.classifier import classify_batch
 
     uids = {i: str(uuid.uuid4()) for i in range(1, 4)}
 
-    mock_response = {
-        "results": [{
-            "fact": 1,
-            "nodes": [
-                {"id": 1, "confidence": 0.92, "reason": "top"},
-                {"id": 2, "confidence": 0.78, "reason": "second best"},
-                {"id": 3, "confidence": 0.65, "reason": "third option"},
-            ],
-        }]
-    }
+    mock_response = {"a": [[1, 2, 0.88]]}
 
     async def _mock_post(self, url, **kwargs):
         mock_resp = MagicMock()
@@ -458,12 +429,8 @@ async def test_classifier_ranks_2_3_in_alternatives():
             ["Test fact."], "1 A\n2 B\n3 C", uids, "fake-key"
         )
 
-    alts = results[0]["node_alternatives"]
-    assert len(alts) == 2
-    assert alts[0]["node_uid"] == uids[2]
-    assert alts[0]["confidence"] == 0.78
-    assert alts[0]["reason"] == "second best"
-    assert alts[1]["node_uid"] == uids[3]
+    assert results[0]["suggested_node_uid"] == uids[2]
+    assert results[0]["node_confidence"] == 0.88
 
 
 @pytest.mark.asyncio
@@ -482,7 +449,7 @@ async def test_node_constraint_appears_in_classifier_prompt():
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps({"results": [{"fact": 1, "nodes": [{"id": 1, "confidence": 0.9, "reason": "match"}]}]})}}]
+            "choices": [{"message": {"content": json.dumps({"a": [[1, 1, 0.9]]})}}]
         }
         return mock_resp
 
@@ -550,7 +517,7 @@ async def test_conflict_only_jaccard_03_to_085():
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps({"results": []})}}]
+            "choices": [{"message": {"content": json.dumps({"r": [{"n": 1, "t": "X", "e": "e1", "reason": "different topic"}]})}}]
         }
         return mock_resp
 
@@ -585,7 +552,7 @@ async def test_conflict_detected_sets_fields():
     ]
 
     mock_ai_response = {
-        "results": [{"existing": 1, "type": "C", "reason": "Incompatible MW values"}]
+        "r": [{"n": 1, "t": "C", "e": "e1", "reason": "Incompatible MW values"}]
     }
 
     async def _mock_post(self, url, **kwargs):
