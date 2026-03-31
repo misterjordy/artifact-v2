@@ -108,33 +108,25 @@ function importApp() {
 
     // === Computed ===
 
-    // Token estimate (updated async when program + text change)
-    _tokenEstimate: 0,
-    _tokenEstimatePending: false,
+    // Token estimate — server provides taxonomy/corpus size once,
+    // then all per-keystroke math is pure client-side algebra.
+    _serverNodeCount: 0,
+    _serverFactCount: 0,
+    _serverProgram: "",
 
     get estimatedTokens() {
-      // Trigger async estimate when inputs change
       var chars = this.activeTab === "paste" ? this.pasteText.length : 0;
-      if (chars > 500 && this.programNodeUid && !this._tokenEstimatePending) {
-        this._fetchTokenEstimate(chars);
-      }
-      return this._tokenEstimate || Math.round(1500 + chars * 0.5); // fallback
-    },
-
-    async _fetchTokenEstimate(chars) {
-      this._tokenEstimatePending = true;
-      try {
-        var resp = await fetch(
-          "/api/v1/import/estimate-tokens?program_node_uid=" +
-          this.programNodeUid + "&char_count=" + chars
-        );
-        if (resp.ok) {
-          var data = await resp.json();
-          this._tokenEstimate = data.estimated_tokens;
-        }
-      } catch (e) { /* fallback to simple model */ }
-      var self = this;
-      setTimeout(function() { self._tokenEstimatePending = false; }, 3000);
+      if (!chars) return 0;
+      var nodes = this._serverNodeCount || 76;
+      var facts = this._serverFactCount || 200;
+      var chunks = Math.max(1, Math.ceil(chars / 3000));
+      var taxonomy = nodes * 8;
+      var estFacts = Math.max(5, Math.round(chars / 120));
+      var extract = chunks * (400 + Math.round(Math.min(chars, 3000) * 0.25) + 100);
+      var nodesort = chunks * (30 + taxonomy + estFacts * 7);
+      var finddupBatches = Math.max(1, Math.ceil((estFacts + 5) / 6));
+      var finddup = finddupBatches * (150 + Math.min(facts, 25) * 12 + 120);
+      return Math.round(extract + nodesort + finddup);
     },
 
     get canStart() {
@@ -499,7 +491,21 @@ function importApp() {
       if (uid) {
         this.programNodeUid = uid;
         this.programNodeTitle = title || uid;
+        this._fetchProgramStats(uid);
       }
+    },
+
+    async _fetchProgramStats(uid) {
+      if (this._serverProgram === uid) return;
+      try {
+        var resp = await fetch("/api/v1/import/estimate-tokens?program_node_uid=" + uid + "&char_count=100");
+        if (resp.ok) {
+          var data = await resp.json();
+          this._serverNodeCount = data.node_count;
+          this._serverFactCount = data.fact_count;
+          this._serverProgram = uid;
+        }
+      } catch (e) { /* use defaults */ }
     },
 
     handleConstraintDrop(event) {
