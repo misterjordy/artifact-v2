@@ -13,7 +13,22 @@ function importSearch() {
     results: [],
     hasResults: false,
     noProgramHint: false,
+    programReady: false,
     _pending: false,
+
+    init() {
+      // Poll for program selection (cross x-data reactivity workaround)
+      var self = this;
+      setInterval(function () {
+        self.programReady = self._checkProgram();
+      }, 500);
+    },
+
+    _checkProgram() {
+      var importRoot = document.getElementById("import-root");
+      var appData = importRoot ? Alpine.$data(importRoot) : null;
+      return !!(appData && appData.programNodeUid);
+    },
 
     get modeLabel() {
       return this.mode === "nodes" ? "nodes" : this.mode === "facts" ? "facts" : "nodes and facts";
@@ -23,14 +38,8 @@ function importSearch() {
       return this.mode === "nodes" ? "N" : this.mode === "facts" ? "F" : "NF";
     },
 
-    hasProgramSelected() {
-      var importRoot = document.getElementById("import-root");
-      var appData = importRoot ? Alpine.$data(importRoot) : null;
-      return !!(appData && appData.programNodeUid);
-    },
-
     showNoProgramHint() {
-      if (!this.hasProgramSelected()) {
+      if (!this.programReady) {
         this.noProgramHint = true;
         var self = this;
         setTimeout(function () { self.noProgramHint = false; }, 3000);
