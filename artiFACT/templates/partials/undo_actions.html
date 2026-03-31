@@ -111,9 +111,8 @@
             </button>
           {% endif %}
         {% else %}
-          <span class="text-xs text-[var(--color-text-muted)] cursor-default"
-                title="{{ action.lock_reason or 'Not undoable' }}">
-            &#128274;
+          <span class="cursor-default" title="{{ action.lock_reason or 'Not undoable' }}">
+            <svg class="w-4 h-4 text-[var(--color-text-muted)]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/></svg>
           </span>
         {% endif %}
       </div>
@@ -137,8 +136,9 @@
             Undo
           </button>
           {% else %}
-          <span class="text-2xs text-[var(--color-text-muted)] flex-shrink-0 ml-2"
-                title="{{ sub.lock_reason or 'Not undoable' }}">&#128274;</span>
+          <span class="flex-shrink-0 ml-2" title="{{ sub.lock_reason or 'Not undoable' }}">
+            <svg class="w-3.5 h-3.5 text-[var(--color-text-muted)]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/></svg>
+          </span>
           {% endif %}
         </div>
         {% endfor %}
