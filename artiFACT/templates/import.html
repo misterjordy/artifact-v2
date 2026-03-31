@@ -195,29 +195,44 @@
   <!-- ═══ PROGRESS STEP ═══ -->
   <div x-show="step === 'analyzing'" class="flex-1 flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
-      <!-- Animated puzzle pieces: atomicfact → nodesort → finddup -->
-      <svg viewBox="0 0 300 120" class="w-64 mx-auto mb-6" xmlns="http://www.w3.org/2000/svg">
-        <!-- Piece 1: atomicfact (left) -->
+      <!-- Animated interlocking puzzle pieces: atomicFact → nodeSort → findDup -->
+      <svg viewBox="0 0 330 130" style="width:20vw;min-width:200px" class="mx-auto mb-6" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Piece 1: left piece — tab right, socket bottom -->
+          <clipPath id="pz1">
+            <path d="M0 0 h80 v30 c0 0 4 0 4 4 a10 10 0 0 1 0 20 c0 4 -4 4 -4 4 v30 h-30 c0 0 0 4 -4 4 a10 10 0 0 1 -20 0 c-4 0 -4 -4 -4 -4 h-22 z"/>
+          </clipPath>
+          <!-- Piece 2: center — socket left, tab right, tab bottom -->
+          <clipPath id="pz2">
+            <path d="M0 0 h88 v30 c0 0 4 0 4 4 a10 10 0 0 1 0 20 c0 4 -4 4 -4 4 v30 h-30 c0 0 0 4 -4 4 a10 10 0 0 0 -20 0 c-4 0 -4 -4 -4 -4 h-30 v-30 c0 0 -4 0 -4 -4 a10 10 0 0 1 0 -20 c0 -4 4 -4 4 -4 z"/>
+          </clipPath>
+          <!-- Piece 3: right — socket left, socket bottom -->
+          <clipPath id="pz3">
+            <path d="M0 0 h80 v88 h-30 c0 0 0 4 -4 4 a10 10 0 0 1 -20 0 c-4 0 -4 -4 -4 -4 h-22 v-30 c0 0 -4 0 -4 -4 a10 10 0 0 1 0 -20 c0 -4 4 -4 4 -4 z"/>
+          </clipPath>
+        </defs>
+        <!-- Piece 1: atomicFact -->
         <g class="import-puzzle-piece import-puzzle-1">
-          <rect x="10" y="30" width="70" height="55" rx="6" fill="var(--color-accent)" opacity="0.85"/>
-          <path d="M80 45 q10 0 10 12 q0 12 -10 12" fill="var(--color-accent)" opacity="0.85"/>
-          <text x="45" y="55" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">atomic</text>
-          <text x="45" y="65" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">Fact</text>
+          <rect x="10" y="10" width="88" height="108" rx="0" fill="var(--color-accent)" clip-path="url(#pz1)" opacity="0.9"/>
+          <text x="45" y="52" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="9" font-weight="700">atomic</text>
+          <text x="45" y="64" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="9" font-weight="700">Fact</text>
         </g>
-        <!-- Piece 2: nodesort (center) -->
+        <!-- Piece 2: nodeSort -->
         <g class="import-puzzle-piece import-puzzle-2">
-          <rect x="100" y="30" width="70" height="55" rx="6" fill="var(--color-accent)" opacity="0.7"/>
-          <path d="M100 45 q-10 0 -10 12 q0 12 10 12" fill="var(--color-accent)" opacity="0.7"/>
-          <path d="M170 45 q10 0 10 12 q0 12 -10 12" fill="var(--color-accent)" opacity="0.7"/>
-          <text x="135" y="55" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">node</text>
-          <text x="135" y="65" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">Sort</text>
+          <rect x="108" y="10" width="108" height="108" rx="0" fill="var(--color-accent)" clip-path="url(#pz2)" opacity="0.75" transform="translate(108,10)"/>
+          <g transform="translate(118,10)">
+            <rect width="88" height="108" fill="var(--color-accent)" clip-path="url(#pz2)" opacity="0.75"/>
+          </g>
+          <text x="162" y="52" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="9" font-weight="700">node</text>
+          <text x="162" y="64" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="9" font-weight="700">Sort</text>
         </g>
-        <!-- Piece 3: finddup (right) -->
+        <!-- Piece 3: findDup -->
         <g class="import-puzzle-piece import-puzzle-3">
-          <rect x="190" y="30" width="70" height="55" rx="6" fill="var(--color-accent)" opacity="0.55"/>
-          <path d="M190 45 q-10 0 -10 12 q0 12 10 12" fill="var(--color-accent)" opacity="0.55"/>
-          <text x="225" y="55" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">find</text>
-          <text x="225" y="65" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="7" font-weight="600">Dup</text>
+          <g transform="translate(226,10)">
+            <rect width="88" height="108" fill="var(--color-accent)" clip-path="url(#pz3)" opacity="0.6"/>
+          </g>
+          <text x="270" y="52" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="9" font-weight="700">find</text>
+          <text x="270" y="64" text-anchor="middle" fill="var(--color-text-on-accent)" font-size="9" font-weight="700">Dup</text>
         </g>
       </svg>
 
