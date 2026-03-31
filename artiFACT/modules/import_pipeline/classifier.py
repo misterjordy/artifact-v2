@@ -189,9 +189,9 @@ async def classify_all(
     id_mapping: dict[int, str],
     ai_key: str,
     constraint_node_uids: list[str] | None = None,
-    batch_size: int = 8,
+    batch_size: int = 25,
 ) -> list[dict]:
-    """Classify all facts in batches of batch_size."""
+    """Classify all facts in batches (default 25 = one call for most imports)."""
     results: list[dict] = []
     for i in range(0, len(facts), batch_size):
         batch = facts[i : i + batch_size]

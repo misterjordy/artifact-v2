@@ -351,7 +351,7 @@ async def test_classifier_batches_8_facts():
     with patch("httpx.AsyncClient.post", new=_mock_post):
         results = await classify_all(facts, taxonomy_text, id_mapping, "fake-key")
 
-    assert call_count == 3  # 8 + 8 + 4
+    assert call_count == 1  # all 20 in one batch (default batch_size=25)
     assert len(results) == 20
 
 
