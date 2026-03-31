@@ -23,6 +23,7 @@ class SessionOut(BaseModel):
     effective_date: date
     status: str
     error_message: str | None = None
+    input_type: str = "document"
     created_at: datetime
     completed_at: datetime | None = None
 
@@ -61,3 +62,38 @@ class RecommendLocationRequest(BaseModel):
 
 class RecommendLocationOut(BaseModel):
     recommendations: list[dict[str, Any]]
+
+
+# --- New schemas for import pipeline v2 ---
+
+
+class PasteImportRequest(BaseModel):
+    text: str = Field(..., min_length=10, max_length=100_000)
+    program_node_uid: UUID
+    effective_date: date
+    granularity: str = Field(default="standard")
+    constraint_node_uids: list[UUID] | None = None
+
+
+class StagedFactOut(BaseModel):
+    staged_fact_uid: UUID
+    display_sentence: str
+    suggested_node_uid: UUID | None
+    node_confidence: float | None
+    node_alternatives: list[dict[str, Any]]
+    status: str
+    duplicate_of_uid: UUID | None
+    similarity_score: float | None
+    conflict_with_uid: UUID | None
+    conflict_reason: str | None
+    resolution: str | None
+    source_chunk_index: int | None
+
+    model_config = {"from_attributes": True}
+
+
+class StagedFactUpdate(BaseModel):
+    suggested_node_uid: UUID | None = None
+    display_sentence: str | None = None
+    status: str | None = None
+    resolution: str | None = None

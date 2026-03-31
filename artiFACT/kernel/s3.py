@@ -47,3 +47,9 @@ def upload_json(key: str, data: str) -> None:
 def download_json(key: str) -> str:
     """Download JSON string from S3."""
     return download_bytes(key).decode("utf-8")
+
+
+def delete_object(key: str) -> None:
+    """Delete an object from S3."""
+    client = get_s3_client()
+    client.delete_object(Bucket=settings.S3_BUCKET, Key=key)

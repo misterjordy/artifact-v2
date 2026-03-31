@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     Computed,
     DateTime,
+    Float,
     ForeignKey,
     Identity,
     Index,
@@ -407,6 +408,9 @@ class FcImportSession(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    constraint_node_uids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    input_type: Mapped[str] = mapped_column(String(10), nullable=False, default="document")
 
     __table_args__ = (
         CheckConstraint(
@@ -414,11 +418,64 @@ class FcImportSession(Base):
             name="ck_import_granularity",
         ),
         CheckConstraint(
-            "status IN ('pending','analyzing','staged','proposed','approved','rejected','failed')",
+            "status IN ('pending','analyzing','staged','proposed','approved','rejected','failed','discarded')",
             name="ck_import_status",
+        ),
+        CheckConstraint(
+            "input_type IN ('document','text')",
+            name="ck_import_input_type",
         ),
         Index("idx_import_program", "program_node_uid"),
         Index("idx_import_hash", "source_hash"),
+    )
+
+
+class FcImportStagedFact(Base):
+    __tablename__ = "fc_import_staged_fact"
+
+    staged_fact_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("fc_import_session.session_uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    display_sentence: Mapped[str] = mapped_column(Text, nullable=False)
+    suggested_node_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_node.node_uid"), nullable=True
+    )
+    node_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    node_alternatives: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    duplicate_of_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_fact_version.version_uid"), nullable=True
+    )
+    similarity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conflict_with_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_fact_version.version_uid"), nullable=True
+    )
+    conflict_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    original_sentence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_chunk_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    metadata_tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','accepted','rejected','duplicate','conflict','orphaned')",
+            name="ck_staged_fact_status",
+        ),
+        CheckConstraint(
+            "resolution IS NULL OR resolution IN "
+            "('keep_new','keep_existing','keep_both','edited','deleted')",
+            name="ck_staged_fact_resolution",
+        ),
+        Index("idx_staged_fact_session", "session_uid"),
     )
 
 
