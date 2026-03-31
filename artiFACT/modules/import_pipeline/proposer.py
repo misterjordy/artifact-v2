@@ -28,6 +28,14 @@ def make_import_tag() -> str:
     return f"#import{now.strftime('%Y%m%d%H%M%S')}"
 
 
+def _effective_date_str(session: FcImportSession) -> str:
+    """Format effective_date as YYYY-MM-DD string regardless of column type."""
+    d = session.effective_date
+    if hasattr(d, "strftime"):
+        return d.strftime("%Y-%m-%d")
+    return str(d)[:10]
+
+
 def _source_name(session: FcImportSession) -> str:
     """Human-readable source name for import comments."""
     if session.input_type == "text":
@@ -154,7 +162,7 @@ async def _propose_new_fact(
         sentence=sf.display_sentence,
         actor=actor,
         metadata_tags=sf.metadata_tags or [],
-        effective_date=str(session.effective_date),
+        effective_date=_effective_date_str(session),
         classification="UNCLASSIFIED",
         auto_approve=False,
     )
@@ -194,7 +202,7 @@ async def _propose_keep_new(
         sentence=sf.display_sentence,
         actor=actor,
         metadata_tags=sf.metadata_tags or [],
-        effective_date=str(session.effective_date),
+        effective_date=_effective_date_str(session),
         classification="UNCLASSIFIED",
         change_summary=change_summary,
         auto_approve=False,
