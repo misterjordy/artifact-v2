@@ -106,20 +106,33 @@ async def estimate_tokens(
     )
     fact_count = fact_count_row.scalar_one()
 
-    # Model: fixed_prompt_overhead + taxonomy_tokens + input_text + output_estimate
-    # Taxonomy: ~8 tokens per node (number + indent + title)
-    # Fixed: ~400t (atomicfact system) + ~150t (finddup system) = 550t
-    # Input text: chars * 0.25 (tokens per char)
-    # Output estimate: ~15t per extracted fact, ~5t per nodesort assignment
-    # Finddup: candidates scale with fact_count but capped by Jaccard filtering
+    # Model calibrated from real runs:
+    #   550c artiFACT (76 nodes, 545 facts) = 2,392t actual
+    #   1485c Boatwing (120 nodes, ~300 facts) = 2,037t actual
+    #   4400c Boatwing (120 nodes, ~300 facts) = 8,623t actual
+    #
+    # Key cost drivers:
+    # 1. Chunks: text >3000c splits into N chunks, each gets extract + nodesort call
+    # 2. Each nodesort call carries the full taxonomy (~8t per node)
+    # 3. Each finddup batch carries candidates (~600-800t per batch)
+    # 4. Extract system prompt: ~400t per chunk call
+    chunks = max(1, (char_count + 2999) // 3000)
     taxonomy_tokens = node_count * 8
-    input_tokens = round(char_count * 0.25)
-    estimated_facts = max(5, round(char_count / 150))  # ~1 fact per 150 chars
-    extract_output = estimated_facts * 12
-    nodesort_cost = taxonomy_tokens + estimated_facts * 5
-    finddup_cost = min(fact_count * 3, 800) + estimated_facts * 20
+    estimated_facts = max(5, round(char_count / 120))
 
-    total = 550 + taxonomy_tokens + input_tokens + extract_output + nodesort_cost + finddup_cost
+    # Per-chunk costs (repeated per chunk)
+    extract_per_chunk = 400 + round(min(char_count, 3000) * 0.25) + 100  # system + input + output
+    nodesort_per_chunk = 30 + taxonomy_tokens + estimated_facts * 7  # system + taxonomy + output
+
+    # finddup: ~1 batch per 6 facts, each batch ~600t
+    finddup_batches = max(1, (estimated_facts + 5) // 6)
+    finddup_per_batch = 150 + min(fact_count, 25) * 12 + 120  # system + candidates + output
+
+    total = (
+        chunks * extract_per_chunk
+        + chunks * nodesort_per_chunk
+        + finddup_batches * finddup_per_batch
+    )
     return {"estimated_tokens": total, "node_count": node_count, "fact_count": fact_count}
 
 
