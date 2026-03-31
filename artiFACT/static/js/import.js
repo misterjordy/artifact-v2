@@ -12,6 +12,7 @@ function importSearch() {
     mode: "both",       // "nodes" | "facts" | "both"
     results: [],
     hasResults: false,
+    noProgramHint: false,
     _pending: false,
 
     get modeLabel() {
@@ -20,6 +21,20 @@ function importSearch() {
 
     get modeIcon() {
       return this.mode === "nodes" ? "N" : this.mode === "facts" ? "F" : "NF";
+    },
+
+    hasProgramSelected() {
+      var importRoot = document.getElementById("import-root");
+      var appData = importRoot ? Alpine.$data(importRoot) : null;
+      return !!(appData && appData.programNodeUid);
+    },
+
+    showNoProgramHint() {
+      if (!this.hasProgramSelected()) {
+        this.noProgramHint = true;
+        var self = this;
+        setTimeout(function () { self.noProgramHint = false; }, 3000);
+      }
     },
 
     cycleMode() {
