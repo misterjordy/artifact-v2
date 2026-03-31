@@ -17,17 +17,11 @@ function importSearch() {
     _pending: false,
 
     init() {
-      // Poll for program selection (cross x-data reactivity workaround)
+      // Listen for program selection event from the import app
       var self = this;
-      setInterval(function () {
-        self.programReady = self._checkProgram();
-      }, 500);
-    },
-
-    _checkProgram() {
-      var importRoot = document.getElementById("import-root");
-      var appData = importRoot ? Alpine.$data(importRoot) : null;
-      return !!(appData && appData.programNodeUid);
+      window.addEventListener("import-program-changed", function (e) {
+        self.programReady = !!e.detail.uid;
+      });
     },
 
     get modeLabel() {
@@ -583,6 +577,7 @@ function importApp() {
         this.programNodeUid = uid;
         this.programNodeTitle = title || uid;
         this._fetchProgramStats(uid);
+        window.dispatchEvent(new CustomEvent("import-program-changed", { detail: { uid: uid } }));
       }
     },
 
