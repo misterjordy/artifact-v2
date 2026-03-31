@@ -67,6 +67,62 @@ async def upload_document(
     return SessionOut.model_validate(session)
 
 
+@router.get("/estimate-tokens")
+async def estimate_tokens(
+    program_node_uid: UUID,
+    char_count: int,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Estimate total pipeline token cost for an import."""
+    from sqlalchemy import text as sa_text, func as sa_func
+
+    # Count taxonomy nodes under this program
+    node_count_row = await db.execute(
+        sa_text(
+            "WITH RECURSIVE tree AS ("
+            "  SELECT node_uid FROM fc_node WHERE node_uid = :uid"
+            "  UNION ALL"
+            "  SELECT n.node_uid FROM fc_node n JOIN tree t ON n.parent_node_uid = t.node_uid"
+            ") SELECT count(*) FROM tree"
+        ),
+        {"uid": str(program_node_uid)},
+    )
+    node_count = node_count_row.scalar_one()
+
+    # Count existing facts under this program (drives finddup candidate pool)
+    fact_count_row = await db.execute(
+        sa_text(
+            "WITH RECURSIVE tree AS ("
+            "  SELECT node_uid FROM fc_node WHERE node_uid = :uid"
+            "  UNION ALL"
+            "  SELECT n.node_uid FROM fc_node n JOIN tree t ON n.parent_node_uid = t.node_uid"
+            ") SELECT count(*) FROM fc_fact_version fv"
+            " JOIN fc_fact f ON fv.fact_uid = f.fact_uid"
+            " JOIN tree t ON f.node_uid = t.node_uid"
+            " WHERE f.is_retired = false"
+        ),
+        {"uid": str(program_node_uid)},
+    )
+    fact_count = fact_count_row.scalar_one()
+
+    # Model: fixed_prompt_overhead + taxonomy_tokens + input_text + output_estimate
+    # Taxonomy: ~8 tokens per node (number + indent + title)
+    # Fixed: ~400t (atomicfact system) + ~150t (finddup system) = 550t
+    # Input text: chars * 0.25 (tokens per char)
+    # Output estimate: ~15t per extracted fact, ~5t per nodesort assignment
+    # Finddup: candidates scale with fact_count but capped by Jaccard filtering
+    taxonomy_tokens = node_count * 8
+    input_tokens = round(char_count * 0.25)
+    estimated_facts = max(5, round(char_count / 150))  # ~1 fact per 150 chars
+    extract_output = estimated_facts * 12
+    nodesort_cost = taxonomy_tokens + estimated_facts * 5
+    finddup_cost = min(fact_count * 3, 800) + estimated_facts * 20
+
+    total = 550 + taxonomy_tokens + input_tokens + extract_output + nodesort_cost + finddup_cost
+    return {"estimated_tokens": total, "node_count": node_count, "fact_count": fact_count}
+
+
 @router.post("/paste", status_code=201)
 async def paste_import(
     request: Request,

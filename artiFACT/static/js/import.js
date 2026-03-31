@@ -108,11 +108,33 @@ function importApp() {
 
     // === Computed ===
 
+    // Token estimate (updated async when program + text change)
+    _tokenEstimate: 0,
+    _tokenEstimatePending: false,
+
     get estimatedTokens() {
-      // Floor estimate from measured runs (550c→2392t, 1485c→2037t).
-      // Framed as "exceeds" since actual varies by taxonomy size + fact count.
+      // Trigger async estimate when inputs change
       var chars = this.activeTab === "paste" ? this.pasteText.length : 0;
-      return Math.round(1500 + chars * 0.5);
+      if (chars > 500 && this.programNodeUid && !this._tokenEstimatePending) {
+        this._fetchTokenEstimate(chars);
+      }
+      return this._tokenEstimate || Math.round(1500 + chars * 0.5); // fallback
+    },
+
+    async _fetchTokenEstimate(chars) {
+      this._tokenEstimatePending = true;
+      try {
+        var resp = await fetch(
+          "/api/v1/import/estimate-tokens?program_node_uid=" +
+          this.programNodeUid + "&char_count=" + chars
+        );
+        if (resp.ok) {
+          var data = await resp.json();
+          this._tokenEstimate = data.estimated_tokens;
+        }
+      } catch (e) { /* fallback to simple model */ }
+      var self = this;
+      setTimeout(function() { self._tokenEstimatePending = false; }, 3000);
     },
 
     get canStart() {
