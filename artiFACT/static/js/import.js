@@ -108,6 +108,15 @@ function importApp() {
 
     // === Computed ===
 
+    get estimatedTokens() {
+      // Linear model based on measured pipeline runs:
+      // total ≈ 1200 (fixed overhead) + chars * rate_multiplier
+      var rates = { brief: 1.5, standard: 2.2, overkill: 3.5 };
+      var mult = rates[this.granularity] || 2.2;
+      var chars = this.activeTab === "paste" ? this.pasteText.length : 0;
+      return Math.round(1200 + chars * mult);
+    },
+
     get canStart() {
       if (!this.programNodeUid || !this.effectiveDate) return false;
       if (this.activeTab === "paste" && this.pasteText.length < 10) return false;
