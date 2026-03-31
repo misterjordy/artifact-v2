@@ -67,6 +67,73 @@ async def upload_document(
     return SessionOut.model_validate(session)
 
 
+@router.get("/search")
+async def search_tree(
+    q: str,
+    program_node_uid: UUID,
+    mode: str = "both",
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Search nodes and/or facts under a program for the import search bar."""
+    from sqlalchemy import text as sa_text
+
+    query_like = f"%{q}%"
+    results: list[dict[str, Any]] = []
+
+    if mode in ("nodes", "both"):
+        node_rows = (await db.execute(
+            sa_text(
+                "WITH RECURSIVE tree AS ("
+                "  SELECT node_uid, title FROM fc_node WHERE node_uid = :uid"
+                "  UNION ALL"
+                "  SELECT n.node_uid, n.title FROM fc_node n"
+                "  JOIN tree t ON n.parent_node_uid = t.node_uid"
+                "  WHERE n.is_archived = false"
+                ") SELECT node_uid, title FROM tree"
+                " WHERE lower(title) LIKE lower(:q)"
+                " LIMIT 30"
+            ),
+            {"uid": str(program_node_uid), "q": query_like},
+        )).fetchall()
+        for row in node_rows:
+            results.append({
+                "type": "node",
+                "uid": str(row[0]),
+                "text": row[1],
+            })
+
+    if mode in ("facts", "both"):
+        fact_rows = (await db.execute(
+            sa_text(
+                "WITH RECURSIVE tree AS ("
+                "  SELECT node_uid FROM fc_node WHERE node_uid = :uid"
+                "  UNION ALL"
+                "  SELECT n.node_uid FROM fc_node n"
+                "  JOIN tree t ON n.parent_node_uid = t.node_uid"
+                ") SELECT fv.display_sentence, fv.version_uid, n.title AS node_title"
+                " FROM fc_fact f"
+                " JOIN tree t ON f.node_uid = t.node_uid"
+                " JOIN fc_fact_version fv ON fv.version_uid = f.current_published_version_uid"
+                " JOIN fc_node n ON f.node_uid = n.node_uid"
+                " WHERE f.is_retired = false"
+                " AND f.current_published_version_uid IS NOT NULL"
+                " AND lower(fv.display_sentence) LIKE lower(:q)"
+                " LIMIT 50"
+            ),
+            {"uid": str(program_node_uid), "q": query_like},
+        )).fetchall()
+        for row in fact_rows:
+            results.append({
+                "type": "fact",
+                "text": row[0],
+                "uid": str(row[1]),
+                "node_title": row[2],
+            })
+
+    return {"results": results, "total": len(results)}
+
+
 @router.get("/estimate-tokens")
 async def estimate_tokens(
     program_node_uid: UUID,

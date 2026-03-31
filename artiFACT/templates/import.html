@@ -8,15 +8,58 @@
 {% block title %}Import | artiFACT{% endblock %}
 
 {% block sidebar_top %}
-<!-- Import tree with drag-drop zones -->
-<div class="px-1 pb-2">
-  <div class="text-label font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)] px-2 mb-2">
-    Taxonomy Tree
+<!-- Import tree with search + drag-drop zones -->
+<div class="px-1 pb-2" x-data="importSearch()">
+  <!-- Sticky search bar -->
+  <div class="sticky top-0 z-10 bg-[var(--color-bg-sidebar)] pb-2">
+    <div class="flex items-center gap-1 px-1">
+      <div class="relative flex-1 min-w-0">
+        <input type="text" x-model="query" @input.debounce.300ms="doSearch()"
+               :placeholder="'Search ' + modeLabel"
+               class="w-full px-2 py-1 text-xs rounded bg-[var(--color-bg-input)] text-[var(--color-text)] border border-[var(--color-border-input)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+               autocomplete="off">
+        <button x-show="query.length > 0" @click="clearSearch()"
+                class="absolute right-1 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">&#10005;</button>
+      </div>
+      <button @click="cycleMode()"
+              class="flex-shrink-0 px-1.5 py-1 text-2xs rounded font-medium transition-colors"
+              :class="mode === 'both' ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)]'
+                     : 'bg-[var(--color-bg-hover)] text-[var(--color-text-sidebar)]'"
+              :title="'Mode: ' + modeLabel"
+              x-text="modeIcon"></button>
+    </div>
   </div>
-  <p class="px-2 mb-2 text-2xs text-[var(--color-text-sidebar-heading)] leading-relaxed">
+
+  <!-- Search results (replaces tree when active) -->
+  <div x-show="hasResults" class="px-1 space-y-1 mb-3">
+    <div class="text-2xs text-[var(--color-text-sidebar-heading)] px-1 mb-1"
+         x-text="results.length + ' results'"></div>
+    <template x-for="r in results" :key="r.uid">
+      <div class="rounded px-2 py-1.5 hover:bg-[var(--color-bg-hover)] transition-colors cursor-default"
+           :data-node-uid="r.type === 'node' ? r.uid : ''"
+           :data-node-title="r.type === 'node' ? r.text : ''"
+           :draggable="r.type === 'node' ? 'true' : 'false'">
+        <div class="flex items-center gap-1.5">
+          <span class="flex-shrink-0 text-2xs px-1 rounded font-medium"
+                :class="r.type === 'node'
+                  ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]'
+                  : 'bg-[var(--color-bg-hover)] text-[var(--color-text-muted)]'"
+                x-text="r.type === 'node' ? 'node' : 'fact'"></span>
+          <span class="text-xs text-[var(--color-text-sidebar)] truncate" x-text="r.text"></span>
+        </div>
+        <div x-show="r.node_title" class="text-2xs text-[var(--color-text-sidebar-heading)] pl-8 truncate"
+             x-text="r.node_title"></div>
+      </div>
+    </template>
+  </div>
+
+  <p class="px-2 mb-2 text-2xs text-[var(--color-text-sidebar-heading)] leading-relaxed"
+     x-show="!hasResults">
     Drag a program node into the target box below. Optionally drag sections to help the AI focus.
   </p>
-  <div id="import-tree-container"
+
+  <!-- Tree (hidden when search results are showing) -->
+  <div id="import-tree-container" x-show="!hasResults"
        hx-get="/partials/tree?max_open_depth=3&amp;readonly=true" hx-trigger="load" hx-swap="innerHTML">
     <div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">Loading tree&hellip;</div>
   </div>

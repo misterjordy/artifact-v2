@@ -6,6 +6,73 @@ function getCsrfToken() {
   return match ? match[1] : "";
 }
 
+function importSearch() {
+  return {
+    query: "",
+    mode: "both",       // "nodes" | "facts" | "both"
+    results: [],
+    hasResults: false,
+    _pending: false,
+
+    get modeLabel() {
+      return this.mode === "nodes" ? "nodes" : this.mode === "facts" ? "facts" : "nodes and facts";
+    },
+
+    get modeIcon() {
+      return this.mode === "nodes" ? "N" : this.mode === "facts" ? "F" : "NF";
+    },
+
+    cycleMode() {
+      var modes = ["both", "nodes", "facts"];
+      var idx = (modes.indexOf(this.mode) + 1) % modes.length;
+      this.mode = modes[idx];
+      if (this.query.length >= 2) this.doSearch();
+    },
+
+    async doSearch() {
+      if (this.query.length < 2) {
+        this.results = [];
+        this.hasResults = false;
+        return;
+      }
+
+      // Get program node from the main import app
+      var importRoot = document.getElementById("import-root");
+      var appData = importRoot ? Alpine.$data(importRoot) : null;
+      var programUid = appData ? appData.programNodeUid : "";
+      if (!programUid) {
+        // No program selected — can't search
+        this.results = [];
+        this.hasResults = false;
+        return;
+      }
+
+      if (this._pending) return;
+      this._pending = true;
+
+      try {
+        var resp = await fetch(
+          "/api/v1/import/search?q=" + encodeURIComponent(this.query)
+          + "&program_node_uid=" + programUid
+          + "&mode=" + this.mode
+        );
+        if (resp.ok) {
+          var data = await resp.json();
+          this.results = data.results;
+          this.hasResults = this.results.length > 0;
+        }
+      } catch (e) { /* silent */ }
+      this._pending = false;
+    },
+
+    clearSearch() {
+      this.query = "";
+      this.results = [];
+      this.hasResults = false;
+    },
+  };
+}
+
 function importApp() {
   return {
     // State
