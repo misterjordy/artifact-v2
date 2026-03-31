@@ -175,13 +175,19 @@ def _detect_conflicts_sync(
 
 
 def _get_existing_facts(db: Session, program_node_uid: UUID) -> list[tuple[str, UUID]]:
-    """Get existing facts for a program node (sentence, version_uid)."""
+    """Get existing facts for a program node and ALL descendants."""
     rows = db.execute(
         sa_text(
+            "WITH RECURSIVE tree AS ("
+            "  SELECT node_uid FROM fc_node WHERE node_uid = :node_uid"
+            "  UNION ALL"
+            "  SELECT n.node_uid FROM fc_node n JOIN tree t ON n.parent_node_uid = t.node_uid"
+            ") "
             "SELECT fv.display_sentence, fv.version_uid "
             "FROM fc_fact_version fv "
             "JOIN fc_fact f ON fv.fact_uid = f.fact_uid "
-            "WHERE f.node_uid = :node_uid AND f.is_retired = false"
+            "JOIN tree t ON f.node_uid = t.node_uid "
+            "WHERE f.is_retired = false"
         ),
         {"node_uid": str(program_node_uid)},
     ).fetchall()
