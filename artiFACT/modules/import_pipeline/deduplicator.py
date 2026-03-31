@@ -1,11 +1,21 @@
 """Jaccard similarity deduplication (ONE copy — regression: v1 I-ARCH-03)."""
 
+import re
 from typing import Any
+
+_PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
+_STOPWORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "has", "have", "had", "do", "does", "did", "of", "in", "to", "for",
+    "on", "at", "by", "up", "it", "its", "as", "or", "if", "no", "not",
+    "so", "than", "that", "this", "with", "from",
+})
 
 
 def tokenize(text: str) -> set[str]:
-    """Split text into lowercase word tokens."""
-    return set(text.lower().split())
+    """Split text into lowercase word tokens, strip punctuation and stopwords."""
+    words = _PUNCT.sub("", text.lower()).split()
+    return {w for w in words if w and w not in _STOPWORDS}
 
 
 def jaccard(set_a: set[str], set_b: set[str]) -> float:

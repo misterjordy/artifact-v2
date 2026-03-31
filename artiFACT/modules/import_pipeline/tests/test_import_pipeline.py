@@ -585,7 +585,7 @@ async def test_conflict_detected_sets_fields():
     ]
 
     mock_ai_response = {
-        "results": [{"existing": 1, "contradicts": True, "reason": "Incompatible MW values"}]
+        "results": [{"existing": 1, "type": "C", "reason": "Incompatible MW values"}]
     }
 
     async def _mock_post(self, url, **kwargs):
@@ -603,8 +603,9 @@ async def test_conflict_detected_sets_fields():
 
     assert len(results) == 1
     assert results[0]["staged_fact_uid"] == staged_uid
-    assert results[0]["conflict_with_uid"] == existing_version_uid
-    assert "MW" in results[0]["conflict_reason"]
+    assert results[0]["type"] == "conflict"
+    assert results[0]["version_uid"] == existing_version_uid
+    assert "MW" in results[0]["reason"]
 
 
 # === Granularity ===

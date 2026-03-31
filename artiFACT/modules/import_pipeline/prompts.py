@@ -42,13 +42,14 @@ TAXONOMY:
 {constraint_hint}"""
 
 CONFLICT_SYSTEM_PROMPT = (
-    "You detect contradictions between facts in a "
-    "DoD acquisition corpus. A contradiction means the new fact and an existing "
-    "fact cannot both be true simultaneously \u2014 they assert incompatible values, "
-    "dates, quantities, or states. Similar wording alone is NOT a contradiction. "
-    'Return ONLY valid JSON: {"results":[{"existing":N,"contradicts":true, '
-    '"reason":"explanation"},...]}. Only include entries where contradicts=true. '
-    "No fences, no extra text."
+    "Compare each new fact against its candidates. "
+    "D=duplicate (same information, any wording — abbreviations, rewordings, "
+    "unit changes all count as D). C=conflict (contradicts — incompatible values, "
+    "dates, quantities for the same attribute). X=neither. "
+    "Be AGGRESSIVE on duplicates: if two facts convey the same core assertion, "
+    "even with different framing or extra words, that is D. "
+    'Return ONLY valid JSON: {"results":[{"existing":N,"type":"D|C|X",'
+    '"reason":"one sentence"},...]}. Include ALL candidates. No fences, no extra text.'
 )
 
 CONFLICT_USER_TEMPLATE = """NEW FACT: "{new_fact}"
@@ -56,7 +57,7 @@ CONFLICT_USER_TEMPLATE = """NEW FACT: "{new_fact}"
 EXISTING FACTS:
 {numbered_existing}
 
-Do any of these existing facts contradict the new fact?"""
+Classify each existing fact as D (duplicate), C (conflict), or X (neither)."""
 
 # Granularity -> max facts per chunk
 GRANULARITY_MAP: dict[str, int] = {

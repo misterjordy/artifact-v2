@@ -375,17 +375,22 @@ def _run_analysis(db: Session, session: FcImportSession, session_uid_str: str) -
     ).scalars().all()
 
     if pending_facts and existing_facts:
-        conflicts = _detect_conflicts_sync(
+        detections = _detect_conflicts_sync(
             list(pending_facts),
             existing_facts,
             plaintext_key,
         )
-        for conflict in conflicts:
+        for det in detections:
             for sf in pending_facts:
-                if sf.staged_fact_uid == conflict["staged_fact_uid"]:
-                    sf.status = "conflict"
-                    sf.conflict_with_uid = conflict["conflict_with_uid"]
-                    sf.conflict_reason = conflict["conflict_reason"]
+                if sf.staged_fact_uid == det["staged_fact_uid"]:
+                    if det.get("type") == "duplicate":
+                        sf.status = "duplicate"
+                        sf.duplicate_of_uid = det["version_uid"]
+                        sf.similarity_score = 0.0  # AI-detected, not Jaccard
+                    else:
+                        sf.status = "conflict"
+                        sf.conflict_with_uid = det["version_uid"]
+                    sf.conflict_reason = det.get("reason", "")
                     break
 
     _publish_progress(session_uid_str, "Checking for duplicates and conflicts...", 98)
