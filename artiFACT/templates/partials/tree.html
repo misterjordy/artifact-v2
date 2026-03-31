@@ -5,7 +5,7 @@
   <div class="group flex items-center gap-1 rounded px-2 py-1 hover:bg-[var(--color-bg-hover)] transition-colors"
        data-node-uid="{{ node.node_uid }}"
        data-node-title="{{ node.title | e }}"
-       {% if node.node_depth is defined and node.node_depth > 0 %}draggable="true"{% endif %}>
+       draggable="true">
     {% if node.children %}
     <button class="tree-toggle flex-shrink-0 w-4 h-4 flex items-center justify-center text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]"
             @click="open = !open" aria-label="Toggle">
@@ -15,6 +15,9 @@
     <span class="flex-shrink-0 w-4 h-4"></span>
     {% endif %}
 
+    {% if readonly %}
+    <span class="flex-1 truncate text-node text-[var(--color-text-sidebar)] cursor-default">{{ node.title }}</span>
+    {% else %}
     <a class="flex-1 truncate text-node text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] cursor-pointer transition-colors"
        hx-get="/partials/browse/{{ node.node_uid }}"
        hx-target="#center-pane"
@@ -46,6 +49,7 @@
       {% endif %}
     </span>
     {% endif %}
+    {% endif %}
   </div>
 
   {% if node.children %}
@@ -58,10 +62,12 @@
 </div>
 {% endmacro %}
 
-{# Inject writable UIDs for drag-drop permission checks #}
+{% if not readonly %}
+{# Inject writable UIDs for drag-drop permission checks (browse only) #}
 <script>
 window.__writableNodeUids = [{% if can_contribute_uids %}{% for uid in can_contribute_uids %}"{{ uid }}"{% if not loop.last %},{% endif %}{% endfor %}{% endif %}];
 </script>
+{% endif %}
 
 {% if nodes %}
 {% for node in nodes %}
