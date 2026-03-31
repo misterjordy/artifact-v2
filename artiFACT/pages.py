@@ -121,11 +121,30 @@ async def chat_page(
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(
     user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
     playground_mode: str | None = Cookie(None, alias="playground_mode"),
 ) -> HTMLResponse:
-    """Document import page."""
+    """Document import page with tree sidebar and program selector."""
+    # Get root-level program nodes the user can contribute to
+    all_nodes = (
+        await db.execute(
+            select(FcNode)
+            .where(FcNode.is_archived.is_(False), FcNode.node_depth == 0)
+            .order_by(FcNode.sort_order, FcNode.title)
+        )
+    ).scalars().all()
+
+    programs = []
+    for node in all_nodes:
+        if user.global_role == "admin" or await can(user, "contribute", node.node_uid, db):
+            programs.append({"node_uid": str(node.node_uid), "title": node.title})
+
     html = _jinja.get_template("import.html").render(
-        user=user, active_nav="import", playground_mode=(playground_mode == "true"),
+        user=user,
+        active_nav="import",
+        playground_mode=(playground_mode == "true"),
+        programs=programs,
+        today=date.today().isoformat(),
     )
     return HTMLResponse(html)
 

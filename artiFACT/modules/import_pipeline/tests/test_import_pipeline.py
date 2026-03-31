@@ -763,3 +763,233 @@ async def test_patch_staged_fact(
     assert sf.display_sentence == "Edited sentence."
     assert sf.original_sentence == "Original sentence."
     assert sf.status == "accepted"
+
+
+# === Import page renders ===
+
+
+@pytest.mark.asyncio
+async def test_import_page_renders_with_tabs(
+    authed_client: AsyncClient,
+):
+    """GET /import returns 200 with paste and upload tabs."""
+    resp = await authed_client.get("/import")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Paste Text" in body
+    assert "Upload Document" in body
+
+
+# === Staging review grouped facts ===
+
+
+@pytest.mark.asyncio
+async def test_staging_review_returns_grouped_by_node(
+    authed_client: AsyncClient,
+    db: AsyncSession,
+    import_contributor: FcUser,
+    root_node: FcNode,
+):
+    """GET /staged returns facts with node_title for grouping."""
+    session = FcImportSession(
+        session_uid=uuid.uuid4(),
+        program_node_uid=root_node.node_uid,
+        source_filename="test.txt",
+        source_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+        effective_date=date(2026, 1, 15),
+        status="staged",
+        created_by_uid=import_contributor.user_uid,
+    )
+    db.add(session)
+    await db.flush()
+
+    sf = FcImportStagedFact(
+        staged_fact_uid=uuid.uuid4(),
+        session_uid=session.session_uid,
+        display_sentence="Grouped test fact.",
+        suggested_node_uid=root_node.node_uid,
+        node_confidence=0.91,
+        status="pending",
+        source_chunk_index=0,
+        node_alternatives=[],
+        metadata_tags=[],
+    )
+    db.add(sf)
+    await db.flush()
+
+    resp = await authed_client.get(
+        f"/api/v1/import/sessions/{session.session_uid}/staged",
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    fact = data["facts"][0]
+    # node_title should be resolved from the node UID
+    assert fact["node_title"] == root_node.title
+
+
+# === Resolution PATCH ===
+
+
+@pytest.mark.asyncio
+async def test_resolution_patch_updates_staged_fact(
+    authed_client: AsyncClient,
+    db: AsyncSession,
+    import_contributor: FcUser,
+    root_node: FcNode,
+):
+    """PATCH with resolution updates status and resolution fields."""
+    session = FcImportSession(
+        session_uid=uuid.uuid4(),
+        program_node_uid=root_node.node_uid,
+        source_filename="test.txt",
+        source_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+        effective_date=date(2026, 1, 15),
+        status="staged",
+        created_by_uid=import_contributor.user_uid,
+    )
+    db.add(session)
+    await db.flush()
+
+    sf_uid = uuid.uuid4()
+    sf = FcImportStagedFact(
+        staged_fact_uid=sf_uid,
+        session_uid=session.session_uid,
+        display_sentence="Duplicate resolution test.",
+        status="duplicate",
+        source_chunk_index=0,
+        node_alternatives=[],
+        metadata_tags=[],
+    )
+    db.add(sf)
+    await db.flush()
+
+    resp = await authed_client.patch(
+        f"/api/v1/import/staged/{sf_uid}",
+        json={"resolution": "keep_new", "status": "accepted"},
+    )
+    assert resp.status_code == 200
+
+    await db.refresh(sf)
+    assert sf.resolution == "keep_new"
+    assert sf.status == "accepted"
+    assert sf.resolved_at is not None
+
+
+# === Download unresolved ===
+
+
+@pytest.mark.asyncio
+async def test_download_unresolved_returns_txt(
+    authed_client: AsyncClient,
+    db: AsyncSession,
+    import_contributor: FcUser,
+    root_node: FcNode,
+):
+    """GET /download-unresolved returns text/plain with unresolved facts."""
+    session = FcImportSession(
+        session_uid=uuid.uuid4(),
+        program_node_uid=root_node.node_uid,
+        source_filename="report.txt",
+        source_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+        effective_date=date(2026, 1, 15),
+        status="staged",
+        created_by_uid=import_contributor.user_uid,
+    )
+    db.add(session)
+    await db.flush()
+
+    # Add facts with different statuses
+    for status_val, sentence in [
+        ("duplicate", "Dup fact for download."),
+        ("conflict", "Conflict fact for download."),
+        ("orphaned", "Orphaned fact for download."),
+        ("pending", "Pending fact should NOT be in download."),
+    ]:
+        sf = FcImportStagedFact(
+            staged_fact_uid=uuid.uuid4(),
+            session_uid=session.session_uid,
+            display_sentence=sentence,
+            status=status_val,
+            source_chunk_index=0,
+            node_alternatives=[],
+            metadata_tags=[],
+        )
+        db.add(sf)
+    await db.flush()
+
+    resp = await authed_client.get(
+        f"/api/v1/import/sessions/{session.session_uid}/download-unresolved",
+    )
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    body = resp.text
+    assert "Dup fact for download" in body
+    assert "Conflict fact for download" in body
+    assert "Orphaned fact for download" in body
+    assert "Pending fact should NOT" not in body
+
+
+# === Staged facts include existing sentence ===
+
+
+@pytest.mark.asyncio
+async def test_staged_facts_include_existing_sentence_for_duplicates(
+    authed_client: AsyncClient,
+    db: AsyncSession,
+    import_contributor: FcUser,
+    root_node: FcNode,
+):
+    """GET /staged returns existing_sentence when duplicate_of_uid is set."""
+    from artiFACT.kernel.models import FcFact, FcFactVersion
+
+    # Create an existing fact with a version
+    fact = FcFact(
+        node_uid=root_node.node_uid,
+        created_by_uid=import_contributor.user_uid,
+    )
+    db.add(fact)
+    await db.flush()
+
+    version = FcFactVersion(
+        fact_uid=fact.fact_uid,
+        state="published",
+        display_sentence="The existing system runs at 99.9% uptime.",
+        effective_date="2026-01-01",
+        created_by_uid=import_contributor.user_uid,
+    )
+    db.add(version)
+    await db.flush()
+
+    session = FcImportSession(
+        session_uid=uuid.uuid4(),
+        program_node_uid=root_node.node_uid,
+        source_filename="test.txt",
+        source_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+        effective_date=date(2026, 1, 15),
+        status="staged",
+        created_by_uid=import_contributor.user_uid,
+    )
+    db.add(session)
+    await db.flush()
+
+    sf = FcImportStagedFact(
+        staged_fact_uid=uuid.uuid4(),
+        session_uid=session.session_uid,
+        display_sentence="The system runs at 99.9% uptime.",
+        status="duplicate",
+        duplicate_of_uid=version.version_uid,
+        similarity_score=0.92,
+        source_chunk_index=0,
+        node_alternatives=[],
+        metadata_tags=[],
+    )
+    db.add(sf)
+    await db.flush()
+
+    resp = await authed_client.get(
+        f"/api/v1/import/sessions/{session.session_uid}/staged",
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    fact_data = data["facts"][0]
+    assert fact_data["existing_sentence"] == "The existing system runs at 99.9% uptime."

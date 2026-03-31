@@ -9,7 +9,8 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.middleware import get_current_user
@@ -174,7 +175,9 @@ async def get_staged_facts(
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Get staged facts for review (from Postgres)."""
+    """Get staged facts for review (from Postgres), with existing sentences for dups/conflicts."""
+    from artiFACT.kernel.models import FcFactVersion, FcNode
+
     session = await db.get(FcImportSession, session_uid)
     if not session:
         raise NotFound("Import session not found", code="SESSION_NOT_FOUND")
@@ -182,12 +185,45 @@ async def get_staged_facts(
     from artiFACT.modules.import_pipeline.stager import load_staged_facts_postgres
 
     staged = await load_staged_facts_postgres(db, session_uid)
-
     if not staged:
         raise NotFound("No staged facts available", code="NO_STAGED_FACTS")
 
-    facts = [StagedFactOut.model_validate(sf) for sf in staged]
-    return {"session_uid": str(session_uid), "facts": [f.model_dump() for f in facts], "total": len(facts)}
+    # Collect version UIDs that need existing sentence lookup
+    version_uids = set()
+    for sf in staged:
+        if sf.duplicate_of_uid:
+            version_uids.add(sf.duplicate_of_uid)
+        if sf.conflict_with_uid:
+            version_uids.add(sf.conflict_with_uid)
+
+    existing_sentences: dict[str, str] = {}
+    if version_uids:
+        rows = (await db.execute(
+            select(FcFactVersion.version_uid, FcFactVersion.display_sentence)
+            .where(FcFactVersion.version_uid.in_(list(version_uids)))
+        )).all()
+        existing_sentences = {str(r[0]): r[1] for r in rows}
+
+    # Collect node UIDs for title lookup
+    node_uids = {sf.suggested_node_uid for sf in staged if sf.suggested_node_uid}
+    node_titles: dict[str, str] = {}
+    if node_uids:
+        rows = (await db.execute(
+            select(FcNode.node_uid, FcNode.title).where(FcNode.node_uid.in_(list(node_uids)))
+        )).all()
+        node_titles = {str(r[0]): r[1] for r in rows}
+
+    facts = []
+    for sf in staged:
+        d = StagedFactOut.model_validate(sf).model_dump()
+        # Add existing sentence for resolution modal
+        dup_uid = str(sf.duplicate_of_uid) if sf.duplicate_of_uid else None
+        conf_uid = str(sf.conflict_with_uid) if sf.conflict_with_uid else None
+        d["existing_sentence"] = existing_sentences.get(dup_uid or conf_uid or "", None)
+        d["node_title"] = node_titles.get(str(sf.suggested_node_uid), None) if sf.suggested_node_uid else None
+        facts.append(d)
+
+    return {"session_uid": str(session_uid), "facts": facts, "total": len(facts)}
 
 
 @router.patch("/staged/{staged_fact_uid}")
@@ -218,6 +254,42 @@ async def update_staged_fact(
 
     await db.commit()
     return {"status": "updated", "staged_fact_uid": str(staged_fact_uid)}
+
+
+@router.get("/sessions/{session_uid}/download-unresolved")
+async def download_unresolved(
+    session_uid: UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlainTextResponse:
+    """Download unresolved facts (duplicates, conflicts, orphaned) as .txt."""
+    session = await db.get(FcImportSession, session_uid)
+    if not session:
+        raise NotFound("Import session not found", code="SESSION_NOT_FOUND")
+
+    result = await db.execute(
+        select(FcImportStagedFact)
+        .where(
+            FcImportStagedFact.session_uid == session_uid,
+            FcImportStagedFact.status.in_(["duplicate", "conflict", "orphaned"]),
+        )
+        .order_by(FcImportStagedFact.source_chunk_index)
+    )
+    unresolved = result.scalars().all()
+
+    lines = []
+    for sf in unresolved:
+        prefix = f"[{sf.status.upper()}]"
+        lines.append(f"{prefix} {sf.display_sentence}")
+        if sf.conflict_reason:
+            lines.append(f"  Reason: {sf.conflict_reason}")
+
+    body = "\n".join(lines) if lines else "No unresolved facts."
+    filename = f"unresolved-{session.source_filename.rsplit('.', 1)[0]}.txt"
+    return PlainTextResponse(
+        content=body,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/sessions/{session_uid}/reset")
