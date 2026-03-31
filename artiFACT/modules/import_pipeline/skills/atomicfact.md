@@ -14,7 +14,7 @@ RULES:
 - CANONICAL: use simple verbs ("is", "has", "requires"), not bureaucratic prose.
   "NAVWAR, serving in its stewardship role, maintains ownership" → "NAVWAR is the data owner"
 - CLEAN: no filler, headers, labels, navigation text. Only factual content.
-- STANDALONE: each fact must make sense without reading others. No "same as above".
+- STANDALONE: each fact must make sense alone. No "the other", "same as above", ordinals ("first", "second") that reference siblings. Name the subject explicitly every time.
 - DETERMINISTIC: "sufficiently strong" → "minimum 16 characters". Quantify.
 - SPLITTABLE: "roles = maintainer, supervisor" → two facts, one per role.
 - NO INFERENCE: state what the text says, do not conclude or combine.
