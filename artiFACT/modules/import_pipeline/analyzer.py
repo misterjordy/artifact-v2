@@ -114,7 +114,7 @@ def _call_ai(api_key: str, provider: str, model: str, messages: list[dict[str, A
         raise ValueError(f"Unsupported provider: {provider}")
 
 
-DEFAULT_MODELS = {"openai": "gpt-4o", "anthropic": "claude-sonnet-4-20250514"}
+DEFAULT_MODELS = {"openai": "gpt-4.1", "anthropic": "claude-sonnet-4-20250514"}
 
 
 def _parse_extracted_facts(response_text: str) -> list[dict[str, Any]]:
