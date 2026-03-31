@@ -178,7 +178,7 @@
                class="import-drop-target rounded-lg border-2 border-dashed px-4 py-3 text-sm transition-colors"
                :class="programNodeUid
                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-light)]'
-                 : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+                 : 'import-drop-target-empty'"
                @dragover.prevent="$el.classList.add('dnd-drag-over')"
                @dragleave.prevent="$el.classList.remove('dnd-drag-over')"
                @drop.prevent="handleProgramDrop($event)">

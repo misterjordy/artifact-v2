@@ -498,6 +498,23 @@ html.eyecare button.border-red-400:hover {
   border-radius: 4px;
 }
 
+/* Program drop zone — attention-grabbing until filled */
+.import-drop-target-empty {
+  border-color: var(--color-import-drop-empty);
+  animation: import-drop-pulse 2s ease-in-out 3;
+}
+.import-drop-target-empty:hover {
+  border-color: var(--color-accent);
+}
+html.dark    { --color-import-drop-empty: #C0A050; }
+html.eyecare { --color-import-drop-empty: #B8860B; }
+html.default { --color-import-drop-empty: #D97706; }
+
+@keyframes import-drop-pulse {
+  0%, 100% { border-color: var(--color-import-drop-empty); }
+  50%      { border-color: transparent; }
+}
+
 .import-drop-target.dnd-drag-over {
   border-color: var(--color-accent) !important;
   background-color: var(--color-accent-light) !important;
