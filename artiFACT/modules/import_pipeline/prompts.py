@@ -26,8 +26,11 @@ EXTRACTOR_USER_TEMPLATE = (
 
 CLASSIFIER_SYSTEM_PROMPT = (
     "Taxonomy classifier for a DoD acquisition "
-    "fact corpus. Given numbered facts and an indented taxonomy tree (numeric "
-    "id + title), return the 3 best-matching node ids for EACH fact. Return "
+    "fact corpus. The taxonomy is indented to show hierarchy (children indented "
+    "under parents). ALWAYS prefer the MOST SPECIFIC (deepest/leaf) node that "
+    "fits. Never assign to a parent when a child is a better match. "
+    "Given numbered facts and the taxonomy tree (numeric id + title), return "
+    "the 3 best-matching node ids for EACH fact. Return "
     'ONLY valid JSON: {"results":[{"fact":N,"nodes":[{"id":M,"confidence":0.92,'
     '"reason":"one sentence"},{"id":M,"confidence":0.78,"reason":"one sentence"},'
     '{"id":M,"confidence":0.65,"reason":"one sentence"}]},...]}. Top 3 nodes '

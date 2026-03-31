@@ -31,16 +31,18 @@ async def build_taxonomy_index(
         await db.execute(
             sa_text(
                 "WITH RECURSIVE tree AS ("
-                "  SELECT node_uid, title, node_depth, sort_order"
+                "  SELECT node_uid, title, node_depth, sort_order,"
+                "         ARRAY[sort_order] AS path"
                 "  FROM fc_node"
                 "  WHERE node_uid = :root_uid AND is_archived = false"
                 "  UNION ALL"
-                "  SELECT n.node_uid, n.title, n.node_depth, n.sort_order"
+                "  SELECT n.node_uid, n.title, n.node_depth, n.sort_order,"
+                "         t.path || n.sort_order"
                 "  FROM fc_node n"
                 "  JOIN tree t ON n.parent_node_uid = t.node_uid"
                 "  WHERE n.is_archived = false"
                 ") SELECT node_uid, title, node_depth FROM tree"
-                " ORDER BY node_depth, sort_order"
+                " ORDER BY path"
             ),
             {"root_uid": str(program_node_uid)},
         )
@@ -75,7 +77,7 @@ async def classify_batch(
 
     constraint_hint = ""
     if constraint_node_uids:
-        # Build hint from constraint nodes that appear in the mapping
+        # Build hint from constraint nodes and their descendants
         reverse_map = {v: k for k, v in id_mapping.items()}
         hint_parts: list[str] = []
         for uid_str in constraint_node_uids:
@@ -84,7 +86,10 @@ async def classify_batch(
                 hint_parts.append(str(int_id))
         if hint_parts:
             constraint_hint = (
-                f"\nPriority nodes (prefer these if relevant): {', '.join(hint_parts)}"
+                f"\nCONSTRAINT: The user selected nodes {', '.join(hint_parts)} "
+                "and their children as the target area. STRONGLY prefer these nodes "
+                "and their descendants. Only use nodes outside this subtree if "
+                "no constrained node fits at all."
             )
 
     user_msg = CLASSIFIER_USER_TEMPLATE.format(

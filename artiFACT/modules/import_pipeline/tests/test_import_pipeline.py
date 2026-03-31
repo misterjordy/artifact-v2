@@ -493,7 +493,7 @@ async def test_node_constraint_appears_in_classifier_prompt():
         )
 
     user_msg = captured_messages[0]["messages"][-1]["content"]
-    assert "Priority nodes" in user_msg
+    assert "CONSTRAINT" in user_msg
 
 
 # === Duplicate detection ===
