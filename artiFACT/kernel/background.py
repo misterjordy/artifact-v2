@@ -5,4 +5,5 @@ app = Celery(
     "artiFACT",
     broker=os.getenv("REDIS_URL", "redis://redis:6379"),
     backend=os.getenv("REDIS_URL", "redis://redis:6379"),
+    include=["artiFACT.modules.import_pipeline.analyzer"],
 )
