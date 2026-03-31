@@ -477,13 +477,17 @@ def _run_reanalysis(db: Session, session: FcImportSession, session_uid_str: str)
 
     pending_facts = [sf for sf in staged if sf.status == "pending"]
     if pending_facts and existing_facts:
-        conflicts = _detect_conflicts_sync(pending_facts, existing_facts, plaintext_key)
-        for conflict in conflicts:
+        detections = _detect_conflicts_sync(pending_facts, existing_facts, plaintext_key)
+        for det in detections:
             for sf in pending_facts:
-                if sf.staged_fact_uid == conflict["staged_fact_uid"]:
-                    sf.status = "conflict"
-                    sf.conflict_with_uid = conflict["conflict_with_uid"]
-                    sf.conflict_reason = conflict["conflict_reason"]
+                if sf.staged_fact_uid == det["staged_fact_uid"]:
+                    if det.get("type") == "duplicate":
+                        sf.status = "duplicate"
+                        sf.duplicate_of_uid = det["version_uid"]
+                    else:
+                        sf.status = "conflict"
+                        sf.conflict_with_uid = det["version_uid"]
+                    sf.conflict_reason = det.get("reason", "")
                     break
 
     session.status = "staged"
