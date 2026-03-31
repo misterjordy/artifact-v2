@@ -501,36 +501,12 @@
     </div>
   </div>
 
-  <!-- ═══ IMPORT HISTORY ═══ -->
-  <div x-show="step === 'entry' || step === 'done'" x-data="{ showAllHistory: false }"
-       class="border-t border-[var(--color-border)] mt-4 mx-6 pt-4 pb-6">
-    <h3 class="text-sm font-semibold mb-3">Past Imports</h3>
-    <div id="import-history" class="space-y-2">
-      <template x-for="(h, idx) in history" :key="h.session_uid">
-        <div x-show="idx < 3 || showAllHistory"
-             class="flex items-center gap-3 px-3 py-2 rounded border border-[var(--color-border)] text-xs">
-          <span class="font-medium truncate flex-1"
-                x-text="h.input_type === 'text' ? 'Pasted text' : h.source_filename"></span>
-          <span class="px-1.5 py-0.5 rounded text-2xs font-medium"
-                :class="{
-                  'bg-green-100 text-green-800': h.status === 'proposed',
-                  'bg-red-100 text-red-800': h.status === 'failed',
-                  'bg-[var(--color-border)] text-[var(--color-text-muted)]': h.status === 'discarded' || h.status === 'rejected'
-                }"
-                x-text="h.status"></span>
-          <span class="text-[var(--color-text-muted)]" x-text="h.total + ' facts'"></span>
-          <span class="text-[var(--color-text-muted)]"
-                x-text="h.created_at ? new Date(h.created_at).toLocaleDateString() : ''"></span>
-        </div>
-      </template>
-      <button x-show="history.length > 3 && !showAllHistory"
-              @click="showAllHistory = true"
-              class="text-xs text-[var(--color-accent)] hover:underline">
-        See all <span x-text="history.length"></span> imports&hellip;
-      </button>
-      <p x-show="history.length === 0" class="text-xs text-[var(--color-text-muted)]">No past imports.</p>
-    </div>
-  </div>
+  <!-- Fixed bottom-left history link -->
+  <button x-show="history.length > 0"
+          @click="openHistoryPane()"
+          class="fixed bottom-4 left-[calc(var(--sidebar-width)+1rem)] z-20 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors">
+    See all <span x-text="history.length"></span> imports&hellip;
+  </button>
 
   <!-- ═══ RESOLUTION MODAL ═══ -->
   <div x-show="resolutionOpen" x-cloak

@@ -584,6 +584,41 @@ function importApp() {
       window.open("/api/v1/import/sessions/" + this.sessionUid + "/download-unresolved", "_blank");
     },
 
+    openHistoryPane() {
+      var pane = document.getElementById("right-pane");
+      var content = document.getElementById("right-pane-content");
+      var title = document.getElementById("right-pane-title");
+      if (!pane || !content) return;
+
+      title.textContent = "Import History";
+
+      var html = '<div class="space-y-3">';
+      this.history.forEach(function (h) {
+        var name = h.input_type === "text" ? "Pasted text" : h.source_filename;
+        var statusClass = h.status === "proposed" ? "bg-green-100 text-green-800"
+          : h.status === "failed" ? "bg-red-100 text-red-800"
+          : "bg-[var(--color-border)] text-[var(--color-text-muted)]";
+        var date = h.created_at ? new Date(h.created_at).toLocaleDateString() : "";
+        html += '<div class="border border-[var(--color-border)] rounded-lg p-3">'
+          + '<div class="flex items-center justify-between mb-1">'
+          + '<span class="text-xs font-medium">' + name + '</span>'
+          + '<span class="px-1.5 py-0.5 rounded text-2xs font-medium ' + statusClass + '">' + h.status + '</span>'
+          + '</div>'
+          + '<div class="text-2xs text-[var(--color-text-muted)]">'
+          + h.total + ' facts &middot; ' + date
+          + '</div>'
+          + '</div>';
+      });
+      if (this.history.length === 0) {
+        html += '<p class="text-xs text-[var(--color-text-muted)]">No past imports.</p>';
+      }
+      html += '</div>';
+      content.innerHTML = html;
+
+      pane.classList.add("open");
+      pane.style.width = "320px";
+    },
+
     resetToEntry() {
       this.step = "entry";
       this.sessionUid = null;
