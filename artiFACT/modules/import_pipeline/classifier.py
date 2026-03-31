@@ -140,7 +140,7 @@ async def classify_batch(
         top = matches[0]
         node_id = top[1]
         top_uid = id_mapping.get(node_id) if node_id != 0 else None
-        top_conf = top[2] if len(top) > 2 else 0.85
+        top_conf = top[2] if len(top) > 2 else 0.5
 
         results.append({
             "sentence": fact,
