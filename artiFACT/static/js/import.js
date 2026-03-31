@@ -585,12 +585,8 @@ function importApp() {
     },
 
     openHistoryPane() {
-      var pane = document.getElementById("right-pane");
       var content = document.getElementById("right-pane-content");
-      var title = document.getElementById("right-pane-title");
-      if (!pane || !content) return;
-
-      title.textContent = "Import History";
+      if (!content) return;
 
       var html = '<div class="space-y-3">';
       this.history.forEach(function (h) {
@@ -615,8 +611,7 @@ function importApp() {
       html += '</div>';
       content.innerHTML = html;
 
-      pane.classList.add("open");
-      pane.style.width = "320px";
+      window.openRightPane("Import History");
     },
 
     resetToEntry() {
