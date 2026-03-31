@@ -26,7 +26,7 @@
 {% block main_class %}p-0{% endblock %}
 
 {% block content %}
-<div id="import-root" class="flex flex-col h-full"
+<div id="import-root" class="relative flex flex-col h-full"
      x-data="importApp()"
      data-programs='{{ (programs or []) | tojson }}'
      data-today="{{ today or '' }}"
@@ -501,12 +501,13 @@
     </div>
   </div>
 
-  <!-- Fixed bottom-left history link -->
-  <button x-show="history.length > 0"
-          @click="openHistoryPane()"
-          class="fixed bottom-4 left-[calc(var(--sidebar-width)+1rem)] z-20 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors">
-    See all <span x-text="history.length"></span> imports&hellip;
-  </button>
+  <!-- Bottom-left history link (inside content flow, not fixed to viewport) -->
+  <div x-show="history.length > 0" class="absolute bottom-4 left-6 z-20">
+    <button @click="openHistoryPane()"
+            class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors">
+      See all <span x-text="history.length"></span> imports&hellip;
+    </button>
+  </div>
 
   <!-- ═══ RESOLUTION MODAL ═══ -->
   <div x-show="resolutionOpen" x-cloak
