@@ -319,11 +319,11 @@ async def test_reset_deletes_staged_facts(
 
 
 @pytest.mark.asyncio
-async def test_classifier_one_call_per_fact():
-    """classify_all sends one AI call per fact (batch_size=1 default)."""
+async def test_classifier_batches_8_facts():
+    """classify_all sends ceil(20/8) = 3 AI calls."""
     from artiFACT.modules.import_pipeline.classifier import classify_all
 
-    facts = [f"Fact number {i}" for i in range(5)]
+    facts = [f"Fact number {i}" for i in range(20)]
     taxonomy_text = "1 Root\n2 Child A\n3 Child B"
     id_mapping = {1: str(uuid.uuid4()), 2: str(uuid.uuid4()), 3: str(uuid.uuid4())}
 
@@ -351,8 +351,8 @@ async def test_classifier_one_call_per_fact():
     with patch("httpx.AsyncClient.post", new=_mock_post):
         results = await classify_all(facts, taxonomy_text, id_mapping, "fake-key")
 
-    assert call_count == 5  # one per fact
-    assert len(results) == 5
+    assert call_count == 3  # 8 + 8 + 4
+    assert len(results) == 20
 
 
 @pytest.mark.asyncio
