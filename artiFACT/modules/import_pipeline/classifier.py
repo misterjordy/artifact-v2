@@ -112,13 +112,12 @@ async def classify_batch(
     content = resp.json()["choices"][0]["message"]["content"]
     data = json.loads(content)
 
-    # Parse v1-style compact format: {"a":[[fact#, node#, confidence], ...]}
+    # Parse compact format: {"a":[[fact#, node#], ...]} or {"a":[[fact#, node#, conf], ...]}
     assignments = data.get("a", [])
 
     results: list[dict] = []
     for i, fact in enumerate(facts):
         fact_num = i + 1
-        # Find all assignments for this fact number
         matches = [a for a in assignments if len(a) >= 2 and a[0] == fact_num]
 
         if not matches:
@@ -131,8 +130,9 @@ async def classify_batch(
             continue
 
         top = matches[0]
-        top_uid = id_mapping.get(top[1])
-        top_conf = top[2] if len(top) > 2 else 0.8
+        node_id = top[1]
+        top_uid = id_mapping.get(node_id) if node_id != 0 else None
+        top_conf = top[2] if len(top) > 2 else 0.85
 
         results.append({
             "sentence": fact,

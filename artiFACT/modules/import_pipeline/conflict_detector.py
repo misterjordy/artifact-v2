@@ -40,14 +40,14 @@ async def detect_conflicts(
 
         for sentence, version_uid, ex_tokens in existing_tokenized:
             score = jaccard_fn(staged_tokens, ex_tokens)
-            if 0.2 <= score <= 0.85:
+            if 0.1 <= score <= 0.85:
                 candidates.append((sentence, version_uid, score))
 
         if not candidates:
             continue
 
         candidates.sort(key=lambda c: c[2], reverse=True)
-        candidates = candidates[:5]
+        candidates = candidates[:8]
 
         match = await _check_dcx(
             staged.display_sentence,
