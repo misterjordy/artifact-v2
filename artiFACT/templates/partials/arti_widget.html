@@ -1,5 +1,6 @@
-{# arti chat widget — floating overlay, persists across HTMX navigation #}
-<div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2"
+{# arti chat widget — floating overlay, persists across page navigation #}
+<div id="arti-widget"
+     class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2"
      x-data="artiChat()" x-cloak x-init="init()">
 
   {# ── Minimized session bubbles ─────────────────────── #}
@@ -23,6 +24,7 @@
        x-transition:leave="transition ease-in duration-200"
        x-transition:leave-start="opacity-100 scale-100"
        x-transition:leave-end="opacity-0 scale-90"
+       :class="{ 'transition-none': skipTransition }"
        class="arti-chatbox w-[28rem] max-h-[36rem] flex flex-col rounded-xl
               bg-[var(--color-bg-card)] border border-[var(--color-border)]
               shadow-2xl origin-bottom-right overflow-hidden">
@@ -51,19 +53,9 @@
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 12h14"/></svg>
         </button>
         {# Close #}
-        <button @click="promptClose()" class="p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors" title="Close chat">
+        <button @click="closeChat()" class="p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors" title="Close chat">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
-      </div>
-    </div>
-
-    {# ── Close confirmation ──────────────────────────── #}
-    <div x-show="confirmingClose" x-cloak
-         class="px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-      <p class="text-xs text-[var(--color-text-muted)] mb-2">Close this chat? Messages will be deleted.</p>
-      <div class="flex gap-2">
-        <button @click="closeChat()" class="px-3 py-1 text-xs rounded bg-[var(--color-danger)] text-[var(--color-text-on-accent)]">Yes, close</button>
-        <button @click="cancelClose()" class="px-3 py-1 text-xs rounded bg-[var(--color-bg-card)] text-[var(--color-text-muted)] border border-[var(--color-border)]">Cancel</button>
       </div>
     </div>
 
@@ -239,6 +231,16 @@
         <span class="animate-pulse">...</span>
       </div>
 
+      {# Error banners #}
+      <div x-show="errorMessage === 'no-ai-key'" x-cloak
+           class="mx-2 px-3 py-2 rounded text-xs bg-[var(--color-warning)]/15 text-[var(--color-warning)] border border-[var(--color-warning)]/30">
+        No AI API key configured. <a href="/settings" class="underline font-semibold">Go to Settings</a> to add one.
+      </div>
+      <div x-show="errorMessage === 'session-limit'" x-cloak
+           class="mx-2 px-3 py-2 rounded text-xs bg-[var(--color-warning)]/15 text-[var(--color-warning)] border border-[var(--color-warning)]/30">
+        Maximum 5 active chats reached. Close one to start a new chat.
+      </div>
+
       {# Scroll-down indicator #}
       <div x-show="scrolledUp" x-cloak
            @click="scrollToBottom()"
@@ -254,7 +256,7 @@
       <div class="border-t border-[var(--color-border)]">
         {# Token counter #}
         <div class="flex items-center justify-between px-3 pt-1.5">
-          <span class="text-2xs text-[var(--color-text-muted)]">~<span x-text="sessionTokens"></span> tokens this session</span>
+          <span class="text-2xs text-[var(--color-text-muted)]"><span x-text="formatTokens(sessionTokens)"></span> tokens this session</span>
           <button @click="startNewChat()" title="New chat"
                   class="text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>

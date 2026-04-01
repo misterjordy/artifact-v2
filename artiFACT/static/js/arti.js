@@ -5,6 +5,11 @@ function getCsrfToken() {
   return match ? match[1] : "";
 }
 
+function formatTokens(n) {
+  if (n >= 1000) return "~" + (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+
 function artiChat() {
   return {
     /* ── state ─────────────────────────────────────────── */
@@ -14,7 +19,8 @@ function artiChat() {
     streaming: false,
     inputText: "",
     scrolledUp: false,
-    confirmingClose: false,
+    errorMessage: null,
+    skipTransition: false,
 
     /* setup flow state */
     programs: [],
@@ -29,6 +35,7 @@ function artiChat() {
     /* current chat state */
     messages: [],
     sessionTokens: 0,
+    messageCache: {},
 
     /* ── lifecycle ─────────────────────────────────────── */
 
@@ -38,7 +45,11 @@ function artiChat() {
       if (stored) {
         var found = this.sessions.find(function (s) { return s.chat_uid === stored; });
         if (found) {
+          /* skip enter animation on page restore */
+          this.skipTransition = true;
           await this.openChat(stored);
+          var self = this;
+          this.$nextTick(function () { self.skipTransition = false; });
         }
       }
     },
@@ -74,6 +85,7 @@ function artiChat() {
     async startNewChat() {
       this.activeChat = "__new__";
       this.newChatStep = "program";
+      this.errorMessage = null;
       this.messages = [];
       this.constraintNodes = [];
       this.constraintNodeUids = [];
@@ -103,11 +115,17 @@ function artiChat() {
       this.newChatStep = "constraint";
     },
 
-    /* constraint drag-drop */
+    /* constraint drag-drop — supports both import.js keys and browse_dnd.js keys */
     handleConstraintDrop(event) {
       event.currentTarget.classList.remove("dnd-drag-over");
-      var uid = event.dataTransfer.getData("text/plain");
-      var title = event.dataTransfer.getData("text/x-node-title") || uid;
+      var uid = event.dataTransfer.getData("text/plain")
+             || event.dataTransfer.getData("text/x-entity-uid");
+      var title = event.dataTransfer.getData("text/x-node-title")
+               || event.dataTransfer.getData("text/x-entity-label")
+               || uid;
+      /* ignore fact drags from browse — only accept node drags */
+      var moveType = event.dataTransfer.getData("text/x-move-type");
+      if (moveType === "fact") return;
       if (uid && this.constraintNodeUids.indexOf(uid) === -1) {
         this.constraintNodeUids.push(uid);
         this.constraintNodes.push({ uid: uid, title: title });
@@ -167,19 +185,36 @@ function artiChat() {
           this.newChatStep = null;
           this.messages = [];
           this.sessionTokens = 0;
+          this.errorMessage = null;
           sessionStorage.setItem("arti-active-chat", session.chat_uid);
+        } else if (resp2.status === 409) {
+          this.errorMessage = "session-limit";
+          this.newChatStep = null;
+        } else {
+          this.errorMessage = "create-failed";
+          this.newChatStep = null;
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { this.errorMessage = "create-failed"; this.newChatStep = null; }
       this.setupLoading = false;
     },
 
     /* ── open / minimize / close ───────────────────────── */
 
     async openChat(chatUid) {
+      /* cache messages from current chat before switching */
+      if (this.activeChat && this.activeChat !== "__new__" && this.messages.length > 0) {
+        this.messageCache[this.activeChat] = this.messages.slice();
+      }
       this.activeChat = chatUid;
       this.newChatStep = null;
-      this.confirmingClose = false;
+      this.errorMessage = null;
       sessionStorage.setItem("arti-active-chat", chatUid);
+      /* restore from cache for instant swap, then refresh from server */
+      if (this.messageCache[chatUid]) {
+        this.messages = this.messageCache[chatUid];
+      } else {
+        this.messages = [];
+      }
       await this.loadMessages(chatUid);
       var session = this.currentSession;
       if (session) {
@@ -190,16 +225,11 @@ function artiChat() {
     },
 
     minimizeChat() {
+      if (this.activeChat && this.activeChat !== "__new__" && this.messages.length > 0) {
+        this.messageCache[this.activeChat] = this.messages.slice();
+      }
       this.activeChat = null;
       sessionStorage.removeItem("arti-active-chat");
-    },
-
-    promptClose() {
-      this.confirmingClose = true;
-    },
-
-    cancelClose() {
-      this.confirmingClose = false;
     },
 
     async closeChat() {
@@ -207,7 +237,6 @@ function artiChat() {
       if (!uid || uid === "__new__") {
         this.activeChat = null;
         this.newChatStep = null;
-        this.confirmingClose = false;
         sessionStorage.removeItem("arti-active-chat");
         return;
       }
@@ -218,9 +247,9 @@ function artiChat() {
         });
       } catch (e) { /* silent */ }
       this.sessions = this.sessions.filter(function (s) { return s.chat_uid !== uid; });
+      delete this.messageCache[uid];
       this.activeChat = null;
       this.messages = [];
-      this.confirmingClose = false;
       sessionStorage.removeItem("arti-active-chat");
     },
 
@@ -262,10 +291,10 @@ function artiChat() {
         created_at: new Date().toISOString(),
       };
       this.messages.push(artiMsg);
-      var artiIndex = this.messages.length - 1;
+      var chatUid = this.activeChat;
 
       try {
-        var resp = await fetch("/api/v1/ai/chat/" + this.activeChat + "/send", {
+        var resp = await fetch("/api/v1/ai/chat/" + chatUid + "/send", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -275,7 +304,17 @@ function artiChat() {
         });
 
         if (!resp.ok) {
-          this.messages[artiIndex].content = "Error: could not get a response.";
+          var errText = "";
+          try { var errBody = await resp.json(); errText = errBody.detail || ""; } catch (e) { /* */ }
+          if (resp.status === 400 && errText.indexOf("No AI API key") !== -1) {
+            artiMsg.content = "No AI API key configured. Add one in Settings.";
+            this.errorMessage = "no-ai-key";
+          } else if (resp.status === 429) {
+            artiMsg.content = "Rate limit reached. Wait a moment and try again.";
+          } else {
+            artiMsg.content = "Error: " + (errText || "could not get a response.");
+          }
+          artiMsg._error = true;
           this.streaming = false;
           return;
         }
@@ -301,42 +340,49 @@ function artiChat() {
             try {
               var evt = JSON.parse(payload);
               if (evt.chunk) {
-                this.messages[artiIndex].content += evt.chunk;
+                artiMsg.content += evt.chunk;
                 if (!this.scrolledUp) this.scrollToBottom();
               }
               if (evt.replace) {
-                this.messages[artiIndex].content = evt.replace;
+                artiMsg.content = evt.replace;
               }
               if (evt.done) {
                 this.sessionTokens = evt.session_total_tokens || this.sessionTokens;
+                if (evt.input_tokens === 0 && evt.output_tokens === 0) {
+                  artiMsg._error = true;
+                }
               }
             } catch (e) { /* skip unparseable */ }
           }
         }
       } catch (e) {
-        this.messages[artiIndex].content = "Connection error. Please try again.";
+        artiMsg.content = "Connection error. Please try again.";
+        artiMsg._error = true;
       }
 
       this.streaming = false;
-      /* reload full messages + sessions to sync server state */
-      await this.loadMessages(this.activeChat);
-      await this.loadSessions();
-      var session = this.currentSession;
-      if (session) {
-        this.sessionTokens = session.total_input_tokens + session.total_output_tokens;
+      /* reload full messages + sessions to sync server state,
+         but skip if the response was an error (no content saved to DB) */
+      if (artiMsg.content && !artiMsg._error) {
+        await this.loadMessages(this.activeChat);
+        await this.loadSessions();
+        var session = this.currentSession;
+        if (session) {
+          this.sessionTokens = session.total_input_tokens + session.total_output_tokens;
+        }
       }
     },
 
     /* ── toggle fact filter ────────────────────────────── */
 
     async toggleFilter() {
-      var newFilter = this.factFilter === "published" ? "signed" : "published";
-      if (!this.activeChat || this.activeChat === "__new__") {
-        this.factFilter = newFilter;
-        return;
-      }
+      var oldFilter = this.factFilter;
+      var newFilter = oldFilter === "published" ? "signed" : "published";
+      /* optimistic update */
+      this.factFilter = newFilter;
+      if (!this.activeChat || this.activeChat === "__new__") return;
       try {
-        await fetch("/api/v1/ai/chat/sessions/" + this.activeChat + "/filter", {
+        var resp = await fetch("/api/v1/ai/chat/sessions/" + this.activeChat + "/filter", {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -344,19 +390,20 @@ function artiChat() {
           },
           body: JSON.stringify({ fact_filter: newFilter }),
         });
-        this.factFilter = newFilter;
-        /* add system-style notification */
-        this.messages.push({
+        if (!resp.ok) { this.factFilter = oldFilter; return; }
+        /* server wiped messages — clear local state to match */
+        this.messages = [{
           message_uid: "sys-" + Date.now(),
           role: "system",
-          content: "Switched to " + newFilter + " facts.",
+          content: "Switched to " + newFilter + " facts. Chat history cleared.",
           input_tokens: 0,
           output_tokens: 0,
           facts_loaded: 0,
           created_at: new Date().toISOString(),
-        });
+        }];
+        this.sessionTokens = 0;
         this.scrollToBottom();
-      } catch (e) { /* silent */ }
+      } catch (e) { this.factFilter = oldFilter; }
     },
 
     /* ── scroll management ─────────────────────────────── */

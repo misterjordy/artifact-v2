@@ -114,7 +114,7 @@ async def chat(
     await check_anomaly(db, user.user_uid, "ai_chat")
 
     key_row.last_used_at = datetime.now(timezone.utc)
-    await db.flush()
+    await db.commit()
 
     return {
         "content": filtered,
@@ -186,7 +186,7 @@ async def chat_stream(
     yield "data: [DONE]\n\n"
 
     key_row.last_used_at = datetime.now(timezone.utc)
-    await db.flush()
+    await db.commit()
 
     await publish(
         "ai.chat",
@@ -202,20 +202,18 @@ async def chat_stream(
 # ── Session-based chat (new widget) ─────────────────────────────────
 
 
-async def chat_with_session(
+async def prepare_chat_session(
     db: AsyncSession,
     chat_uid: uuid.UUID,
     user_message: str,
     user: FcUser,
-) -> AsyncIterator[str]:
-    """Send a message in an existing chat session. Streams response via SSE.
+) -> dict:
+    """Do all setup work for a chat session message.
 
-    1. Load session (mode, constraints, fact_filter)
-    2. Save user message
-    3. Load facts (smart vs efficient)
-    4. Build system prompt + conversation history
-    5. Stream AI response, save assistant message
-    6. Update session token totals
+    This runs BEFORE the StreamingResponse is created, so any failure
+    becomes a proper HTTP error instead of a broken stream.
+
+    Returns a dict with everything the streaming generator needs.
     """
     session = await get_session(db, chat_uid, user.user_uid)
 
@@ -227,8 +225,9 @@ async def chat_with_session(
 
     input_check = check_input(user_message)
 
-    # Save user message
+    # Save user message and commit so the row lock is released before streaming
     await save_message(db, chat_uid, "user", input_check.normalized)
+    await db.commit()
 
     # Parse "search for X" command in efficient mode
     search_query = input_check.normalized
@@ -276,19 +275,67 @@ async def chat_with_session(
             + ", ".join(input_check.flags) + "]"
         )
 
-    # Build conversation: system prompt + prior messages + current user message
+    # Build conversation: system prompt + last 20 messages as context
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     prior = await get_messages(db, chat_uid)
-    for msg in prior:
+    for msg in prior[-20:]:
         if msg.role in ("user", "assistant"):
             messages.append({"role": msg.role, "content": msg.content})
 
-    # Stream AI response
+    return {
+        "session": session,
+        "key_row": key_row,
+        "input_check": input_check,
+        "messages": messages,
+        "facts": facts,
+        "facts_loaded": facts_loaded,
+        "system_prompt": system_prompt,
+        "program_name": program_name,
+    }
+
+
+async def stream_chat_response(
+    db: AsyncSession,
+    chat_uid: uuid.UUID,
+    user: FcUser,
+    ctx: dict,
+) -> AsyncIterator[str]:
+    """Stream AI response for a prepared chat session.
+
+    Only the actual AI call + post-stream save lives in the generator.
+    All setup that can fail is done in prepare_chat_session() before
+    the StreamingResponse is created.
+    """
+    session = ctx["session"]
+    key_row = ctx["key_row"]
+    input_check = ctx["input_check"]
+    messages = ctx["messages"]
+    facts = ctx["facts"]
+    facts_loaded = ctx["facts_loaded"]
+    system_prompt = ctx["system_prompt"]
+    program_name = ctx["program_name"]
+
+    # Stream AI response — catch provider errors (429, 500, etc.)
     collected = ""
-    stream_iter = await _ai.stream_for_key(key_row, messages)
-    async for chunk in stream_iter:
-        collected += chunk
-        yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+    try:
+        stream_iter = await _ai.stream_for_key(key_row, messages)
+        async for chunk in stream_iter:
+            collected += chunk
+            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+    except Exception as exc:
+        log.exception("ai_stream_error", chat_uid=str(chat_uid), error=str(exc))
+        exc_str = str(exc)
+        if "insufficient_quota" in exc_str or "billing" in exc_str.lower():
+            error_msg = "Your OpenAI API key has no remaining quota. Check your billing at platform.openai.com."
+        elif "429" in exc_str:
+            error_msg = "Rate limit reached. Wait a moment and try again."
+        elif "401" in exc_str or "invalid" in exc_str.lower():
+            error_msg = "Your AI API key is invalid. Update it in Settings."
+        else:
+            error_msg = "AI provider error. Please try again."
+        yield f"data: {json.dumps({'chunk': error_msg})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'input_tokens': 0, 'output_tokens': 0, 'facts_loaded': 0, 'session_total_tokens': 0})}\n\n"
+        return
 
     # Output filter
     fact_sentences = [f["sentence"] if isinstance(f, dict) else f for f in facts]
@@ -301,34 +348,48 @@ async def chat_with_session(
     input_tokens = len(system_prompt + input_check.normalized) // 4
     output_tokens = len(collected) // 4
 
-    # Save assistant message
-    await save_message(
-        db, chat_uid, "assistant", collected,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        facts_loaded=facts_loaded,
-    )
+    # Save assistant message + finalize — errors here must not kill the stream
+    try:
+        await save_message(
+            db, chat_uid, "assistant", collected,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            facts_loaded=facts_loaded,
+        )
 
-    # Update key last_used_at
-    key_row.last_used_at = datetime.now(timezone.utc)
-    await db.flush()
+        key_row.last_used_at = datetime.now(timezone.utc)
+        await db.commit()
 
-    # Final done event
-    session_refreshed = await get_session(db, chat_uid, user.user_uid)
-    yield f"data: {json.dumps({'done': True, 'input_tokens': input_tokens, 'output_tokens': output_tokens, 'facts_loaded': facts_loaded, 'session_total_tokens': session_refreshed.total_input_tokens + session_refreshed.total_output_tokens})}\n\n"
+        session_refreshed = await get_session(db, chat_uid, user.user_uid)
+        yield f"data: {json.dumps({'done': True, 'input_tokens': input_tokens, 'output_tokens': output_tokens, 'facts_loaded': facts_loaded, 'session_total_tokens': session_refreshed.total_input_tokens + session_refreshed.total_output_tokens})}\n\n"
 
-    await publish(
-        "ai.chat",
-        {
-            "user_uid": str(user.user_uid),
-            "provider": key_row.provider,
-            "node_uid": str(session.program_node_uid),
-            "flagged": not input_check.clean,
-        },
-    )
+        await publish(
+            "ai.chat",
+            {
+                "user_uid": str(user.user_uid),
+                "provider": key_row.provider,
+                "node_uid": str(session.program_node_uid),
+                "flagged": not input_check.clean,
+            },
+        )
 
-    await log_data_access(
-        db, user.user_uid, "ai_chat",
-        {"topic": program_name, "facts_loaded": facts_loaded},
-    )
-    await check_anomaly(db, user.user_uid, "ai_chat")
+        await log_data_access(
+            db, user.user_uid, "ai_chat",
+            {"topic": program_name, "facts_loaded": facts_loaded},
+        )
+        await check_anomaly(db, user.user_uid, "ai_chat")
+    except Exception:
+        log.exception("post-stream save failed", chat_uid=str(chat_uid))
+        yield f"data: {json.dumps({'done': True, 'input_tokens': 0, 'output_tokens': 0, 'facts_loaded': 0, 'session_total_tokens': 0})}\n\n"
+
+
+async def chat_with_session(
+    db: AsyncSession,
+    chat_uid: uuid.UUID,
+    user_message: str,
+    user: FcUser,
+) -> AsyncIterator[str]:
+    """Convenience wrapper: prepare + stream in one async generator (used by tests)."""
+    ctx = await prepare_chat_session(db, chat_uid, user_message, user)
+    async for chunk in stream_chat_response(db, chat_uid, user, ctx):
+        yield chunk

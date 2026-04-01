@@ -117,6 +117,14 @@ async def _delete_scoped_data(db: AsyncSession) -> None:
     await db.execute(text(
         "DELETE FROM fc_import_session WHERE program_node_uid IN (SELECT uid FROM _pg_nodes)"
     ))
+    # h2. Chat sessions referencing playground nodes
+    await db.execute(text(
+        "DELETE FROM fc_chat_message WHERE chat_uid IN ("
+        "SELECT chat_uid FROM fc_chat_session WHERE program_node_uid IN (SELECT uid FROM _pg_nodes))"
+    ))
+    await db.execute(text(
+        "DELETE FROM fc_chat_session WHERE program_node_uid IN (SELECT uid FROM _pg_nodes)"
+    ))
     # i. Nodes in reverse depth order (leaves first — ON DELETE RESTRICT)
     result = await db.execute(text(
         "SELECT DISTINCT node_depth FROM fc_node "

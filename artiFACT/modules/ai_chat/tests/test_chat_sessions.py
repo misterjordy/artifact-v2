@@ -27,6 +27,7 @@ from artiFACT.modules.ai_chat.retriever import (
 )
 from artiFACT.modules.ai_chat.service import chat_with_session
 from artiFACT.modules.ai_chat.session_manager import (
+    MAX_ACTIVE_SESSIONS,
     close_session,
     create_session,
     get_active_sessions,
@@ -569,3 +570,177 @@ class TestPromptBuilderNew:
 
         # Prompt with no facts — just instructions
         assert count_tokens(prompt) < 200
+
+
+# ── Max 5 sessions limit ───────────────────────────────────────────
+
+
+class TestSessionLimit:
+    @pytest.mark.asyncio
+    async def test_create_session_enforces_max_limit(
+        self, db: AsyncSession, contributor_user: FcUser, root_node: FcNode
+    ) -> None:
+        for _ in range(MAX_ACTIVE_SESSIONS):
+            await create_session(db, contributor_user.user_uid, root_node.node_uid)
+
+        from artiFACT.kernel.exceptions import Conflict
+
+        with pytest.raises(Conflict):
+            await create_session(db, contributor_user.user_uid, root_node.node_uid)
+
+    @pytest.mark.asyncio
+    async def test_closed_session_frees_slot(
+        self, db: AsyncSession, contributor_user: FcUser, root_node: FcNode
+    ) -> None:
+        sessions = []
+        for _ in range(MAX_ACTIVE_SESSIONS):
+            sessions.append(
+                await create_session(db, contributor_user.user_uid, root_node.node_uid)
+            )
+        # Close one — should free a slot
+        await close_session(db, sessions[0].chat_uid, contributor_user.user_uid)
+        new_session = await create_session(
+            db, contributor_user.user_uid, root_node.node_uid
+        )
+        assert new_session.chat_uid is not None
+
+
+# ── Conversation history cap ───────────────────────────────────────
+
+
+class TestConversationHistoryCap:
+    @pytest.mark.asyncio
+    async def test_history_capped_at_20_messages(
+        self, db: AsyncSession, user_with_key: FcUser,
+        program_with_facts: tuple, contributor_permission: None
+    ) -> None:
+        root, child, sentences = program_with_facts
+        session = await create_session(
+            db, user_with_key.user_uid, root.node_uid, mode="efficient"
+        )
+
+        # Seed 30 messages (15 user + 15 assistant)
+        for i in range(15):
+            await save_message(db, session.chat_uid, "user", f"Question {i}")
+            await save_message(db, session.chat_uid, "assistant", f"Answer {i}")
+
+        captured_messages: list[list[dict]] = []
+
+        async def _mock_stream(self, key_row, messages, **kwargs):
+            captured_messages.append(messages)
+
+            async def _gen():
+                yield "Response."
+            return _gen()
+
+        with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
+            async for _ in chat_with_session(
+                db, session.chat_uid, "Final question", user_with_key,
+            ):
+                pass
+
+        assert len(captured_messages) == 1
+        ai_messages = captured_messages[0]
+        # First is system prompt, rest are conversation messages
+        conversation = [m for m in ai_messages if m["role"] != "system"]
+        # 30 prior + 1 new user = 31, but capped at last 20 prior + new user
+        # The 20 cap is on prior messages; the new user message is included in prior
+        # since save_message is called before building conversation
+        assert len(conversation) <= 21  # 20 capped prior + at most 1 edge case
+
+    @pytest.mark.asyncio
+    async def test_all_messages_still_persisted(
+        self, db: AsyncSession, contributor_user: FcUser, root_node: FcNode
+    ) -> None:
+        """Even though only 20 are sent to AI, all messages are kept in DB."""
+        session = await create_session(
+            db, contributor_user.user_uid, root_node.node_uid
+        )
+        for i in range(25):
+            await save_message(db, session.chat_uid, "user", f"Message {i}")
+
+        msgs = await get_messages(db, session.chat_uid)
+        assert len(msgs) == 25  # all persisted
+
+
+# ── Token accumulation ─────────────────────────────────────────────
+
+
+class TestTokenAccumulation:
+    @pytest.mark.asyncio
+    async def test_tokens_accumulate_across_messages(
+        self, db: AsyncSession, contributor_user: FcUser, root_node: FcNode
+    ) -> None:
+        session = await create_session(
+            db, contributor_user.user_uid, root_node.node_uid
+        )
+        await save_message(
+            db, session.chat_uid, "user", "q1", input_tokens=100, output_tokens=0
+        )
+        await save_message(
+            db, session.chat_uid, "assistant", "a1", input_tokens=0, output_tokens=200
+        )
+        await save_message(
+            db, session.chat_uid, "user", "q2", input_tokens=150, output_tokens=0
+        )
+        await save_message(
+            db, session.chat_uid, "assistant", "a2", input_tokens=0, output_tokens=300
+        )
+        await db.refresh(session)
+        assert session.total_input_tokens == 250
+        assert session.total_output_tokens == 500
+
+    @pytest.mark.asyncio
+    async def test_close_preserves_token_totals(
+        self, db: AsyncSession, contributor_user: FcUser, root_node: FcNode
+    ) -> None:
+        session = await create_session(
+            db, contributor_user.user_uid, root_node.node_uid
+        )
+        await save_message(
+            db, session.chat_uid, "user", "q", input_tokens=50, output_tokens=0
+        )
+        await save_message(
+            db, session.chat_uid, "assistant", "a", input_tokens=0, output_tokens=75
+        )
+        await close_session(db, session.chat_uid, contributor_user.user_uid)
+
+        refreshed = await db.get(FcChatSession, session.chat_uid)
+        assert refreshed.total_input_tokens == 50
+        assert refreshed.total_output_tokens == 75
+        assert refreshed.is_active is False
+
+
+# ── SSE streaming response format ──────────────────────────────────
+
+
+class TestStreamingFormat:
+    @pytest.mark.asyncio
+    async def test_stream_contains_chunk_and_done_events(
+        self, db: AsyncSession, user_with_key: FcUser,
+        program_with_facts: tuple, contributor_permission: None
+    ) -> None:
+        root, child, sentences = program_with_facts
+        session = await create_session(
+            db, user_with_key.user_uid, root.node_uid
+        )
+
+        async def _mock_stream(self, key_row, messages, **kwargs):
+            async def _gen():
+                yield "Part 1 "
+                yield "Part 2."
+            return _gen()
+
+        with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
+            chunks = []
+            async for chunk in chat_with_session(
+                db, session.chat_uid, "Test", user_with_key,
+            ):
+                chunks.append(chunk)
+
+        all_text = "".join(chunks)
+        # Should have chunk events and a done event
+        assert '"chunk":' in all_text or '"chunk": ' in all_text
+        assert '"done":' in all_text or '"done": ' in all_text
+        # Should have session_total_tokens in done event
+        assert "session_total_tokens" in all_text

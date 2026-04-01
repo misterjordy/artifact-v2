@@ -98,15 +98,17 @@ async def retrieve_relevant_facts(
     program_node_uid: uuid.UUID,
     constraint_node_uids: list[uuid.UUID] | None,
     fact_filter: str,
-    top_n: int = 50,
-    threshold: float = 0.1,
+    top_n: int = 20,
+    threshold: float = 0.05,
 ) -> list[dict]:
     """Jaccard-search query against all facts in scope.
 
     Returns top_n facts sorted by relevance, each as:
     {"sentence": str, "score": float, "node_title": str}
 
-    Falls back to first 50 facts by node order if fewer than 10 exceed threshold.
+    For short/vague queries where few facts match, falls back to the
+    top_n highest-scoring facts (even below threshold) rather than
+    dumping the entire corpus.
     """
     all_facts = await _load_facts_in_scope(
         db, program_node_uid, constraint_node_uids, fact_filter
@@ -121,14 +123,9 @@ async def retrieve_relevant_facts(
         score = jaccard(query_tokens, fact_tokens)
         scored.append({**fact, "score": round(score, 4)})
 
-    above_threshold = [f for f in scored if f["score"] >= threshold]
-
-    if len(above_threshold) < 10:
-        # Fallback: return first top_n facts by original order
-        return all_facts[:top_n]
-
-    above_threshold.sort(key=lambda f: f["score"], reverse=True)
-    return above_threshold[:top_n]
+    # Always sort by relevance; return top_n regardless of threshold
+    scored.sort(key=lambda f: f["score"], reverse=True)
+    return scored[:top_n]
 
 
 async def load_all_facts(

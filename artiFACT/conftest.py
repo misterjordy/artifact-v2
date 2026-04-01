@@ -32,11 +32,20 @@ def _create_tables():
 
 @pytest_asyncio.fixture
 async def db(_create_tables):
-    """Per-test database session with automatic rollback."""
+    """Per-test database session with automatic rollback.
+
+    Overrides commit() to flush only, so service code that calls db.commit()
+    does not break the outer transaction used for test isolation.
+    """
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.connect() as conn:
         trans = await conn.begin()
         session = AsyncSession(bind=conn, expire_on_commit=False)
+
+        async def _flush_only():
+            await session.flush()
+        session.commit = _flush_only
+
         yield session
         await session.close()
         await trans.rollback()

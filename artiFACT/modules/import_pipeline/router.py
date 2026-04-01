@@ -330,7 +330,11 @@ async def stream_progress(
             await pubsub.unsubscribe(f"import:{session_uid}")
             await r.aclose()
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/sessions/{session_uid}/staged")

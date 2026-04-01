@@ -28,7 +28,12 @@ from artiFACT.modules.ai_chat.schemas import (
     TokenEstimate,
     UpdateFactFilter,
 )
-from artiFACT.modules.ai_chat.service import chat, chat_stream, chat_with_session
+from artiFACT.modules.ai_chat.service import (
+    chat,
+    chat_stream,
+    prepare_chat_session,
+    stream_chat_response,
+)
 from artiFACT.modules.ai_chat.session_manager import (
     close_session,
     create_session,
@@ -80,7 +85,11 @@ async def post_chat_stream(
         node_uid=body.node_uid,
         history=[h.model_dump() for h in body.history],
     )
-    return StreamingResponse(stream, media_type="text/event-stream")
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/context", response_model=ContextOut)
@@ -182,6 +191,8 @@ async def create_chat_session(
             if node:
                 constraint_names.append(node.title)
 
+    await db.commit()
+
     return ChatSessionOut(
         chat_uid=session.chat_uid,
         program_name=program.title,
@@ -243,6 +254,7 @@ async def delete_chat_session(
 ) -> dict[str, str]:
     """Close a chat session (is_active=false, messages deleted)."""
     await close_session(db, chat_uid, user.user_uid)
+    await db.commit()
     return {"status": "closed"}
 
 
@@ -255,6 +267,7 @@ async def patch_session_filter(
 ) -> dict[str, str]:
     """Update fact_filter on an active session (published/signed toggle)."""
     await update_fact_filter(db, chat_uid, user.user_uid, body.fact_filter)
+    await db.commit()
     return {"status": "updated", "fact_filter": body.fact_filter}
 
 
@@ -266,16 +279,21 @@ async def send_chat_message(
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Send a message in a chat session. Streams response via SSE."""
-    # Validate session exists and belongs to user
-    await get_session(db, chat_uid, user.user_uid)
-
-    stream = chat_with_session(
+    # All setup runs here — failures become proper HTTP errors (400/404/500)
+    ctx = await prepare_chat_session(
         db=db,
         chat_uid=chat_uid,
         user_message=body.content,
         user=user,
     )
-    return StreamingResponse(stream, media_type="text/event-stream")
+
+    # Only the AI streaming loop lives in the generator
+    stream = stream_chat_response(db=db, chat_uid=chat_uid, user=user, ctx=ctx)
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/chat/{chat_uid}/messages", response_model=list[ChatMessageOut])

@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.exceptions import NotFound
+from artiFACT.kernel.exceptions import Conflict, NotFound
+
+MAX_ACTIVE_SESSIONS = 5
 from artiFACT.kernel.models import FcChatMessage, FcChatSession
 
 
@@ -18,7 +20,16 @@ async def create_session(
     mode: str = "efficient",
     fact_filter: str = "published",
 ) -> FcChatSession:
-    """Create a new chat session. Does not send any messages."""
+    """Create a new chat session. Does not send any messages.
+
+    Raises Conflict if user already has MAX_ACTIVE_SESSIONS active sessions.
+    """
+    active = await get_active_sessions(db, user_uid)
+    if len(active) >= MAX_ACTIVE_SESSIONS:
+        raise Conflict(
+            f"Maximum {MAX_ACTIVE_SESSIONS} active chat sessions",
+            code="CHAT_SESSION_LIMIT",
+        )
     session = FcChatSession(
         chat_uid=uuid.uuid4(),
         user_uid=user_uid,
@@ -83,9 +94,15 @@ async def update_fact_filter(
     user_uid: uuid.UUID,
     fact_filter: str,
 ) -> FcChatSession:
-    """Update the fact_filter on an active session."""
+    """Update the fact_filter and wipe messages (prevents cross-filter leakage)."""
     session = await get_session(db, chat_uid, user_uid)
     session.fact_filter = fact_filter
+    # Wipe conversation so the AI can't reference answers from the old filter
+    await db.execute(
+        delete(FcChatMessage).where(FcChatMessage.chat_uid == chat_uid)
+    )
+    session.total_input_tokens = 0
+    session.total_output_tokens = 0
     await db.flush()
     return session
 
