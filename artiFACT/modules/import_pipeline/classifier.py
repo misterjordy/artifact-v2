@@ -3,16 +3,14 @@
 import json
 from uuid import UUID
 
-import httpx
 import structlog
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.modules.import_pipeline.prompts import load_skill
 
 log = structlog.get_logger()
-
-AI_MODEL = "gpt-4.1"
 
 
 async def build_taxonomy_index(
@@ -63,7 +61,8 @@ async def classify_batch(
     facts: list[str],
     taxonomy_text: str,
     id_mapping: dict[int, str],
-    ai_key: str,
+    db: AsyncSession,
+    user_uid: UUID,
     constraint_node_uids: list[str] | None = None,
 ) -> list[dict]:
     """Classify up to 8 facts at once against the taxonomy.
@@ -98,26 +97,17 @@ async def classify_batch(
         constraint_hint=constraint_hint,
     )
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {ai_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": AI_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-                "max_tokens": 4096,
-                "response_format": {"type": "json_object"},
-            },
-        )
-        resp.raise_for_status()
-
-    content = resp.json()["choices"][0]["message"]["content"]
+    ai = AIProvider()
+    content = await ai.complete(
+        db,
+        user_uid,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_msg},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=4096,
+    )
     data = json.loads(content)
 
     # Parse compact format: {"a":[[fact#, node#], ...]} or {"a":[[fact#, node#, conf], ...]}
@@ -187,7 +177,8 @@ async def classify_all(
     facts: list[str],
     taxonomy_text: str,
     id_mapping: dict[int, str],
-    ai_key: str,
+    db: AsyncSession,
+    user_uid: UUID,
     constraint_node_uids: list[str] | None = None,
     batch_size: int = 25,
 ) -> list[dict]:
@@ -196,7 +187,7 @@ async def classify_all(
     for i in range(0, len(facts), batch_size):
         batch = facts[i : i + batch_size]
         batch_results = await classify_batch(
-            batch, taxonomy_text, id_mapping, ai_key, constraint_node_uids
+            batch, taxonomy_text, id_mapping, db, user_uid, constraint_node_uids
         )
         results.extend(batch_results)
     return results

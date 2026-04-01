@@ -4,21 +4,21 @@ import json
 from collections.abc import Callable
 from uuid import UUID
 
-import httpx
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.kernel.models import FcImportStagedFact
 from artiFACT.modules.import_pipeline.prompts import load_skill
 
 log = structlog.get_logger()
 
-AI_MODEL = "gpt-4.1"
-
 
 async def detect_conflicts(
     staged_facts: list[FcImportStagedFact],
     existing_facts: list[tuple[str, UUID]],
-    ai_key: str,
+    db: AsyncSession,
+    user_uid: UUID,
     jaccard_fn: Callable[[set[str], set[str]], float],
     tokenize_fn: Callable[[str], set[str]],
 ) -> list[dict]:
@@ -71,7 +71,7 @@ async def detect_conflicts(
             batch_uids.update(uids)
         batch_pool = [(uid, pool[uid]) for uid in pool_order if uid in batch_uids]
 
-        batch_results = await _check_dcx_batch(batch, batch_pool, ai_key)
+        batch_results = await _check_dcx_batch(batch, batch_pool, db, user_uid)
         results.extend(batch_results)
 
     return results
@@ -80,7 +80,8 @@ async def detect_conflicts(
 async def _check_dcx_batch(
     fact_candidates: list[tuple[FcImportStagedFact, list[UUID]]],
     pool: list[tuple[UUID, str]],
-    ai_key: str,
+    db: AsyncSession,
+    user_uid: UUID,
 ) -> list[dict]:
     """Send N-facts with a shared deduplicated candidate pool."""
     system_prompt, user_template = load_skill("finddup")
@@ -109,26 +110,17 @@ async def _check_dcx_batch(
 
     user_msg = user_template.format(comparisons="\n".join(lines))
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {ai_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": AI_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-                "max_tokens": 4096,
-                "response_format": {"type": "json_object"},
-            },
-        )
-        resp.raise_for_status()
-
-    content = resp.json()["choices"][0]["message"]["content"]
+    ai = AIProvider()
+    content = await ai.complete(
+        db,
+        user_uid,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_msg},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=4096,
+    )
     data = json.loads(content)
 
     results: list[dict] = []

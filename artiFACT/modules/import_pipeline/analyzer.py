@@ -6,16 +6,15 @@ import os
 from typing import Any
 from uuid import UUID
 
-import httpx
 import redis as sync_redis
 import structlog
 from sqlalchemy import create_engine, select
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
+from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.kernel.background import app as celery_app
-from artiFACT.kernel.crypto import decrypt
-from artiFACT.kernel.models import FcImportSession, FcImportStagedFact, FcUser, FcUserAiKey
+from artiFACT.kernel.models import FcImportSession, FcImportStagedFact, FcUser
 from artiFACT.kernel.s3 import download_bytes
 from artiFACT.modules.import_pipeline.deduplicator import deduplicate, jaccard, tokenize
 from artiFACT.modules.import_pipeline.extractors import get_extractor
@@ -59,52 +58,7 @@ def _chunk_text(text: str, max_chars: int = 3000) -> list[str]:
     return chunks or [text]
 
 
-def _call_ai(api_key: str, provider: str, model: str, messages: list[dict[str, Any]]) -> str:
-    """Synchronous AI provider call."""
-    if provider in ("openai", "azure_openai"):
-        resp = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "messages": messages,
-                "max_tokens": 4096,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return str(resp.json()["choices"][0]["message"]["content"])
-    elif provider == "anthropic":
-        system_content = ""
-        api_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_content = msg["content"]
-            else:
-                api_messages.append(msg)
-        resp = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "max_tokens": 4096,
-                "system": system_content,
-                "messages": api_messages,
-            },
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return str(resp.json()["content"][0]["text"])
-    else:
-        raise ValueError(f"Unsupported provider: {provider}")
-
-
-DEFAULT_MODELS = {"openai": "gpt-4.1", "anthropic": "claude-sonnet-4-20250514"}
+_ai = AIProvider()
 
 
 def _parse_extracted_facts(response_text: str) -> list[dict[str, Any]]:
@@ -130,7 +84,7 @@ def _classify_sync(
     facts: list[str],
     db: Session,
     program_node_uid: UUID,
-    ai_key: str,
+    user_uid: UUID,
     constraint_node_uids: list[str] | None = None,
 ) -> list[dict]:
     """Run async classifier from sync Celery task context."""
@@ -147,7 +101,7 @@ def _classify_sync(
         async with AsyncSession(engine) as async_db:
             taxonomy_text, id_mapping = await build_taxonomy_index(async_db, program_node_uid)
             return await classify_all(
-                facts, taxonomy_text, id_mapping, ai_key, constraint_node_uids
+                facts, taxonomy_text, id_mapping, async_db, user_uid, constraint_node_uids
             )
 
     loop = asyncio.new_event_loop()
@@ -160,16 +114,27 @@ def _classify_sync(
 def _detect_conflicts_sync(
     staged_facts: list[FcImportStagedFact],
     existing_facts: list[tuple[str, UUID]],
-    ai_key: str,
+    user_uid: UUID,
 ) -> list[dict]:
     """Run async conflict detector from sync Celery task context."""
     from artiFACT.modules.import_pipeline.conflict_detector import detect_conflicts
 
+    async def _run() -> list[dict]:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        async_url = os.getenv(
+            "DATABASE_URL",
+            "postgresql+asyncpg://artifact:artifact_dev@postgres:5432/artifact_db",
+        )
+        engine = create_async_engine(async_url, pool_pre_ping=True)
+        async with AsyncSession(engine) as async_db:
+            return await detect_conflicts(
+                staged_facts, existing_facts, async_db, user_uid, jaccard, tokenize
+            )
+
     loop = asyncio.new_event_loop()
     try:
-        return loop.run_until_complete(
-            detect_conflicts(staged_facts, existing_facts, ai_key, jaccard, tokenize)
-        )
+        return loop.run_until_complete(_run())
     finally:
         loop.close()
 
@@ -197,9 +162,8 @@ def _get_existing_facts(db: Session, program_node_uid: UUID) -> list[tuple[str, 
 
 def _extract_facts_from_document(
     session: FcImportSession,
-    plaintext_key: str,
-    provider: str,
-    model: str,
+    db: Session,
+    user_uid: UUID,
     session_uid_str: str,
     granularity: str,
 ) -> list[dict[str, Any]]:
@@ -221,9 +185,10 @@ def _extract_facts_from_document(
     for i, chunk in enumerate(chunks):
         max_facts = compute_max_facts(chunk, granularity)
         user_msg = user_template.format(max_facts=max_facts, chunk_text=chunk)
-        response = _call_ai(
-            plaintext_key, provider, model,
+        response = _ai.complete_sync(
+            db, user_uid,
             [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_msg}],
+            response_format={"type": "json_object"},
         )
         facts = _parse_extracted_facts(response)
         all_facts.extend(facts)
@@ -235,9 +200,8 @@ def _extract_facts_from_document(
 
 def _extract_facts_from_text(
     source_text: str,
-    plaintext_key: str,
-    provider: str,
-    model: str,
+    db: Session,
+    user_uid: UUID,
     session_uid_str: str,
     granularity: str,
 ) -> list[dict[str, Any]]:
@@ -253,9 +217,10 @@ def _extract_facts_from_text(
     for i, chunk in enumerate(chunks):
         max_facts = compute_max_facts(chunk, granularity)
         user_msg = user_template.format(max_facts=max_facts, chunk_text=chunk)
-        response = _call_ai(
-            plaintext_key, provider, model,
+        response = _ai.complete_sync(
+            db, user_uid,
             [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_msg}],
+            response_format={"type": "json_object"},
         )
         facts = _parse_extracted_facts(response)
         all_facts.extend(facts)
@@ -289,27 +254,19 @@ def analyze_document(session_uid_str: str) -> None:
 
 def _run_analysis(db: Session, session: FcImportSession, session_uid_str: str) -> None:
     """Core analysis pipeline — extract, classify, deduplicate, conflict-check, stage."""
-    ai_key = db.execute(
-        select(FcUserAiKey).where(FcUserAiKey.user_uid == session.created_by_uid)
-    ).scalar_one_or_none()
-
-    if not ai_key:
-        raise RuntimeError("No AI key configured for user")
-
-    plaintext_key = decrypt(ai_key.encrypted_key)
-    model = ai_key.model_override or DEFAULT_MODELS.get(ai_key.provider, "gpt-4.1")
+    user_uid = session.created_by_uid
     granularity = session.granularity or "standard"
 
     # Step 1: Extract facts
     _publish_progress(session_uid_str, "Extracting facts...", 10)
     if session.input_type == "text" and session.source_text:
         all_facts = _extract_facts_from_text(
-            session.source_text, plaintext_key, ai_key.provider, model,
+            session.source_text, db, user_uid,
             session_uid_str, granularity,
         )
     else:
         all_facts = _extract_facts_from_document(
-            session, plaintext_key, ai_key.provider, model,
+            session, db, user_uid,
             session_uid_str, granularity,
         )
 
@@ -325,7 +282,7 @@ def _run_analysis(db: Session, session: FcImportSession, session_uid_str: str) -
         else None
     )
     classified = _classify_sync(
-        sentences, db, session.program_node_uid, plaintext_key, constraint_uids
+        sentences, db, session.program_node_uid, user_uid, constraint_uids
     )
 
     # Step 3: Deduplicate (Jaccard > 0.85)
@@ -375,7 +332,7 @@ def _run_analysis(db: Session, session: FcImportSession, session_uid_str: str) -
         detections = _detect_conflicts_sync(
             list(pending_facts),
             existing_facts,
-            plaintext_key,
+            user_uid,
         )
         for det in detections:
             for sf in pending_facts:
@@ -428,14 +385,7 @@ def rerun_analysis(session_uid_str: str) -> None:
 
 def _run_reanalysis(db: Session, session: FcImportSession, session_uid_str: str) -> None:
     """Re-classify and re-check conflicts without re-extracting."""
-    ai_key = db.execute(
-        select(FcUserAiKey).where(FcUserAiKey.user_uid == session.created_by_uid)
-    ).scalar_one_or_none()
-
-    if not ai_key:
-        raise RuntimeError("No AI key configured for user")
-
-    plaintext_key = decrypt(ai_key.encrypted_key)
+    user_uid = session.created_by_uid
 
     # Load existing staged facts
     staged = db.execute(
@@ -457,7 +407,7 @@ def _run_reanalysis(db: Session, session: FcImportSession, session_uid_str: str)
         else None
     )
     classified = _classify_sync(
-        sentences, db, session.program_node_uid, plaintext_key, constraint_uids
+        sentences, db, session.program_node_uid, user_uid, constraint_uids
     )
 
     # Update staged facts with new classification
@@ -478,7 +428,7 @@ def _run_reanalysis(db: Session, session: FcImportSession, session_uid_str: str)
 
     pending_facts = [sf for sf in staged if sf.status == "pending"]
     if pending_facts and existing_facts:
-        detections = _detect_conflicts_sync(pending_facts, existing_facts, plaintext_key)
+        detections = _detect_conflicts_sync(pending_facts, existing_facts, user_uid)
         for det in detections:
             for sf in pending_facts:
                 if sf.staged_fact_uid == det["staged_fact_uid"]:

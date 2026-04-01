@@ -1,13 +1,13 @@
-"""Tests for chat service: integration with real permissions, events, encryption. Only LLM httpx calls mocked."""
+"""Tests for chat service: integration with real permissions, events, encryption. Only AI provider calls mocked."""
 
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.kernel.models import (
     FcFact,
     FcFactVersion,
@@ -58,18 +58,6 @@ async def node_with_facts(
     return child_node, sentences
 
 
-def _mock_openai_response(content: str = "The system uses AES-256 encryption.") -> httpx.Response:
-    """Build a fake OpenAI chat completions response."""
-    return httpx.Response(
-        status_code=200,
-        json={
-            "choices": [{"message": {"content": content}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 100, "completion_tokens": 50},
-        },
-        request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
-    )
-
-
 class TestChat:
     @pytest.mark.asyncio
     async def test_no_key_returns_clear_error_message(
@@ -77,7 +65,7 @@ class TestChat:
         db: AsyncSession,
         contributor_user: FcUser,
     ) -> None:
-        """DoS: no key → clear error message."""
+        """DoS: no key -> clear error message."""
         with pytest.raises(NoAIKeyError) as exc_info:
             await chat(db, contributor_user, "Hello", None, [])
         assert "No AI API key configured" in str(exc_info.value.detail)
@@ -90,21 +78,19 @@ class TestChat:
         user_with_key: FcUser,
         contributor_permission: FcNodePermission,
         node_with_facts: tuple[FcNode, list[str]],
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Full chat flow with mocked httpx only."""
+        """Full chat flow with mocked AIProvider only."""
         node, _ = node_with_facts
-        mock_response = _mock_openai_response("The system uses AES-256 encryption.")
-        mock_post = AsyncMock(return_value=mock_response)
-        monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+        mock_complete = AsyncMock(return_value="The system uses AES-256 encryption.")
 
-        result = await chat(
-            db=db,
-            user=user_with_key,
-            message="What encryption does the system use?",
-            node_uid=node.node_uid,
-            history=[],
-        )
+        with patch.object(AIProvider, "complete_for_key", mock_complete):
+            result = await chat(
+                db=db,
+                user=user_with_key,
+                message="What encryption does the system use?",
+                node_uid=node.node_uid,
+                history=[],
+            )
         assert "content" in result
         assert result["facts_loaded"] > 0
         assert result["facts_total"] > 0
@@ -116,60 +102,26 @@ class TestChat:
         user_with_key: FcUser,
         contributor_permission: FcNodePermission,
         node_with_facts: tuple[FcNode, list[str]],
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """DoS: streaming response works end to end."""
         node, _ = node_with_facts
 
-        # Mock httpx stream for OpenAI
-        chunks = [
-            b'data: {"choices":[{"delta":{"content":"Hello "}}]}\n\n',
-            b'data: {"choices":[{"delta":{"content":"world."}}]}\n\n',
-            b"data: [DONE]\n\n",
-        ]
+        async def _mock_stream(self, key_row, messages, **kwargs):
+            async def _gen():
+                yield "Hello "
+                yield "world."
+            return _gen()
 
-        class FakeStreamResponse:
-            status_code = 200
-
-            def raise_for_status(self) -> None:
-                pass
-
-            async def aiter_lines(self):
-                for chunk in chunks:
-                    for line in chunk.decode().strip().split("\n"):
-                        if line:
-                            yield line
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *args):
-                pass
-
-        class FakeClient:
-            def __init__(self, **kwargs):
-                pass
-
-            def stream(self, method, url, **kwargs):
-                return FakeStreamResponse()
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *args):
-                pass
-
-        monkeypatch.setattr("artiFACT.modules.ai_chat.service.httpx.AsyncClient", FakeClient)
-
-        collected: list[str] = []
-        async for chunk in chat_stream(
-            db=db,
-            user=user_with_key,
-            message="Hello",
-            node_uid=node.node_uid,
-            history=[],
-        ):
-            collected.append(chunk)
+        with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
+            collected: list[str] = []
+            async for chunk in chat_stream(
+                db=db,
+                user=user_with_key,
+                message="Hello",
+                node_uid=node.node_uid,
+                history=[],
+            ):
+                collected.append(chunk)
 
         all_text = "".join(collected)
         assert "meta" in all_text
@@ -184,27 +136,25 @@ class TestRateLimit:
         user_with_key: FcUser,
         contributor_permission: FcNodePermission,
         node_with_facts: tuple[FcNode, list[str]],
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """DoS: rate limited per user."""
         from artiFACT.kernel.exceptions import RateLimited
 
         node, _ = node_with_facts
-        mock_response = _mock_openai_response()
-        mock_post = AsyncMock(return_value=mock_response)
-        monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+        mock_complete = AsyncMock(return_value="The system uses AES-256 encryption.")
 
-        # Override rate limit to a small number for testing
-        import artiFACT.kernel.rate_limiter as rl
+        with patch.object(AIProvider, "complete_for_key", mock_complete):
+            # Override rate limit to a small number for testing
+            import artiFACT.kernel.rate_limiter as rl
 
-        original_limits = rl.DEFAULT_LIMITS.copy()
-        rl.DEFAULT_LIMITS["api_write"] = 3
+            original_limits = rl.DEFAULT_LIMITS.copy()
+            rl.DEFAULT_LIMITS["api_write"] = 3
 
-        try:
-            for i in range(3):
-                await chat(db, user_with_key, f"Message {i}", node.node_uid, [])
+            try:
+                for i in range(3):
+                    await chat(db, user_with_key, f"Message {i}", node.node_uid, [])
 
-            with pytest.raises(RateLimited):
-                await chat(db, user_with_key, "One too many", node.node_uid, [])
-        finally:
-            rl.DEFAULT_LIMITS.update(original_limits)
+                with pytest.raises(RateLimited):
+                    await chat(db, user_with_key, "One too many", node.node_uid, [])
+            finally:
+                rl.DEFAULT_LIMITS.update(original_limits)

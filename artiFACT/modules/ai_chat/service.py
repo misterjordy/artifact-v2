@@ -4,16 +4,15 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from typing import Any, Literal, overload
+from typing import Any
 
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.access_logger import log_data_access
-from artiFACT.kernel.crypto import decrypt
+from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.kernel.events import publish
 from artiFACT.kernel.exceptions import AppError
-from artiFACT.kernel.models import FcUser, FcUserAiKey
+from artiFACT.kernel.models import FcUser
 from artiFACT.kernel.rate_limiter import check_rate
 from artiFACT.modules.admin.anomaly_detector import check_anomaly
 from artiFACT.modules.ai_chat.context_provider import get_facts_for_context
@@ -21,6 +20,8 @@ from artiFACT.modules.ai_chat.prompt_builder import build_system_prompt
 from artiFACT.modules.ai_chat.safety.input_filter import check_input
 from artiFACT.modules.ai_chat.safety.output_filter import check_output
 from artiFACT.modules.auth_admin.ai_key_manager import get_ai_key
+
+_ai = AIProvider()
 
 
 class NoAIKeyError(AppError):
@@ -31,12 +32,6 @@ class NoAIKeyError(AppError):
             detail="No AI API key configured. Add one in Settings.",
             code="NO_AI_KEY",
         )
-
-
-DEFAULT_MODELS: dict[str, str] = {
-    "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-20250514",
-}
 
 
 async def chat(
@@ -53,8 +48,6 @@ async def chat(
     key_row = await get_ai_key(db, user.user_uid)
     if not key_row:
         raise NoAIKeyError()
-
-    plaintext_key = decrypt(key_row.encrypted_key)
 
     # Input filter (Layer 1)
     input_check = check_input(message)
@@ -87,7 +80,7 @@ async def chat(
     messages.append({"role": "user", "content": input_check.normalized})
 
     # Call AI provider
-    response_text = await _call_provider(key_row, plaintext_key, messages, stream=False)
+    response_text = await _ai.complete_for_key(key_row, messages)
 
     # Output filter (Layer 3)
     is_safe, filtered = check_output(response_text, fact_sentences[:facts_loaded])
@@ -141,8 +134,6 @@ async def chat_stream(
     if not key_row:
         raise NoAIKeyError()
 
-    plaintext_key = decrypt(key_row.encrypted_key)
-
     input_check = check_input(message)
 
     fact_sentences: list[str] = []
@@ -181,7 +172,7 @@ async def chat_stream(
 
     # Stream response chunks
     collected = ""
-    stream_iter = await _call_provider(key_row, plaintext_key, messages, stream=True)
+    stream_iter = await _ai.stream_for_key(key_row, messages)
     async for chunk in stream_iter:
         collected += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'data': chunk})}\n\n"
@@ -207,172 +198,3 @@ async def chat_stream(
     )
 
 
-@overload
-async def _call_provider(
-    key_row: FcUserAiKey,
-    plaintext_key: str,
-    messages: list[dict[str, str]],
-    *,
-    stream: Literal[False] = ...,
-    timeout: int = ...,
-    max_tokens: int = ...,
-) -> str: ...
-
-
-@overload
-async def _call_provider(
-    key_row: FcUserAiKey,
-    plaintext_key: str,
-    messages: list[dict[str, str]],
-    *,
-    stream: Literal[True],
-    timeout: int = ...,
-    max_tokens: int = ...,
-) -> AsyncIterator[str]: ...
-
-
-async def _call_provider(
-    key_row: FcUserAiKey,
-    plaintext_key: str,
-    messages: list[dict[str, str]],
-    *,
-    stream: bool = False,
-    timeout: int = 120,
-    max_tokens: int = 4096,
-) -> str | AsyncIterator[str]:
-    """Route to correct provider's API."""
-    provider = key_row.provider
-    model = key_row.model_override or DEFAULT_MODELS.get(provider, "gpt-4o")
-
-    if provider == "openai" or provider == "azure_openai":
-        return await _call_openai(plaintext_key, messages, model, stream, timeout, max_tokens)
-    elif provider == "anthropic":
-        return await _call_anthropic(plaintext_key, messages, model, stream, timeout, max_tokens)
-    else:
-        raise AppError(f"Unsupported provider: {provider}")
-
-
-async def _call_openai(
-    api_key: str,
-    messages: list[dict[str, str]],
-    model: str,
-    stream: bool,
-    timeout: int,
-    max_tokens: int,
-) -> str | AsyncIterator[str]:
-    """Call OpenAI chat completions API."""
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    body = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "stream": stream,
-    }
-
-    if stream:
-        return _stream_openai(headers, body, timeout)
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=body,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return str(data["choices"][0]["message"]["content"])
-
-
-async def _stream_openai(
-    headers: dict[str, str],
-    body: dict[str, Any],
-    timeout: int,
-) -> AsyncIterator[str]:
-    """Stream OpenAI response chunks."""
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream(
-            "POST",
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=body,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if line.startswith("data: "):
-                    payload = line[6:]
-                    if payload == "[DONE]":
-                        break
-                    chunk_data = json.loads(payload)
-                    delta = chunk_data["choices"][0].get("delta", {})
-                    content = delta.get("content", "")
-                    if content:
-                        yield content
-
-
-async def _call_anthropic(
-    api_key: str,
-    messages: list[dict[str, str]],
-    model: str,
-    stream: bool,
-    timeout: int,
-    max_tokens: int,
-) -> str | AsyncIterator[str]:
-    """Call Anthropic messages API."""
-    # Extract system message from messages list
-    system_content = ""
-    api_messages = []
-    for msg in messages:
-        if msg["role"] == "system":
-            system_content = msg["content"]
-        else:
-            api_messages.append(msg)
-
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "system": system_content,
-        "messages": api_messages,
-        "stream": stream,
-    }
-
-    if stream:
-        return _stream_anthropic(headers, body, timeout)
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers=headers,
-            json=body,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return str(data["content"][0]["text"])
-
-
-async def _stream_anthropic(
-    headers: dict[str, str],
-    body: dict[str, Any],
-    timeout: int,
-) -> AsyncIterator[str]:
-    """Stream Anthropic response chunks."""
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream(
-            "POST",
-            "https://api.anthropic.com/v1/messages",
-            headers=headers,
-            json=body,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if line.startswith("data: "):
-                    payload = line[6:]
-                    chunk_data = json.loads(payload)
-                    if chunk_data.get("type") == "content_block_delta":
-                        text = chunk_data.get("delta", {}).get("text", "")
-                        if text:
-                            yield text

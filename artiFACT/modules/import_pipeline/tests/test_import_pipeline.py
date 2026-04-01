@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.kernel.auth.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from artiFACT.kernel.auth.session import create_session, get_redis, update_session_field
 from artiFACT.kernel.models import (
@@ -329,27 +330,19 @@ async def test_classifier_batches_8_facts():
 
     call_count = 0
 
-    def _make_response(batch_size: int) -> dict:
+    async def _mock_complete(self, db, user_uid, *, messages=None, **kwargs):
         nonlocal call_count
         call_count += 1
-        return {"a": [[i + 1, 1, 0.9] for i in range(batch_size)]}
-
-    async def _mock_post(self, url, **kwargs):
-        msgs = kwargs.get("json", {}).get("messages", [])
-        user_msg = msgs[-1]["content"] if msgs else ""
+        user_msg = messages[-1]["content"] if messages else ""
         fact_lines = [l for l in user_msg.split("\n") if l.strip()[:2].rstrip(".") .isdigit()]
         batch_size = max(len(fact_lines), 1)
+        return json.dumps({"a": [[i + 1, 1, 0.9] for i in range(batch_size)]})
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps(_make_response(batch_size))}}]
-        }
-        return mock_resp
+    mock_db = MagicMock()
+    mock_user_uid = uuid.uuid4()
 
-    with patch("httpx.AsyncClient.post", new=_mock_post):
-        results = await classify_all(facts, taxonomy_text, id_mapping, "fake-key")
+    with patch.object(AIProvider, "complete", new=_mock_complete):
+        results = await classify_all(facts, taxonomy_text, id_mapping, mock_db, mock_user_uid)
 
     assert call_count == 1  # all 20 in one batch (default batch_size=25)
     assert len(results) == 20
@@ -388,18 +381,12 @@ async def test_classifier_top1_becomes_suggested_node():
     id_mapping = {1: node_uid_1, 2: node_uid_2, 3: node_uid_3}
 
     mock_response = {"a": [[1, 1, 0.92]]}
+    mock_complete = AsyncMock(return_value=json.dumps(mock_response))
 
-    async def _mock_post(self, url, **kwargs):
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps(mock_response)}}]
-        }
-        return mock_resp
-
-    with patch("httpx.AsyncClient.post", new=_mock_post):
+    with patch.object(AIProvider, "complete", mock_complete):
         results = await classify_batch(
-            ["Test fact one."], "1 Root\n2 Child\n3 Leaf", id_mapping, "fake-key"
+            ["Test fact one."], "1 Root\n2 Child\n3 Leaf", id_mapping,
+            MagicMock(), uuid.uuid4(),
         )
 
     assert len(results) == 1
@@ -415,18 +402,12 @@ async def test_classifier_assigns_single_node_per_fact():
     uids = {i: str(uuid.uuid4()) for i in range(1, 4)}
 
     mock_response = {"a": [[1, 2, 0.88]]}
+    mock_complete = AsyncMock(return_value=json.dumps(mock_response))
 
-    async def _mock_post(self, url, **kwargs):
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps(mock_response)}}]
-        }
-        return mock_resp
-
-    with patch("httpx.AsyncClient.post", new=_mock_post):
+    with patch.object(AIProvider, "complete", mock_complete):
         results = await classify_batch(
-            ["Test fact."], "1 A\n2 B\n3 C", uids, "fake-key"
+            ["Test fact."], "1 A\n2 B\n3 C", uids,
+            MagicMock(), uuid.uuid4(),
         )
 
     assert results[0]["suggested_node_uid"] == uids[2]
@@ -442,24 +423,17 @@ async def test_node_constraint_appears_in_classifier_prompt():
     uid_2 = str(uuid.uuid4())
     id_mapping = {1: uid_1, 2: uid_2}
 
-    captured_messages: list[dict] = []
+    mock_complete = AsyncMock(return_value=json.dumps({"a": [[1, 1, 0.9]]}))
 
-    async def _mock_post(self, url, **kwargs):
-        captured_messages.append(kwargs.get("json", {}))
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps({"a": [[1, 1, 0.9]]})}}]
-        }
-        return mock_resp
-
-    with patch("httpx.AsyncClient.post", new=_mock_post):
+    with patch.object(AIProvider, "complete", mock_complete):
         await classify_batch(
-            ["Test fact."], "1 Node A\n2 Node B", id_mapping, "fake-key",
+            ["Test fact."], "1 Node A\n2 Node B", id_mapping,
+            MagicMock(), uuid.uuid4(),
             constraint_node_uids=[uid_1],
         )
 
-    user_msg = captured_messages[0]["messages"][-1]["content"]
+    messages = mock_complete.call_args.kwargs["messages"]
+    user_msg = messages[-1]["content"]
     assert "CONSTRAINT" in user_msg
 
 
@@ -509,25 +483,17 @@ async def test_conflict_only_jaccard_03_to_085():
         ("The system operates at 50MW capacity.", uuid.uuid4()),
     ]
 
-    ai_call_count = 0
+    mock_complete = AsyncMock(
+        return_value=json.dumps({"r": [{"n": 1, "t": "X", "e": "e1", "reason": "different topic"}]})
+    )
 
-    async def _mock_post(self, url, **kwargs):
-        nonlocal ai_call_count
-        ai_call_count += 1
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps({"r": [{"n": 1, "t": "X", "e": "e1", "reason": "different topic"}]})}}]
-        }
-        return mock_resp
-
-    with patch("httpx.AsyncClient.post", new=_mock_post):
+    with patch.object(AIProvider, "complete", mock_complete):
         results = await detect_conflicts(
-            [staged], existing, "fake-key", jaccard, tokenize
+            [staged], existing, MagicMock(), uuid.uuid4(), jaccard, tokenize
         )
 
     # Only one AI call — for the fact in the 0.3-0.85 range
-    assert ai_call_count == 1
+    assert mock_complete.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -555,17 +521,11 @@ async def test_conflict_detected_sets_fields():
         "r": [{"n": 1, "t": "C", "e": "e1", "reason": "Incompatible MW values"}]
     }
 
-    async def _mock_post(self, url, **kwargs):
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps(mock_ai_response)}}]
-        }
-        return mock_resp
+    mock_complete = AsyncMock(return_value=json.dumps(mock_ai_response))
 
-    with patch("httpx.AsyncClient.post", new=_mock_post):
+    with patch.object(AIProvider, "complete", mock_complete):
         results = await detect_conflicts(
-            [staged], existing, "fake-key", jaccard, tokenize
+            [staged], existing, MagicMock(), uuid.uuid4(), jaccard, tokenize
         )
 
     assert len(results) == 1

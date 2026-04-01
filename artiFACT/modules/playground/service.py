@@ -95,6 +95,12 @@ async def _delete_scoped_data(db: AsyncSession) -> None:
         "current_signed_version_uid = NULL "
         "WHERE fact_uid IN (SELECT uid FROM _pg_facts)"
     ))
+    # d2. Import staged facts (FK to fc_fact_version via duplicate_of_uid/conflict_with_uid)
+    await db.execute(text(
+        "DELETE FROM fc_import_staged_fact WHERE session_uid IN ("
+        "SELECT session_uid FROM fc_import_session "
+        "WHERE program_node_uid IN (SELECT uid FROM _pg_nodes))"
+    ))
     # e. Versions
     await db.execute(text(
         "DELETE FROM fc_fact_version WHERE version_uid IN (SELECT uid FROM _pg_versions)"
