@@ -230,7 +230,7 @@
   </div>
 
   <!-- Revise modal -->
-  <div x-show="revising" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="revising=false">
+  <div x-show="revising" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="revising=false">
     <div class="bg-[var(--color-bg-card)] rounded-lg shadow-xl p-6 w-full max-w-lg">
       <h2 class="text-sm font-semibold mb-3">Revise Language</h2>
       <p class="text-xs text-[var(--color-text-muted)] mb-2">Original:</p>
@@ -255,7 +255,7 @@
   </div>
 
   <!-- Reject challenge modal -->
-  <div x-show="rejectingChallenge" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="rejectingChallenge=false">
+  <div x-show="rejectingChallenge" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="rejectingChallenge=false">
     <div class="bg-[var(--color-bg-card)] rounded-lg shadow-xl p-6 w-full max-w-lg">
       <h2 class="text-sm font-semibold mb-3">Reject Challenge</h2>
       <p class="text-xs text-[var(--color-text-muted)] mb-1">Proposed:</p>

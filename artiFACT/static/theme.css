@@ -530,3 +530,8 @@ html.default { --color-import-drop-empty: #D97706; }
   font-size: 0.6rem;
   line-height: 1;
 }
+
+body {
+  opacity: 1;
+  transition: opacity 0.1s ease-in;
+}

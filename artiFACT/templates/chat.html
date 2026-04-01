@@ -45,10 +45,10 @@
         <div class="text-sm whitespace-pre-wrap" x-text="msg.content"></div>
       </div>
     </template>
-    <div x-show="streaming" class="mr-auto bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-2 max-w-[70%]">
+    <div x-show="streaming" x-cloak class="mr-auto bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-lg px-4 py-2 max-w-[70%]">
       <div class="text-sm whitespace-pre-wrap" x-text="streamBuffer || '...'"></div>
     </div>
-    <div x-show="errorMsg" class="text-sm text-[var(--color-danger)] bg-red-50 border border-red-200 rounded p-3" x-text="errorMsg"></div>
+    <div x-show="errorMsg" x-cloak class="text-sm text-[var(--color-danger)] bg-red-50 border border-red-200 rounded p-3" x-text="errorMsg"></div>
   </div>
 
   <!-- Input -->
