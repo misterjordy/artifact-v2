@@ -104,3 +104,7 @@ class TokenEstimate(BaseModel):
     fact_count: int
     estimated_tokens: int
     warning: bool
+
+
+class UpdateFactFilter(BaseModel):
+    fact_filter: str = Field(..., pattern="^(published|signed)$")

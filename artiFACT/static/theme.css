@@ -531,6 +531,30 @@ html.default { --color-import-drop-empty: #D97706; }
   line-height: 1;
 }
 
+/* arti chat widget */
+.arti-chatbox {
+  transform-origin: bottom right;
+}
+
+@keyframes arti-ticker-scroll {
+  0%, 20% { transform: translateX(0); }
+  80%, 100% { transform: translateX(var(--ticker-dist, 0)); }
+}
+.arti-ticker {
+  animation: arti-ticker-scroll 6s ease-in-out 1s infinite;
+  white-space: nowrap;
+}
+
+.arti-msg-user {
+  background-color: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border-radius: 1rem 1rem 0.25rem 1rem;
+}
+
+.arti-msg-arti {
+  color: var(--color-text);
+}
+
 body {
   opacity: 1;
   transition: opacity 0.1s ease-in;

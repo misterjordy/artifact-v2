@@ -77,6 +77,19 @@ async def close_session(
     await db.flush()
 
 
+async def update_fact_filter(
+    db: AsyncSession,
+    chat_uid: uuid.UUID,
+    user_uid: uuid.UUID,
+    fact_filter: str,
+) -> FcChatSession:
+    """Update the fact_filter on an active session."""
+    session = await get_session(db, chat_uid, user_uid)
+    session.fact_filter = fact_filter
+    await db.flush()
+    return session
+
+
 async def save_message(
     db: AsyncSession,
     chat_uid: uuid.UUID,

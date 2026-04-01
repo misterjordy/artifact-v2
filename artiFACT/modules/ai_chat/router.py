@@ -26,6 +26,7 @@ from artiFACT.modules.ai_chat.schemas import (
     CreateChatSession,
     SendMessage,
     TokenEstimate,
+    UpdateFactFilter,
 )
 from artiFACT.modules.ai_chat.service import chat, chat_stream, chat_with_session
 from artiFACT.modules.ai_chat.session_manager import (
@@ -34,6 +35,7 @@ from artiFACT.modules.ai_chat.session_manager import (
     get_active_sessions,
     get_messages,
     get_session,
+    update_fact_filter,
 )
 from artiFACT.modules.auth_admin.ai_key_manager import (
     delete_ai_key,
@@ -242,6 +244,18 @@ async def delete_chat_session(
     """Close a chat session (is_active=false, messages deleted)."""
     await close_session(db, chat_uid, user.user_uid)
     return {"status": "closed"}
+
+
+@router.patch("/chat/sessions/{chat_uid}/filter", status_code=200)
+async def patch_session_filter(
+    chat_uid: uuid.UUID,
+    body: UpdateFactFilter,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Update fact_filter on an active session (published/signed toggle)."""
+    await update_fact_filter(db, chat_uid, user.user_uid, body.fact_filter)
+    return {"status": "updated", "fact_filter": body.fact_filter}
 
 
 @router.post("/chat/{chat_uid}/send")

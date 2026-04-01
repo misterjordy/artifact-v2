@@ -1,0 +1,293 @@
+{# arti chat widget — floating overlay, persists across HTMX navigation #}
+<div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2"
+     x-data="artiChat()" x-cloak x-init="init()">
+
+  {# ── Minimized session bubbles ─────────────────────── #}
+  <template x-for="session in minimizedSessions" :key="session.chat_uid">
+    <button @click="openChat(session.chat_uid)"
+            class="flex items-center gap-2 px-4 py-2 rounded-full
+                   bg-[var(--color-bg-card)] border border-[var(--color-border)]
+                   shadow-lg hover:shadow-xl transition-all duration-300">
+      <svg class="w-4 h-4 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <span x-text="abbreviation(session)" class="text-xs font-mono text-[var(--color-text)]"></span>
+      <span x-show="session.message_count > 0"
+            class="w-2 h-2 rounded-full bg-[var(--color-accent)]"></span>
+    </button>
+  </template>
+
+  {# ── Chat box (expanded) ───────────────────────────── #}
+  <div x-show="activeChat" x-cloak
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 scale-90"
+       x-transition:enter-end="opacity-100 scale-100"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100 scale-100"
+       x-transition:leave-end="opacity-0 scale-90"
+       class="arti-chatbox w-[28rem] max-h-[36rem] flex flex-col rounded-xl
+              bg-[var(--color-bg-card)] border border-[var(--color-border)]
+              shadow-2xl origin-bottom-right overflow-hidden">
+
+    {# ── Header ──────────────────────────────────────── #}
+    <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--color-border)] bg-[var(--color-header-bg)]">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <svg class="w-4 h-4 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        <div x-ref="tickerOuter" class="overflow-hidden flex-1 min-w-0" x-effect="initTicker()">
+          <span x-ref="tickerInner" x-text="tickerText()"
+                class="text-xs font-mono text-[var(--color-text-sidebar)] whitespace-nowrap inline-block"></span>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        {# Published/Signed toggle #}
+        <template x-if="activeChat && activeChat !== '__new__'">
+          <button @click="toggleFilter()" class="relative w-8 h-4 rounded-full transition-colors"
+                  :class="factFilter === 'signed' ? 'bg-green-500' : 'bg-[var(--color-accent)]'"
+                  :title="factFilter === 'signed' ? 'Signed facts' : 'Published facts'">
+            <span class="absolute left-0.5 top-0.5 w-3 h-3 rounded-full bg-[var(--color-bg-card)] shadow transition-transform"
+                  :class="factFilter === 'signed' ? 'translate-x-4' : ''"></span>
+          </button>
+        </template>
+        {# Minimize #}
+        <button @click="minimizeChat()" class="p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors" title="Minimize">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 12h14"/></svg>
+        </button>
+        {# Close #}
+        <button @click="promptClose()" class="p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] transition-colors" title="Close chat">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    {# ── Close confirmation ──────────────────────────── #}
+    <div x-show="confirmingClose" x-cloak
+         class="px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+      <p class="text-xs text-[var(--color-text-muted)] mb-2">Close this chat? Messages will be deleted.</p>
+      <div class="flex gap-2">
+        <button @click="closeChat()" class="px-3 py-1 text-xs rounded bg-[var(--color-danger)] text-[var(--color-text-on-accent)]">Yes, close</button>
+        <button @click="cancelClose()" class="px-3 py-1 text-xs rounded bg-[var(--color-bg-card)] text-[var(--color-text-muted)] border border-[var(--color-border)]">Cancel</button>
+      </div>
+    </div>
+
+    {# ── Message area ────────────────────────────────── #}
+    <div x-ref="msgArea" @scroll="handleScroll($event)"
+         class="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-[16rem] max-h-[24rem]">
+
+      {# ── SETUP FLOW: program selection ─────────────── #}
+      <template x-if="newChatStep === 'program'">
+        <div>
+          <div class="arti-msg-arti">
+            <div class="flex items-start gap-2">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              <div class="text-sm text-[var(--color-text)]">
+                <p>Hi {{ user.display_name.split(' ')[0] if user is defined and user.display_name else 'there' }}, I'm arti.</p>
+                <p class="mt-1">You're currently querying on all
+                  <strong :class="factFilter === 'signed' ? 'text-green-400' : 'text-[var(--color-accent)]'" x-text="factFilter"></strong> facts.
+                  If you want to constrain to <strong :class="factFilter === 'signed' ? 'text-[var(--color-accent)]' : 'text-green-400'" x-text="factFilter === 'signed' ? 'published' : 'signed'"></strong> facts, use the toggle at the top.</p>
+                <p class="mt-3 font-medium">Which program?</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-3 ml-6">
+            <template x-for="prog in programs" :key="prog.node_uid">
+              <button @click="selectProgram(prog)"
+                      class="px-3 py-1.5 text-sm font-mono rounded-full
+                             border border-[var(--color-accent)] text-[var(--color-accent)]
+                             hover:bg-[var(--color-accent)] hover:text-[var(--color-text-on-accent)]
+                             transition-colors">
+                <span x-text="prog.title"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      {# ── SETUP FLOW: constraint selection ──────────── #}
+      <template x-if="newChatStep === 'constraint'">
+        <div>
+          <div class="arti-msg-arti">
+            <div class="flex items-start gap-2">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              <div class="text-sm text-[var(--color-text)]">
+                <p>Got it. Which topic?</p>
+              </div>
+            </div>
+          </div>
+
+          {# Drop zone #}
+          <div class="mt-3 ml-6 rounded-lg border-2 border-dashed px-4 py-3 text-sm transition-colors"
+               :class="constraintNodes.length > 0 ? 'border-[var(--color-accent)] bg-[var(--color-accent-light)]' : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'"
+               @dragover.prevent="$el.classList.add('dnd-drag-over')"
+               @dragleave.prevent="$el.classList.remove('dnd-drag-over')"
+               @drop.prevent="handleConstraintDrop($event)">
+            <template x-if="constraintNodes.length === 0">
+              <p class="text-[var(--color-text-muted)] text-center py-2">Drop sections from the tree here<br>or skip for the entire program</p>
+            </template>
+            <div class="flex flex-wrap gap-1.5">
+              <template x-for="(c, i) in constraintNodes" :key="c.uid">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs
+                             bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">
+                  <span x-text="c.title"></span>
+                  <button @click.stop="removeConstraint(i)" class="hover:text-red-200 transition-colors">&times;</button>
+                </span>
+              </template>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-3 ml-6">
+            <button @click="skipConstraints()"
+                    class="px-3 py-1.5 text-xs rounded border border-[var(--color-border)]
+                           text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)]
+                           transition-colors">
+              Skip — read everything
+            </button>
+            <button x-show="constraintNodes.length > 0" @click="confirmConstraints()"
+                    class="px-3 py-1.5 text-xs rounded
+                           bg-[var(--color-accent)] text-[var(--color-text-on-accent)]
+                           hover:bg-[var(--color-accent-hover)] transition-colors">
+              Continue
+            </button>
+          </div>
+        </div>
+      </template>
+
+      {# ── SETUP FLOW: mode selection ────────────────── #}
+      <template x-if="newChatStep === 'mode'">
+        <div>
+          <div class="arti-msg-arti">
+            <div class="flex items-start gap-2">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              <div class="text-sm text-[var(--color-text)]">
+                <p>How should I search?</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-3 ml-6" x-show="!setupLoading">
+            <button @click="selectMode('efficient')"
+                    class="flex-1 px-3 py-3 text-center rounded-lg border transition-colors
+                           border-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-on-accent)]">
+              <span class="block text-sm font-semibold">Efficient</span>
+              <span class="block text-2xs text-[var(--color-text-muted)] mt-1">Finds relevant facts per question (faster)</span>
+            </button>
+            <button @click="selectMode('smart')"
+                    class="flex-1 px-3 py-3 text-center rounded-lg border transition-colors
+                           border-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-on-accent)]">
+              <span class="block text-sm font-semibold">Smart</span>
+              <span class="block text-2xs text-[var(--color-text-muted)] mt-1">Reads everything in scope every time (thorough)</span>
+            </button>
+          </div>
+
+          <div x-show="setupLoading" class="mt-3 ml-6 text-xs text-[var(--color-text-muted)]">Creating session...</div>
+        </div>
+      </template>
+
+      {# ── CHAT READY: welcome + token warning ───────── #}
+      <template x-if="!newChatStep && activeChat && activeChat !== '__new__' && messages.length === 0">
+        <div>
+          <div class="arti-msg-arti">
+            <div class="flex items-start gap-2">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              <div class="text-sm text-[var(--color-text)]">
+                <p>Ready. What would you like to know?</p>
+                <p class="mt-2 text-xs text-[var(--color-text-muted)]">Bundle multiple questions in one message to save tokens — facts are resent with each message.</p>
+                <p class="mt-1 text-xs text-[var(--color-text-muted)]">Or click 'site questions' to learn how to use this tool.</p>
+              </div>
+            </div>
+          </div>
+          {# Token warning #}
+          <template x-if="tokenEstimate && tokenEstimate.warning">
+            <div class="mt-2 ml-6 px-3 py-2 rounded text-xs bg-[var(--color-warning)]/15 text-[var(--color-warning)] border border-[var(--color-warning)]/30">
+              This scope has ~<span x-text="tokenEstimate.fact_count"></span> facts
+              (~<span x-text="tokenEstimate.estimated_tokens"></span> tokens).
+              Smart mode sends all of them with every message.
+              Consider narrowing your scope or using Efficient mode.
+            </div>
+          </template>
+        </div>
+      </template>
+
+      {# ── MESSAGES ──────────────────────────────────── #}
+      <template x-for="msg in messages" :key="msg.message_uid">
+        <div>
+          {# User message #}
+          <template x-if="msg.role === 'user'">
+            <div class="flex justify-end">
+              <div class="arti-msg-user max-w-[85%] px-3 py-2 rounded-xl text-sm">
+                <span x-text="msg.content"></span>
+              </div>
+            </div>
+          </template>
+          {# Assistant message #}
+          <template x-if="msg.role === 'assistant'">
+            <div class="arti-msg-arti">
+              <div class="flex items-start gap-2">
+                <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                <div class="max-w-[85%] text-sm text-[var(--color-text)]" x-text="msg.content"></div>
+              </div>
+            </div>
+          </template>
+          {# System message #}
+          <template x-if="msg.role === 'system'">
+            <div class="text-center">
+              <span class="text-2xs text-[var(--color-text-muted)] italic" x-text="msg.content"></span>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      {# Streaming indicator #}
+      <div x-show="streaming" x-cloak class="flex items-center gap-1 ml-6 text-xs text-[var(--color-text-muted)]">
+        <span class="animate-pulse">...</span>
+      </div>
+
+      {# Scroll-down indicator #}
+      <div x-show="scrolledUp" x-cloak
+           @click="scrollToBottom()"
+           class="sticky bottom-0 flex justify-center py-1 cursor-pointer">
+        <span class="px-2 py-0.5 rounded-full text-2xs bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow">
+          New message below
+        </span>
+      </div>
+    </div>
+
+    {# ── Footer ──────────────────────────────────────── #}
+    <template x-if="!newChatStep && activeChat && activeChat !== '__new__'">
+      <div class="border-t border-[var(--color-border)]">
+        {# Token counter #}
+        <div class="flex items-center justify-between px-3 pt-1.5">
+          <span class="text-2xs text-[var(--color-text-muted)]">~<span x-text="sessionTokens"></span> tokens this session</span>
+          <button @click="startNewChat()" title="New chat"
+                  class="text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          </button>
+        </div>
+        {# Input #}
+        <div class="flex items-end gap-2 px-3 pb-3 pt-1.5">
+          <input x-model="inputText" @keydown="handleKey($event)"
+                 :disabled="streaming"
+                 placeholder="Ask arti..."
+                 class="flex-1 px-3 py-2 text-sm rounded-lg
+                        bg-[var(--color-bg-input)] text-[var(--color-text)]
+                        border border-[var(--color-border-input)]
+                        placeholder-[var(--color-text-muted)]
+                        focus:outline-none focus:border-[var(--color-accent)]
+                        disabled:opacity-50">
+          <button @click="sendMessage()" :disabled="streaming || !inputText.trim()"
+                  class="p-2 rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)]
+                         hover:bg-[var(--color-accent-hover)] transition-colors
+                         disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# ── New chat bubble (always visible when no active chat) ── #}
+  <button x-show="!activeChat" @click="startNewChat()"
+          class="flex items-center gap-2 px-4 py-2 rounded-full
+                 bg-[var(--color-bg-card)] border border-[var(--color-border)]
+                 shadow-lg hover:shadow-xl transition-all duration-300">
+    <svg class="w-4 h-4 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+    <span class="text-sm font-semibold text-[var(--color-accent)]">arti</span>
+  </button>
+</div>
