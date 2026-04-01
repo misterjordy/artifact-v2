@@ -501,6 +501,68 @@ class FcDocumentTemplate(Base):
     )
 
 
+class FcChatSession(Base):
+    __tablename__ = "fc_chat_session"
+
+    chat_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_user.user_uid", ondelete="CASCADE"), nullable=False
+    )
+    program_node_uid: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fc_node.node_uid"), nullable=True
+    )
+    constraint_node_uids: Mapped[list | None] = mapped_column(JSONB, default=list)
+    mode: Mapped[str] = mapped_column(String(10), nullable=False, default="efficient")
+    fact_filter: Mapped[str] = mapped_column(String(10), nullable=False, default="published")
+    total_input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_message_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint("mode IN ('smart', 'efficient')", name="ck_chat_session_mode"),
+        CheckConstraint(
+            "fact_filter IN ('published', 'signed')", name="ck_chat_session_filter"
+        ),
+        Index("idx_chat_session_user", "user_uid"),
+    )
+
+
+class FcChatMessage(Base):
+    __tablename__ = "fc_chat_message"
+
+    message_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    chat_uid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("fc_chat_session.chat_uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(10), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    facts_loaded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user', 'assistant', 'system')", name="ck_chat_message_role"
+        ),
+        Index("idx_chat_message_session", "chat_uid"),
+    )
+
+
 class FcAiUsage(Base):
     __tablename__ = "fc_ai_usage"
 

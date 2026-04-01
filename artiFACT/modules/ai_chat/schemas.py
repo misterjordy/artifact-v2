@@ -59,3 +59,48 @@ class AIKeyOut(BaseModel):
 class AIStatusOut(BaseModel):
     has_key: bool
     keys: list[AIKeyOut]
+
+
+# ── Session-based chat schemas ───────────────────────────────────────
+
+
+class CreateChatSession(BaseModel):
+    program_node_uid: uuid.UUID
+    constraint_node_uids: list[uuid.UUID] | None = None
+    mode: str = Field(default="efficient", pattern="^(smart|efficient)$")
+    fact_filter: str = Field(default="published", pattern="^(published|signed)$")
+
+
+class ChatSessionOut(BaseModel):
+    chat_uid: uuid.UUID
+    program_name: str
+    constraint_names: list[str]
+    mode: str
+    fact_filter: str
+    message_count: int
+    total_input_tokens: int
+    total_output_tokens: int
+    created_at: datetime
+    last_message_at: datetime | None
+
+
+class SendMessage(BaseModel):
+    content: str = Field(..., min_length=1, max_length=10_000)
+
+
+class ChatMessageOut(BaseModel):
+    message_uid: uuid.UUID
+    role: str
+    content: str
+    input_tokens: int
+    output_tokens: int
+    facts_loaded: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TokenEstimate(BaseModel):
+    fact_count: int
+    estimated_tokens: int
+    warning: bool

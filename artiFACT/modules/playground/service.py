@@ -134,6 +134,12 @@ async def _delete_playground_users(db: AsyncSession) -> None:
     # Build a safe IN list from the constant tuple (not user input)
     in_list = ", ".join(f"'{u}'" for u in PLAYGROUND_USERNAMES)
     user_subq = f"SELECT user_uid FROM fc_user WHERE cac_dn IN ({in_list})"
+    # Remove chat messages + sessions (no CASCADE from user to chat tables via session)
+    await db.execute(text(
+        f"DELETE FROM fc_chat_message WHERE chat_uid IN ("
+        f"SELECT chat_uid FROM fc_chat_session WHERE user_uid IN ({user_subq}))"
+    ))
+    await db.execute(text(f"DELETE FROM fc_chat_session WHERE user_uid IN ({user_subq})"))
     # Remove AI usage records (no CASCADE on FK)
     await db.execute(text(f"DELETE FROM fc_ai_usage WHERE user_uid IN ({user_subq})"))
     # NULL out remaining event_log actor refs for safety

@@ -1,23 +1,40 @@
 """AI Chat API endpoints."""
 
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.db import get_db
-from artiFACT.kernel.models import FcUser
+from artiFACT.kernel.exceptions import NotFound
+from artiFACT.kernel.models import FcChatMessage, FcChatSession, FcNode, FcUser
 from artiFACT.modules.ai_chat.context_provider import get_available_context
+from artiFACT.modules.ai_chat.retriever import estimate_scope_tokens
 from artiFACT.modules.ai_chat.schemas import (
     AIKeyIn,
     AIKeyOut,
     AIStatusOut,
+    ChatMessageOut,
     ChatRequest,
     ChatResponse,
+    ChatSessionOut,
     ContextNode,
     ContextOut,
+    CreateChatSession,
+    SendMessage,
+    TokenEstimate,
 )
-from artiFACT.modules.ai_chat.service import chat, chat_stream
+from artiFACT.modules.ai_chat.service import chat, chat_stream, chat_with_session
+from artiFACT.modules.ai_chat.session_manager import (
+    close_session,
+    create_session,
+    get_active_sessions,
+    get_messages,
+    get_session,
+)
 from artiFACT.modules.auth_admin.ai_key_manager import (
     delete_ai_key,
     list_ai_keys,
@@ -25,6 +42,9 @@ from artiFACT.modules.auth_admin.ai_key_manager import (
 )
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai_chat"])
+
+
+# ── Legacy endpoints (backward compat) ──────────────────────────────
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -86,7 +106,7 @@ async def get_status(
     )
 
 
-# --- AI Key CRUD (settings page) ---
+# ── AI Key CRUD (settings page) ─────────────────────────────────────
 
 
 @router.post("/keys", response_model=AIKeyOut, status_code=201)
@@ -126,3 +146,150 @@ async def remove_key(
     """Delete an AI key by provider."""
     await delete_ai_key(db, user.user_uid, provider)
     await db.commit()
+
+
+# ── Session-based chat (new widget) ─────────────────────────────────
+
+
+@router.post("/chat/sessions", response_model=ChatSessionOut, status_code=201)
+async def create_chat_session(
+    body: CreateChatSession,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ChatSessionOut:
+    """Create a new chat session."""
+    # Validate program node exists
+    program = await db.get(FcNode, body.program_node_uid)
+    if not program:
+        raise NotFound("Program node not found", code="NODE_NOT_FOUND")
+
+    session = await create_session(
+        db=db,
+        user_uid=user.user_uid,
+        program_node_uid=body.program_node_uid,
+        constraint_node_uids=body.constraint_node_uids,
+        mode=body.mode,
+        fact_filter=body.fact_filter,
+    )
+
+    # Resolve constraint names
+    constraint_names: list[str] = []
+    if body.constraint_node_uids:
+        for uid in body.constraint_node_uids:
+            node = await db.get(FcNode, uid)
+            if node:
+                constraint_names.append(node.title)
+
+    return ChatSessionOut(
+        chat_uid=session.chat_uid,
+        program_name=program.title,
+        constraint_names=constraint_names,
+        mode=session.mode,
+        fact_filter=session.fact_filter,
+        message_count=0,
+        total_input_tokens=0,
+        total_output_tokens=0,
+        created_at=session.created_at,
+        last_message_at=session.last_message_at,
+    )
+
+
+@router.get("/chat/sessions", response_model=list[ChatSessionOut])
+async def list_chat_sessions(
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ChatSessionOut]:
+    """Return user's active sessions with metadata."""
+    sessions = await get_active_sessions(db, user.user_uid)
+    result: list[ChatSessionOut] = []
+    for s in sessions:
+        program = await db.get(FcNode, s.program_node_uid)
+        program_name = program.title if program else "Unknown"
+
+        constraint_names: list[str] = []
+        if s.constraint_node_uids:
+            for uid_str in s.constraint_node_uids:
+                node = await db.get(FcNode, uuid.UUID(uid_str))
+                if node:
+                    constraint_names.append(node.title)
+
+        msg_count_result = await db.execute(
+            select(func.count()).where(FcChatMessage.chat_uid == s.chat_uid)
+        )
+        msg_count = msg_count_result.scalar() or 0
+
+        result.append(ChatSessionOut(
+            chat_uid=s.chat_uid,
+            program_name=program_name,
+            constraint_names=constraint_names,
+            mode=s.mode,
+            fact_filter=s.fact_filter,
+            message_count=msg_count,
+            total_input_tokens=s.total_input_tokens,
+            total_output_tokens=s.total_output_tokens,
+            created_at=s.created_at,
+            last_message_at=s.last_message_at,
+        ))
+    return result
+
+
+@router.delete("/chat/sessions/{chat_uid}", status_code=200)
+async def delete_chat_session(
+    chat_uid: uuid.UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Close a chat session (is_active=false, messages deleted)."""
+    await close_session(db, chat_uid, user.user_uid)
+    return {"status": "closed"}
+
+
+@router.post("/chat/{chat_uid}/send")
+async def send_chat_message(
+    chat_uid: uuid.UUID,
+    body: SendMessage,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Send a message in a chat session. Streams response via SSE."""
+    # Validate session exists and belongs to user
+    await get_session(db, chat_uid, user.user_uid)
+
+    stream = chat_with_session(
+        db=db,
+        chat_uid=chat_uid,
+        user_message=body.content,
+        user=user,
+    )
+    return StreamingResponse(stream, media_type="text/event-stream")
+
+
+@router.get("/chat/{chat_uid}/messages", response_model=list[ChatMessageOut])
+async def get_chat_messages(
+    chat_uid: uuid.UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ChatMessageOut]:
+    """Return ordered messages for this session."""
+    await get_session(db, chat_uid, user.user_uid)
+    messages = await get_messages(db, chat_uid)
+    return [ChatMessageOut.model_validate(m) for m in messages]
+
+
+@router.get("/chat/estimate", response_model=TokenEstimate)
+async def get_token_estimate(
+    program_node_uid: uuid.UUID = Query(...),
+    constraint_node_uids: str | None = Query(default=None),
+    fact_filter: str = Query(default="published", pattern="^(published|signed)$"),
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TokenEstimate:
+    """Estimate token cost for a given scope."""
+    parsed_constraints: list[uuid.UUID] | None = None
+    if constraint_node_uids:
+        parsed_constraints = [uuid.UUID(u.strip()) for u in constraint_node_uids.split(",")]
+
+    result = await estimate_scope_tokens(
+        db, program_node_uid, parsed_constraints, fact_filter
+    )
+    return TokenEstimate(**result)

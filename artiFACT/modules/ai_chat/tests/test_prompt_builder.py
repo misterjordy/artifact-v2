@@ -1,4 +1,4 @@
-"""Tests for prompt_builder: token counting, no byte truncation (v1 A-SEC-01)."""
+"""Tests for prompt_builder: no token cap, mode-aware coverage notes."""
 
 from artiFACT.modules.ai_chat.prompt_builder import build_system_prompt, count_tokens
 
@@ -13,44 +13,55 @@ class TestCountTokens:
 
 
 class TestBuildSystemPrompt:
-    def test_returns_three_tuple(self) -> None:
-        prompt, loaded, total = build_system_prompt(["Fact one.", "Fact two."])
+    def test_returns_two_tuple(self) -> None:
+        prompt, loaded = build_system_prompt(["Fact one.", "Fact two."])
         assert isinstance(prompt, str)
         assert loaded == 2
-        assert total == 2
 
-    def test_prompt_never_truncated_mid_sentence(self) -> None:
-        """Regression: v1 A-SEC-01 — byte truncation split sentences."""
-        # Create facts that are large enough to exceed budget
-        long_facts = [f"This is fact number {i} with extra detail for padding." for i in range(500)]
-        prompt, loaded, total = build_system_prompt(long_facts, max_tokens=2000)
+    def test_no_token_cap_all_facts_included(self) -> None:
+        """All facts should appear in prompt — no truncation."""
+        facts = [f"This is fact number {i} with extra detail for padding." for i in range(300)]
+        prompt, loaded = build_system_prompt(facts)
+        assert loaded == 300
+        for i in range(300):
+            assert f"This is fact number {i}" in prompt
 
-        # Not all facts should be loaded (we exceeded budget)
-        assert loaded < total
-        assert total == 500
-
-        # Every included fact should be complete (no truncation mid-sentence)
-        for i in range(loaded):
-            assert f"- This is fact number {i} with extra detail for padding." in prompt
-
-        # The next fact should NOT be in the prompt (it was cut at boundary)
-        if loaded < total:
-            assert f"- This is fact number {loaded}" not in prompt
-
-    def test_respects_token_budget(self) -> None:
-        facts = [f"Fact {i}." for i in range(100)]
-        prompt, loaded, total = build_system_prompt(facts, max_tokens=1000)
-        assert count_tokens(prompt) <= 1000
-
-    def test_reports_loaded_and_total(self) -> None:
+    def test_reports_loaded_count(self) -> None:
         facts = ["Fact A.", "Fact B.", "Fact C."]
-        prompt, loaded, total = build_system_prompt(facts, max_tokens=6000)
+        prompt, loaded = build_system_prompt(facts)
         assert loaded == 3
-        assert total == 3
-        assert "3 loaded of 3 total" in prompt
+        assert "3 of 3" in prompt
 
     def test_empty_facts(self) -> None:
-        prompt, loaded, total = build_system_prompt([])
+        prompt, loaded = build_system_prompt([])
         assert loaded == 0
-        assert total == 0
-        assert "0 loaded" in prompt
+        assert "0 of 0" in prompt
+
+    def test_system_prompt_includes_program_name(self) -> None:
+        prompt, _ = build_system_prompt(["Fact."], program_name="Boatwing H-12")
+        assert "Boatwing H-12" in prompt
+
+    def test_efficient_mode_prompt_includes_coverage_note(self) -> None:
+        prompt, _ = build_system_prompt(
+            ["Fact."], mode="efficient", total_facts_in_scope=100
+        )
+        assert "most relevant facts" in prompt
+
+    def test_smart_mode_no_coverage_note(self) -> None:
+        prompt, _ = build_system_prompt(
+            ["Fact."], mode="smart", total_facts_in_scope=1
+        )
+        assert "most relevant facts" not in prompt
+
+    def test_accepts_dict_facts(self) -> None:
+        facts = [{"sentence": "Fact A."}, {"sentence": "Fact B."}]
+        prompt, loaded = build_system_prompt(facts)
+        assert loaded == 2
+        assert "Fact A." in prompt
+        assert "Fact B." in prompt
+
+    def test_playground_definitions_removed(self) -> None:
+        """System prompt should NOT contain old playground joke text."""
+        prompt, _ = build_system_prompt(["Fact."])
+        assert "SPECIAL DEFINITIONS" not in prompt
+        assert "Boatwing" not in prompt  # no hardcoded joke
