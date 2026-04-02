@@ -57,7 +57,7 @@ def filter_tags(tags: list[str], fact_sentence: str) -> list[str]:
     seen: set[str] = set()
     validated: list[str] = []
     for tag in tags:
-        cleaned = tag.strip().lower()
+        cleaned = tag.strip().replace("_", " ").lower()
         if not cleaned or cleaned in seen:
             continue
         seen.add(cleaned)

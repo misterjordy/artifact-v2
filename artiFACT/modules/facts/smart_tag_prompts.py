@@ -23,6 +23,8 @@ from the target fact. \
 (7) Minimize word repetition ACROSS tags. If a word already appears \
 in one tag, do not use it in another. Each tag should contribute a \
 unique retrieval term. \
+(8) Use natural spacing, not underscores or camelCase. Output \
+"defense acquisition" not "defense_acquisition". \
 Return ONLY valid JSON: {"tags": ["tag1", "tag2", ...]}. \
 No fences, no extra text.\
 """
@@ -52,6 +54,8 @@ the fact. \
 (7) Minimize word repetition ACROSS tags. If a word already appears \
 in one tag, do not use it in another. Each tag should contribute a \
 unique retrieval term. \
+(8) Use natural spacing, not underscores or camelCase. Output \
+"defense acquisition" not "defense_acquisition". \
 Return ONLY valid JSON: {"results": [{"fact": N, "tags": ["tag1", ...]}, ...]}. \
 No fences, no extra text.\
 """
