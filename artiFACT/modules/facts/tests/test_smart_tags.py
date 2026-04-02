@@ -84,6 +84,29 @@ def test_filter_tags_strips_whitespace():
     assert result == ["hosting", "deployment"]
 
 
+def test_filter_tags_cross_tag_stem_dedup():
+    """Tags whose stems are all already covered by earlier tags get pruned."""
+    result = filter_tags(
+        [
+            "procurement level",
+            "major defense acquisition",
+            "category one",
+            "defense acquisition",
+            "program management",
+            "dod acquisition",
+            "defense category",
+        ],
+        "This is a test sentence about something unrelated.",
+    )
+    assert "procurement level" in result
+    assert "major defense acquisition" in result
+    assert "category one" in result
+    assert "defense acquisition" not in result  # {defens, acquisit} both seen
+    assert "program management" in result
+    assert "dod acquisition" in result  # "dod" is new
+    assert "defense category" not in result  # {defens, categori} both seen
+
+
 # ── sync_tags_text ──
 
 

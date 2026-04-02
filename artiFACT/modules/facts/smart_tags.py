@@ -53,19 +53,29 @@ def validate_tag(tag: str, fact_sentence: str) -> bool:
 
 
 def filter_tags(tags: list[str], fact_sentence: str) -> list[str]:
-    """Validate, strip, lowercase, deduplicate, cap at 12."""
+    """Validate, strip, lowercase, deduplicate, cross-tag stem dedup, cap at 12."""
     seen: set[str] = set()
-    result: list[str] = []
+    validated: list[str] = []
     for tag in tags:
         cleaned = tag.strip().lower()
         if not cleaned or cleaned in seen:
             continue
         seen.add(cleaned)
         if validate_tag(cleaned, fact_sentence):
-            result.append(cleaned)
-        if len(result) >= MAX_TAGS:
+            validated.append(cleaned)
+
+    # Cross-tag dedup: skip tags whose stems are all already covered
+    seen_stems: set[str] = set()
+    unique: list[str] = []
+    for tag in validated:
+        tag_stems = {stem_word(w) for w in re.findall(r"[A-Za-z0-9]+", tag) if len(w) > 2}
+        if tag_stems and tag_stems <= seen_stems:
+            continue
+        seen_stems.update(tag_stems)
+        unique.append(tag)
+        if len(unique) >= MAX_TAGS:
             break
-    return result
+    return unique
 
 
 def sync_tags_text(version: FcFactVersion) -> None:

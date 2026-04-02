@@ -17,6 +17,12 @@ broader/narrower category terms a user might search for. \
 when searching. Avoid academic jargon. Think about what QUESTION \
 someone would ask that should return this fact, and use the nouns \
 from that question. \
+(6) Do not use ANY word that appears in the target fact, even as \
+part of a multi-word phrase. Every word in every tag must be absent \
+from the target fact. \
+(7) Minimize word repetition ACROSS tags. If a word already appears \
+in one tag, do not use it in another. Each tag should contribute a \
+unique retrieval term. \
 Return ONLY valid JSON: {"tags": ["tag1", "tag2", ...]}. \
 No fences, no extra text.\
 """
@@ -40,6 +46,12 @@ acronyms, related standards, broader/narrower category terms. \
 when searching. Avoid academic jargon. Think about what QUESTION \
 someone would ask that should return this fact, and use the nouns \
 from that question. \
+(6) Do not use ANY word that appears in the fact, even as part of \
+a multi-word phrase. Every word in every tag must be absent from \
+the fact. \
+(7) Minimize word repetition ACROSS tags. If a word already appears \
+in one tag, do not use it in another. Each tag should contribute a \
+unique retrieval term. \
 Return ONLY valid JSON: {"results": [{"fact": N, "tags": ["tag1", ...]}, ...]}. \
 No fences, no extra text.\
 """
