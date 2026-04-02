@@ -31,6 +31,7 @@ class VersionOut(BaseModel):
     state: str
     display_sentence: str
     metadata_tags: list[str] = []
+    smart_tags: list[str] = []
     source_reference: dict[str, Any] | None = None
     effective_date: str | None = None
     classification: str = "UNCLASSIFIED"
@@ -160,3 +161,25 @@ class FactHistoryOut(BaseModel):
     versions: list[VersionHistoryOut] = []
     move_events: list[MoveEventOut] = []
     timeline: list[dict[str, Any]] = []
+
+
+# ── Smart Tags ──
+
+
+class SmartTagUpdate(BaseModel):
+    tags: list[str] = Field(..., max_length=12)
+
+
+class SmartTagValidate(BaseModel):
+    tag: str = Field(..., min_length=1, max_length=100)
+
+
+class SmartTagOut(BaseModel):
+    tags: list[str]
+    version_uid: UUID
+
+
+class SmartTagBatchOut(BaseModel):
+    tagged_count: int
+    skipped_count: int
+    results: dict[str, list[str]]

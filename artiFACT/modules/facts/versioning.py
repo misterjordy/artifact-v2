@@ -31,6 +31,15 @@ async def create_version(
     Auto-publishes only when auto_approve=True AND actor has approve
     permission. Default is proposed for all users.
     """
+    # Carry smart tags forward from superseded version
+    carry_smart_tags: list[str] = []
+    carry_smart_tags_text: str = ""
+    if fact.current_published_version_uid:
+        superseded = await db.get(FcFactVersion, fact.current_published_version_uid)
+        if superseded and superseded.smart_tags:
+            carry_smart_tags = list(superseded.smart_tags)
+            carry_smart_tags_text = superseded.smart_tags_text or ""
+
     version = FcFactVersion(
         fact_uid=fact.fact_uid,
         display_sentence=sentence,
@@ -41,6 +50,8 @@ async def create_version(
         change_summary=change_summary,
         supersedes_version_uid=fact.current_published_version_uid,
         created_by_uid=actor.user_uid,
+        smart_tags=carry_smart_tags,
+        smart_tags_text=carry_smart_tags_text,
     )
 
     if auto_approve and await can(actor, "approve", fact.node_uid, db):

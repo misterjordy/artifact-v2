@@ -26,6 +26,8 @@ from artiFACT.modules.facts.schemas import (
     FactOut,
     FactUpdate,
     FactWithVersionOut,
+    SmartTagUpdate,
+    SmartTagValidate,
     VersionOut,
 )
 from artiFACT.modules.facts.service import (
@@ -34,6 +36,12 @@ from artiFACT.modules.facts.service import (
     get_fact_versions,
     retire_fact,
     unretire_fact,
+)
+from artiFACT.modules.facts.smart_tags import (
+    generate_tags_batch,
+    generate_tags_single,
+    update_tags_manual,
+    validate_tag,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["facts"])
@@ -300,3 +308,125 @@ async def create_comment(
         resolved_at=comment.resolved_at,
     )
     return {"data": out.model_dump(mode="json")}
+
+
+# ── Smart Tags ──
+
+
+@router.post("/facts/{fact_uid}/versions/{version_uid}/smart-tags/generate")
+async def generate_smart_tags_endpoint(
+    fact_uid: uuid.UUID,
+    version_uid: uuid.UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Generate AI smart tags for a single fact version."""
+    from artiFACT.kernel.exceptions import Forbidden, NotFound
+    from artiFACT.kernel.permissions.resolver import can
+
+    fact = await db.get(FcFact, fact_uid)
+    if not fact:
+        raise NotFound("Fact not found", code="FACT_NOT_FOUND")
+
+    version = await db.get(FcFactVersion, version_uid)
+    if not version or version.fact_uid != fact.fact_uid:
+        raise NotFound("Version not found", code="VERSION_NOT_FOUND")
+
+    if not await can(user, "contribute", fact.node_uid, db):
+        raise Forbidden("Cannot generate tags in this node", code="FORBIDDEN")
+
+    tags = await generate_tags_single(db, version_uid, user)
+    await db.commit()
+    return {"data": {"tags": tags, "version_uid": str(version_uid)}}
+
+
+@router.post("/nodes/{node_uid}/smart-tags/generate-all")
+async def generate_smart_tags_batch_endpoint(
+    node_uid: uuid.UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Generate AI smart tags for all untagged facts in a node."""
+    from artiFACT.kernel.exceptions import Forbidden, NotFound
+    from artiFACT.kernel.models import FcNode
+    from artiFACT.kernel.permissions.resolver import can
+
+    node = await db.get(FcNode, node_uid)
+    if not node:
+        raise NotFound("Node not found", code="NODE_NOT_FOUND")
+
+    if not await can(user, "contribute", node_uid, db):
+        raise Forbidden("Cannot generate tags in this node", code="FORBIDDEN")
+
+    results = await generate_tags_batch(db, node_uid, user)
+    await db.commit()
+
+    total_in_node = await _count_published_versions(db, node_uid)
+    return {
+        "data": {
+            "tagged_count": len(results),
+            "skipped_count": total_in_node - len(results),
+            "results": {str(k): v for k, v in results.items()},
+        }
+    }
+
+
+async def _count_published_versions(db: AsyncSession, node_uid: uuid.UUID) -> int:
+    """Count published/signed versions in a node."""
+    stmt = (
+        select(FcFactVersion.version_uid)
+        .join(FcFact, FcFact.fact_uid == FcFactVersion.fact_uid)
+        .where(FcFact.node_uid == node_uid)
+        .where(FcFact.is_retired.is_(False))
+        .where(FcFactVersion.state.in_(["published", "signed"]))
+    )
+    result = await db.execute(stmt)
+    return len(result.all())
+
+
+@router.patch("/facts/{fact_uid}/versions/{version_uid}/smart-tags")
+async def update_smart_tags_endpoint(
+    fact_uid: uuid.UUID,
+    version_uid: uuid.UUID,
+    body: SmartTagUpdate,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Manually update smart tags on a fact version."""
+    from artiFACT.kernel.exceptions import NotFound
+
+    fact = await db.get(FcFact, fact_uid)
+    if not fact:
+        raise NotFound("Fact not found", code="FACT_NOT_FOUND")
+
+    version = await db.get(FcFactVersion, version_uid)
+    if not version or version.fact_uid != fact.fact_uid:
+        raise NotFound("Version not found", code="VERSION_NOT_FOUND")
+
+    accepted, rejected = await update_tags_manual(db, version_uid, body.tags, user)
+    await db.commit()
+    return {"data": {"accepted": accepted, "rejected": rejected}}
+
+
+@router.post("/facts/{fact_uid}/versions/{version_uid}/smart-tags/validate")
+async def validate_smart_tag_endpoint(
+    fact_uid: uuid.UUID,
+    version_uid: uuid.UUID,
+    body: SmartTagValidate,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Validate a single tag against a fact's sentence."""
+    from artiFACT.kernel.exceptions import NotFound
+
+    fact = await db.get(FcFact, fact_uid)
+    if not fact:
+        raise NotFound("Fact not found", code="FACT_NOT_FOUND")
+
+    version = await db.get(FcFactVersion, version_uid)
+    if not version or version.fact_uid != fact.fact_uid:
+        raise NotFound("Version not found", code="VERSION_NOT_FOUND")
+
+    is_valid = validate_tag(body.tag, version.display_sentence)
+    reason = None if is_valid else "Tag duplicates words already in the fact sentence"
+    return {"data": {"valid": is_valid, "reason": reason}}

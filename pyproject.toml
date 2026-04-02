@@ -23,6 +23,7 @@ dependencies = [
     "python-docx>=1.1.0",
     "python-pptx>=1.0.0",
     "pdfminer.six>=20231228",
+    "nltk>=3.9",
 ]
 
 [project.optional-dependencies]
@@ -70,5 +71,6 @@ module = [
     "pdfminer.*",
     "pptx.*",
     "docx.*",
+    "nltk.*",
 ]
 ignore_missing_imports = true

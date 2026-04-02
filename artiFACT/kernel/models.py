@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import BYTEA, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -255,6 +256,11 @@ class FcFactVersion(Base):
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Smart tags — contextualizing keywords for AI retrieval
+    smart_tags: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    smart_tags_text: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
     search_vector = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', display_sentence)", persisted=True),
