@@ -383,6 +383,20 @@ async def stream_chat_response(
             facts_loaded=facts_loaded,
         )
 
+        # Record usage to fc_ai_usage for the sidebar token counter
+        from artiFACT.kernel.ai_provider import AIUsage, record_ai_usage
+
+        model = key_row.model_override or "gpt-4o"
+        await record_ai_usage(
+            db, user.user_uid, key_row.provider, model,
+            AIUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                is_actual=stream_usage.is_actual,
+            ),
+            action="chat",
+        )
+
         key_row.last_used_at = datetime.now(timezone.utc)
         await db.commit()
 
