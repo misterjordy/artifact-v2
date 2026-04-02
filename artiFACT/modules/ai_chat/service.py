@@ -19,10 +19,12 @@ from artiFACT.kernel.rate_limiter import check_rate
 from artiFACT.modules.admin.anomaly_detector import check_anomaly
 from artiFACT.modules.ai_chat.context_provider import get_facts_for_context
 from artiFACT.modules.ai_chat.prompt_builder import build_system_prompt
+from artiFACT.modules.ai_chat.intent_mapper import enrich_query_with_context
 from artiFACT.modules.ai_chat.retriever import (
+    _get_scope_node_uids,
     estimate_scope_tokens,
     load_all_facts,
-    retrieve_relevant_facts,
+    retrieve_facts,
 )
 from artiFACT.modules.ai_chat.safety.input_filter import check_input
 from artiFACT.modules.ai_chat.safety.output_filter import check_output
@@ -207,11 +209,16 @@ async def prepare_chat_session(
     chat_uid: uuid.UUID,
     user_message: str,
     user: FcUser,
+    *,
+    full_corpus: bool = False,
 ) -> dict:
     """Do all setup work for a chat session message.
 
     This runs BEFORE the StreamingResponse is created, so any failure
     becomes a proper HTTP error instead of a broken stream.
+
+    Uses unified BM25 retrieval by default, or loads all facts when
+    full_corpus=True.
 
     Returns a dict with everything the streaming generator needs.
     """
@@ -220,8 +227,6 @@ async def prepare_chat_session(
     await check_rate(str(user.user_uid), "api_write")
 
     key_row = await get_ai_key(db, user.user_uid)
-    if not key_row:
-        raise NoAIKeyError()
 
     input_check = check_input(user_message)
 
@@ -229,43 +234,55 @@ async def prepare_chat_session(
     await save_message(db, chat_uid, "user", input_check.normalized)
     await db.commit()
 
-    # Parse "search for X" command in efficient mode
-    search_query = input_check.normalized
-    match = _SEARCH_CMD.match(input_check.normalized)
-    if match and session.mode == "efficient":
-        search_query = match.group(1)
-
-    # Load facts based on mode
+    # Resolve scope
     constraint_uids = (
         [uuid.UUID(u) for u in session.constraint_node_uids]
         if session.constraint_node_uids
         else None
     )
-
-    if session.mode == "smart":
-        facts = await load_all_facts(
-            db, session.program_node_uid, constraint_uids, session.fact_filter
-        )
-    else:
-        facts = await retrieve_relevant_facts(
-            db, search_query, session.program_node_uid,
-            constraint_uids, session.fact_filter,
-        )
-
-    # Get total facts in scope for coverage note
-    scope_info = await estimate_scope_tokens(
-        db, session.program_node_uid, constraint_uids, session.fact_filter
+    scope_node_uids = await _get_scope_node_uids(
+        db, session.program_node_uid, constraint_uids
     )
 
     # Get program name
     program_node = await db.get(FcNode, session.program_node_uid)
     program_name = program_node.title if program_node else "this"
 
+    # Load facts: full corpus or BM25 retrieval
+    if full_corpus:
+        facts = await load_all_facts(db, scope_node_uids)
+    else:
+        # Parse "search for X" command
+        search_query = input_check.normalized
+        match = _SEARCH_CMD.match(input_check.normalized)
+        if match:
+            search_query = match.group(1)
+
+        # Enrich with conversational context
+        enriched = enrich_query_with_context(
+            search_query, None, program_name,
+        )
+        facts = await retrieve_facts(db, enriched, scope_node_uids)
+
+    # Get total facts in scope for coverage note
+    scope_info = await estimate_scope_tokens(
+        db, session.program_node_uid, constraint_uids, session.fact_filter
+    )
+
+    # No-API-key static frame
+    if not key_row:
+        return {
+            "static_frame": True,
+            "facts": facts[:4],
+            "scope_info": scope_info,
+            "program_name": program_name,
+            "input_check": input_check,
+        }
+
     # Build system prompt
     system_prompt, facts_loaded = build_system_prompt(
         facts,
         program_name=program_name,
-        mode=session.mode,
         total_facts_in_scope=scope_info["fact_count"],
     )
 
@@ -291,6 +308,7 @@ async def prepare_chat_session(
         "facts_loaded": facts_loaded,
         "system_prompt": system_prompt,
         "program_name": program_name,
+        "scope_info": scope_info,
     }
 
 
@@ -314,6 +332,7 @@ async def stream_chat_response(
     facts_loaded = ctx["facts_loaded"]
     system_prompt = ctx["system_prompt"]
     program_name = ctx["program_name"]
+    scope_info = ctx.get("scope_info", {})
 
     # Stream AI response — catch provider errors (429, 500, etc.)
     collected = ""
@@ -337,8 +356,15 @@ async def stream_chat_response(
         yield f"data: {json.dumps({'done': True, 'input_tokens': 0, 'output_tokens': 0, 'facts_loaded': 0, 'session_total_tokens': 0})}\n\n"
         return
 
-    # Output filter
-    fact_sentences = [f["sentence"] if isinstance(f, dict) else f for f in facts]
+    # Output filter — extract sentences from ScoredFact or dict or str
+    fact_sentences = []
+    for f in facts:
+        if isinstance(f, str):
+            fact_sentences.append(f)
+        elif isinstance(f, dict):
+            fact_sentences.append(f.get("sentence", ""))
+        else:
+            fact_sentences.append(f.display_sentence)
     is_safe, filtered = check_output(collected, fact_sentences[:facts_loaded])
     if not is_safe:
         collected = filtered
@@ -361,7 +387,22 @@ async def stream_chat_response(
         await db.commit()
 
         session_refreshed = await get_session(db, chat_uid, user.user_uid)
-        yield f"data: {json.dumps({'done': True, 'input_tokens': input_tokens, 'output_tokens': output_tokens, 'facts_loaded': facts_loaded, 'session_total_tokens': session_refreshed.total_input_tokens + session_refreshed.total_output_tokens})}\n\n"
+        done_payload = {
+            "done": True,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "facts_loaded": facts_loaded,
+            "session_total_tokens": (
+                session_refreshed.total_input_tokens
+                + session_refreshed.total_output_tokens
+            ),
+            "scope_fact_count": scope_info.get("fact_count", 0),
+            "loaded_fact_count": facts_loaded,
+            "full_corpus_token_estimate": scope_info.get(
+                "full_corpus_token_estimate", 0
+            ),
+        }
+        yield f"data: {json.dumps(done_payload)}\n\n"
 
         await publish(
             "ai.chat",
@@ -388,8 +429,39 @@ async def chat_with_session(
     chat_uid: uuid.UUID,
     user_message: str,
     user: FcUser,
+    *,
+    full_corpus: bool = False,
 ) -> AsyncIterator[str]:
     """Convenience wrapper: prepare + stream in one async generator (used by tests)."""
-    ctx = await prepare_chat_session(db, chat_uid, user_message, user)
+    ctx = await prepare_chat_session(
+        db, chat_uid, user_message, user, full_corpus=full_corpus,
+    )
+    if ctx.get("static_frame"):
+        yield json.dumps(_build_static_frame(ctx))
+        return
     async for chunk in stream_chat_response(db, chat_uid, user, ctx):
         yield chunk
+
+
+def _build_static_frame(ctx: dict) -> dict:
+    """Build no-API-key static frame response."""
+    facts = ctx.get("facts", [])
+    return {
+        "type": "static_frame",
+        "message": (
+            "I found these potentially relevant facts, but without "
+            "an AI key I can't synthesize an answer:"
+        ),
+        "facts": [
+            {
+                "sentence": f.display_sentence if hasattr(f, "display_sentence") else str(f),
+                "score": round(f.blended_score, 2) if hasattr(f, "blended_score") else 0,
+            }
+            for f in facts
+        ],
+        "action": {
+            "label": "Add AI key in Settings",
+            "url": "/settings#ai-key",
+        },
+        "token_count": 0,
+    }

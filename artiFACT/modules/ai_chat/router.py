@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -271,13 +271,13 @@ async def patch_session_filter(
     return {"status": "updated", "fact_filter": body.fact_filter}
 
 
-@router.post("/chat/{chat_uid}/send")
+@router.post("/chat/{chat_uid}/send", response_model=None)
 async def send_chat_message(
     chat_uid: uuid.UUID,
     body: SendMessage,
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> StreamingResponse:
+):
     """Send a message in a chat session. Streams response via SSE."""
     # All setup runs here — failures become proper HTTP errors (400/404/500)
     ctx = await prepare_chat_session(
@@ -285,7 +285,14 @@ async def send_chat_message(
         chat_uid=chat_uid,
         user_message=body.content,
         user=user,
+        full_corpus=body.full_corpus,
     )
+
+    # No-API-key: return static frame JSON instead of SSE stream
+    if ctx.get("static_frame"):
+        from artiFACT.modules.ai_chat.service import _build_static_frame
+
+        return JSONResponse(content={"data": _build_static_frame(ctx)})
 
     # Only the AI streaming loop lives in the generator
     stream = stream_chat_response(db=db, chat_uid=chat_uid, user=user, ctx=ctx)

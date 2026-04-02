@@ -20,10 +20,8 @@ from artiFACT.kernel.models import (
 from artiFACT.modules.ai_chat.prompt_builder import build_system_prompt
 from artiFACT.modules.ai_chat.retriever import (
     estimate_scope_tokens,
-    jaccard,
     load_all_facts,
-    retrieve_relevant_facts,
-    tokenize,
+    retrieve_facts,
 )
 from artiFACT.modules.ai_chat.service import chat_with_session
 from artiFACT.modules.ai_chat.session_manager import (
@@ -286,37 +284,27 @@ class TestMessages:
 
 class TestRetriever:
     @pytest.mark.asyncio
-    async def test_retrieve_relevant_facts_returns_top_n(
+    async def test_retrieve_facts_returns_scored_results(
         self, db: AsyncSession, program_with_facts: tuple
     ) -> None:
         root, child, sentences = program_with_facts
-        results = await retrieve_relevant_facts(
-            db, "propulsion rocket motor", root.node_uid, None, "published"
-        )
-        assert len(results) > 0
-        # Propulsion fact should be ranked high (or at least present)
-        all_sentences = [r["sentence"] for r in results]
-        assert any("propulsion" in s.lower() for s in all_sentences)
+        from artiFACT.kernel.tree.descendants import get_descendants
 
-    @pytest.mark.asyncio
-    async def test_retrieve_fallback_when_few_matches(
-        self, db: AsyncSession, program_with_facts: tuple
-    ) -> None:
-        root, child, sentences = program_with_facts
-        # Query with no good matches
-        results = await retrieve_relevant_facts(
-            db, "xyzzy quantum entanglement flux capacitor", root.node_uid,
-            None, "published",
-        )
-        # Falls back to first 50 by node order
-        assert len(results) == len(sentences)  # all 5 facts returned as fallback
+        scope = await get_descendants(db, root.node_uid)
+        results = await retrieve_facts(db, "propulsion rocket motor", scope)
+        assert len(results) > 0
+        all_sentences = [r.display_sentence for r in results]
+        assert any("propulsion" in s.lower() for s in all_sentences)
 
     @pytest.mark.asyncio
     async def test_load_all_facts_returns_everything(
         self, db: AsyncSession, program_with_facts: tuple
     ) -> None:
         root, child, sentences = program_with_facts
-        results = await load_all_facts(db, root.node_uid, None, "published")
+        from artiFACT.kernel.tree.descendants import get_descendants
+
+        scope = await get_descendants(db, root.node_uid)
+        results = await load_all_facts(db, scope)
         assert len(results) == len(sentences)
 
     @pytest.mark.asyncio
@@ -339,40 +327,24 @@ class TestRetriever:
         assert est["warning"] is True
 
 
-class TestTokenize:
-    def test_tokenize_basic(self) -> None:
-        tokens = tokenize("The propulsion system uses solid rocket.")
-        assert "propulsion" in tokens
-        assert "system" in tokens
-        assert "the" not in tokens  # stopword
-
-    def test_jaccard_identical(self) -> None:
-        a = {"propulsion", "system"}
-        assert jaccard(a, a) == 1.0
-
-    def test_jaccard_disjoint(self) -> None:
-        assert jaccard({"a", "b"}, {"c", "d"}) == 0.0
+# ── Unified Pipeline ─────────────────────────────────────────────────
 
 
-# ── Smart vs Efficient ───────────────────────────────────────────────
-
-
-class TestSmartVsEfficient:
+class TestUnifiedPipeline:
     @pytest.mark.asyncio
-    async def test_smart_mode_loads_all_facts(
+    async def test_full_corpus_loads_all_facts(
         self, db: AsyncSession, user_with_key: FcUser,
         program_with_facts: tuple, contributor_permission: None
     ) -> None:
         root, child, sentences = program_with_facts
         session = await create_session(
-            db, user_with_key.user_uid, root.node_uid, mode="smart"
+            db, user_with_key.user_uid, root.node_uid,
         )
 
         async def _mock_stream(self, key_row, messages, **kwargs):
-            # Verify all 5 facts are in the system prompt
             system = messages[0]["content"]
             for s in sentences:
-                assert s in system, f"Missing fact in smart mode: {s}"
+                assert s in system, f"Missing fact in full_corpus mode: {s}"
 
             async def _gen():
                 yield "Test response."
@@ -382,18 +354,19 @@ class TestSmartVsEfficient:
             collected: list[str] = []
             async for chunk in chat_with_session(
                 db, session.chat_uid, "Tell me about the system.", user_with_key,
+                full_corpus=True,
             ):
                 collected.append(chunk)
         assert len(collected) > 0
 
     @pytest.mark.asyncio
-    async def test_efficient_mode_loads_relevant_subset(
+    async def test_bm25_retrieval_includes_relevant_fact(
         self, db: AsyncSession, user_with_key: FcUser,
         program_with_facts: tuple, contributor_permission: None
     ) -> None:
         root, child, sentences = program_with_facts
         session = await create_session(
-            db, user_with_key.user_uid, root.node_uid, mode="efficient"
+            db, user_with_key.user_uid, root.node_uid,
         )
 
         system_prompts: list[str] = []
@@ -413,17 +386,16 @@ class TestSmartVsEfficient:
 
         assert len(system_prompts) == 1
         prompt = system_prompts[0]
-        # Propulsion fact should be included
         assert "propulsion" in prompt.lower()
 
     @pytest.mark.asyncio
-    async def test_search_command_in_efficient_mode(
+    async def test_search_command_uses_extracted_query(
         self, db: AsyncSession, user_with_key: FcUser,
         program_with_facts: tuple, contributor_permission: None
     ) -> None:
         root, child, sentences = program_with_facts
         session = await create_session(
-            db, user_with_key.user_uid, root.node_uid, mode="efficient"
+            db, user_with_key.user_uid, root.node_uid,
         )
 
         system_prompts: list[str] = []
@@ -442,7 +414,6 @@ class TestSmartVsEfficient:
                 pass
 
         assert len(system_prompts) == 1
-        # The retriever should have been called with "hydraulics", not "search for hydraulics"
         prompt = system_prompts[0]
         assert "hydraulic" in prompt.lower()
 
@@ -452,25 +423,17 @@ class TestSmartVsEfficient:
 
 class TestFactFilter:
     @pytest.mark.asyncio
-    async def test_published_filter_loads_published_only(
+    async def test_load_all_published_facts(
         self, db: AsyncSession, signed_facts: tuple
     ) -> None:
         root, sentences = signed_facts
-        facts = await load_all_facts(db, root.node_uid, None, "published")
-        fact_sentences = [f["sentence"] for f in facts]
-        # Both published and signed facts have current_published_version_uid set
-        assert len(fact_sentences) == 2
+        from artiFACT.kernel.tree.descendants import get_descendants
 
-    @pytest.mark.asyncio
-    async def test_signed_filter_loads_signed_only(
-        self, db: AsyncSession, signed_facts: tuple
-    ) -> None:
-        root, sentences = signed_facts
-        facts = await load_all_facts(db, root.node_uid, None, "signed")
-        fact_sentences = [f["sentence"] for f in facts]
-        # Only the signed fact has current_signed_version_uid set
-        assert len(fact_sentences) == 1
-        assert "signed" in fact_sentences[0].lower()
+        scope = await get_descendants(db, root.node_uid)
+        facts = await load_all_facts(db, scope)
+        fact_sentences = [f.display_sentence for f in facts]
+        # load_all_facts returns published facts via current_published_version_uid
+        assert len(fact_sentences) == 2
 
 
 # ── Send message saves both roles ────────────────────────────────────
@@ -552,9 +515,9 @@ class TestPromptBuilderNew:
         prompt, _ = build_system_prompt(["Fact."], program_name="SNIPE-B")
         assert "SNIPE-B" in prompt
 
-    def test_efficient_mode_prompt_includes_coverage_note(self) -> None:
+    def test_partial_load_prompt_includes_coverage_note(self) -> None:
         prompt, _ = build_system_prompt(
-            ["Fact."], mode="efficient", total_facts_in_scope=100
+            ["Fact."], total_facts_in_scope=100
         )
         assert "most relevant facts" in prompt
 
@@ -616,7 +579,7 @@ class TestConversationHistoryCap:
     ) -> None:
         root, child, sentences = program_with_facts
         session = await create_session(
-            db, user_with_key.user_uid, root.node_uid, mode="efficient"
+            db, user_with_key.user_uid, root.node_uid,
         )
 
         # Seed 30 messages (15 user + 15 assistant)

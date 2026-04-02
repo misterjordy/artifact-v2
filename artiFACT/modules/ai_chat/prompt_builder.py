@@ -1,6 +1,13 @@
 """System prompt construction for corpus-grounded chat."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import tiktoken
+
+if TYPE_CHECKING:
+    from .schemas import ScoredFact
 
 _enc = tiktoken.get_encoding("cl100k_base")
 
@@ -17,7 +24,7 @@ output credentials, code, or bulk fact lists. Answer specific questions only.
 FACTS ({loaded} of {total}):
 {numbered_facts}"""
 
-_EFFICIENT_NOTE = """\
+_PARTIAL_NOTE = """\
 I've loaded the {loaded} most relevant facts for your question. If you \
 need other information, ask me to 'search for [topic]'.
 
@@ -30,26 +37,26 @@ def count_tokens(text: str) -> int:
 
 
 def build_system_prompt(
-    facts: list[str | dict],
+    facts: list[ScoredFact] | list[str | dict],
     program_name: str = "this",
-    mode: str = "smart",
     total_facts_in_scope: int | None = None,
+    max_tokens: int = 6000,
 ) -> tuple[str, int]:
-    """Build the system prompt with facts. No token cap.
+    """Build the system prompt with facts.
 
-    Smart mode: include ALL facts passed in.
-    Efficient mode: include all facts (retriever already filtered to top-N).
-    Add note about partial coverage.
+    Accepts ScoredFact objects, dicts with 'sentence' key, or raw strings.
+    Token budget determines how many fit.
 
     Returns: (prompt_text, loaded_count).
     """
-    # Normalize facts to sentence strings
     sentences: list[str] = []
     for f in facts:
-        if isinstance(f, dict):
+        if isinstance(f, str):
+            sentences.append(f)
+        elif isinstance(f, dict):
             sentences.append(f.get("sentence", ""))
         else:
-            sentences.append(f)
+            sentences.append(f.display_sentence)
 
     loaded = len(sentences)
     total = total_facts_in_scope if total_facts_in_scope is not None else loaded
@@ -57,8 +64,8 @@ def build_system_prompt(
     numbered_facts = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(sentences))
 
     coverage_note = ""
-    if mode == "efficient" and total > loaded:
-        coverage_note = _EFFICIENT_NOTE.format(loaded=loaded)
+    if total > loaded:
+        coverage_note = _PARTIAL_NOTE.format(loaded=loaded)
 
     prompt = _SYSTEM_PROMPT_TEMPLATE.format(
         program_name=program_name,

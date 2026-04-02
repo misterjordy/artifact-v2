@@ -1,34 +1,26 @@
-"""Fact retrieval for chat: Jaccard-search (efficient) and full-load (smart)."""
+"""BM25 fact retrieval with blended display_sentence + smart_tags scoring.
 
-import re
+Replaces the old smart/efficient mode split. Every chat message goes
+through this retriever unless the user requests full corpus.
+"""
+
 import uuid
+from typing import Any
 
-from sqlalchemy import select
+import structlog
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode
+from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcSystemConfig
 from artiFACT.kernel.tree.descendants import get_descendants
 
-_PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
-_STOPWORDS = frozenset({
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "has", "have", "had", "do", "does", "did", "of", "in", "to", "for",
-    "on", "at", "by", "up", "it", "its", "as", "or", "if", "no", "not",
-    "so", "than", "that", "this", "with", "from",
-})
+from .intent_mapper import detect_intent
+from .schemas import ScoredFact
 
+log = structlog.get_logger()
 
-def tokenize(text: str) -> set[str]:
-    """Split text into lowercase word tokens, strip punctuation and stopwords."""
-    words = _PUNCT.sub("", text.lower()).split()
-    return {w for w in words if w and w not in _STOPWORDS}
-
-
-def jaccard(set_a: set[str], set_b: set[str]) -> float:
-    """Compute Jaccard similarity between two token sets."""
-    if not set_a or not set_b:
-        return 0.0
-    return len(set_a & set_b) / len(set_a | set_b)
+DEFAULT_TEXT_WEIGHT = 0.4
+DEFAULT_TAG_WEIGHT = 0.6
 
 
 async def _get_scope_node_uids(
@@ -45,99 +37,141 @@ async def _get_scope_node_uids(
     return await get_descendants(db, program_node_uid)
 
 
-async def _load_facts_in_scope(
+async def _get_retrieval_weights(
     db: AsyncSession,
-    program_node_uid: uuid.UUID,
-    constraint_node_uids: list[uuid.UUID] | None,
-    fact_filter: str,
-) -> list[dict]:
-    """Load facts with node titles for the given scope and filter."""
-    node_uids = await _get_scope_node_uids(db, program_node_uid, constraint_node_uids)
-    if not node_uids:
-        return []
-
-    # Pick the version pointer column based on filter
-    version_col = (
-        FcFact.current_signed_version_uid
-        if fact_filter == "signed"
-        else FcFact.current_published_version_uid
+    text_weight: float | None,
+    tag_weight: float | None,
+) -> tuple[float, float]:
+    """Load retrieval weights from config or use defaults."""
+    if text_weight is not None and tag_weight is not None:
+        return text_weight, tag_weight
+    config_row = await db.get(FcSystemConfig, "smart_retrieval_weights")
+    if config_row and config_row.value:
+        tw = config_row.value.get("text", DEFAULT_TEXT_WEIGHT)
+        tgw = config_row.value.get("tag", DEFAULT_TAG_WEIGHT)
+        return (
+            text_weight if text_weight is not None else tw,
+            tag_weight if tag_weight is not None else tgw,
+        )
+    return (
+        text_weight if text_weight is not None else DEFAULT_TEXT_WEIGHT,
+        tag_weight if tag_weight is not None else DEFAULT_TAG_WEIGHT,
     )
 
+
+async def retrieve_facts(
+    db: AsyncSession,
+    query: str,
+    scope_node_uids: list[uuid.UUID],
+    *,
+    limit: int = 40,
+    text_weight: float | None = None,
+    tag_weight: float | None = None,
+) -> list[ScoredFact]:
+    """Retrieve and rank facts using BM25 on text + smart tags.
+
+    1. Expand query with intent archetype tags.
+    2. Run two ts_rank scores per fact (text + tags).
+    3. Blend: text_weight * text_score + tag_weight * tag_score.
+    4. Return top `limit` facts ordered by blended score desc.
+    """
+    if not scope_node_uids:
+        return []
+
+    tw, tgw = await _get_retrieval_weights(db, text_weight, tag_weight)
+
+    # Build OR-based tsquery: original query terms OR intent expansion tags
+    _, intent_tags = detect_intent(query)
+    query_tsq = func.plainto_tsquery("english", query)
+    tags_tsq = func.plainto_tsquery("english", " ".join(intent_tags))
+    tsquery = query_tsq.op("||")(tags_tsq)
+
+    text_score = tw * func.coalesce(
+        func.ts_rank(FcFactVersion.search_vector, tsquery), 0.0
+    )
+    tag_score = tgw * func.coalesce(
+        func.ts_rank(
+            func.to_tsvector("english", FcFactVersion.smart_tags_text),
+            tsquery,
+        ),
+        0.0,
+    )
+    blended = (text_score + tag_score).label("blended_score")
+
     stmt = (
-        select(FcFact, FcNode.title)
-        .join(FcNode, FcFact.node_uid == FcNode.node_uid)
-        .where(
-            FcFact.node_uid.in_(node_uids),
-            FcFact.is_retired.is_(False),
-            version_col.isnot(None),
+        select(
+            FcFactVersion.version_uid,
+            FcFactVersion.display_sentence,
+            FcFactVersion.smart_tags,
+            FcFact.node_uid,
+            blended,
         )
-        .order_by(FcNode.sort_order, FcNode.title)
+        .join(FcFact, FcFact.fact_uid == FcFactVersion.fact_uid)
+        .where(
+            FcFact.is_retired.is_(False),
+            FcFactVersion.state.in_(["published", "signed"]),
+            FcFact.node_uid.in_(scope_node_uids),
+            or_(
+                FcFactVersion.search_vector.op("@@")(tsquery),
+                func.to_tsvector("english", FcFactVersion.smart_tags_text).op("@@")(tsquery),
+            ),
+        )
+        .order_by(text("blended_score DESC"))
+        .limit(limit)
     )
     result = await db.execute(stmt)
     rows = result.all()
 
-    facts: list[dict] = []
-    for fact, node_title in rows:
-        version_uid = (
-            fact.current_signed_version_uid
-            if fact_filter == "signed"
-            else fact.current_published_version_uid
+    return [
+        ScoredFact(
+            version_uid=row[0],
+            display_sentence=row[1],
+            smart_tags=row[2] or [],
+            node_uid=row[3],
+            blended_score=round(float(row[4]), 6),
         )
-        ver = await db.get(FcFactVersion, version_uid)
-        if ver:
-            facts.append({
-                "sentence": ver.display_sentence,
-                "node_title": node_title,
-            })
-    return facts
-
-
-async def retrieve_relevant_facts(
-    db: AsyncSession,
-    query: str,
-    program_node_uid: uuid.UUID,
-    constraint_node_uids: list[uuid.UUID] | None,
-    fact_filter: str,
-    top_n: int = 20,
-    threshold: float = 0.05,
-) -> list[dict]:
-    """Jaccard-search query against all facts in scope.
-
-    Returns top_n facts sorted by relevance, each as:
-    {"sentence": str, "score": float, "node_title": str}
-
-    For short/vague queries where few facts match, falls back to the
-    top_n highest-scoring facts (even below threshold) rather than
-    dumping the entire corpus.
-    """
-    all_facts = await _load_facts_in_scope(
-        db, program_node_uid, constraint_node_uids, fact_filter
-    )
-    if not all_facts:
-        return []
-
-    query_tokens = tokenize(query)
-    scored: list[dict] = []
-    for fact in all_facts:
-        fact_tokens = tokenize(fact["sentence"])
-        score = jaccard(query_tokens, fact_tokens)
-        scored.append({**fact, "score": round(score, 4)})
-
-    # Always sort by relevance; return top_n regardless of threshold
-    scored.sort(key=lambda f: f["score"], reverse=True)
-    return scored[:top_n]
+        for row in rows
+    ]
 
 
 async def load_all_facts(
     db: AsyncSession,
-    program_node_uid: uuid.UUID,
-    constraint_node_uids: list[uuid.UUID] | None,
-    fact_filter: str,
-) -> list[dict]:
-    """Load ALL facts in scope. For Smart mode."""
-    return await _load_facts_in_scope(
-        db, program_node_uid, constraint_node_uids, fact_filter
+    scope_node_uids: list[uuid.UUID],
+) -> list[ScoredFact]:
+    """Load ALL published/signed facts in scope (for full-corpus mode).
+
+    No scoring — returns facts in node + created_at order, score=1.0.
+    """
+    if not scope_node_uids:
+        return []
+
+    stmt = (
+        select(
+            FcFactVersion.version_uid,
+            FcFactVersion.display_sentence,
+            FcFactVersion.smart_tags,
+            FcFact.node_uid,
+        )
+        .join(FcFact, FcFact.fact_uid == FcFactVersion.fact_uid)
+        .where(
+            FcFact.is_retired.is_(False),
+            FcFactVersion.state.in_(["published", "signed"]),
+            FcFact.node_uid.in_(scope_node_uids),
+            FcFact.current_published_version_uid == FcFactVersion.version_uid,
+        )
+        .order_by(FcFact.node_uid, FcFactVersion.created_at.asc())
     )
+    result = await db.execute(stmt)
+    return [
+        ScoredFact(
+            version_uid=row[0],
+            display_sentence=row[1],
+            smart_tags=row[2] or [],
+            node_uid=row[3],
+            blended_score=1.0,
+        )
+        for row in result.all()
+    ]
 
 
 async def estimate_scope_tokens(
@@ -145,20 +179,41 @@ async def estimate_scope_tokens(
     program_node_uid: uuid.UUID,
     constraint_node_uids: list[uuid.UUID] | None,
     fact_filter: str,
-) -> dict:
+) -> dict[str, Any]:
     """Count facts and estimate token cost for the given scope.
 
-    Returns: {fact_count: int, estimated_tokens: int, warning: bool}
-    Warning = true if estimated_tokens > 2000.
-    Estimate: ~15 tokens per fact (average sentence length).
+    Returns: {fact_count, estimated_tokens, warning, full_corpus_token_estimate}
     """
-    facts = await _load_facts_in_scope(
-        db, program_node_uid, constraint_node_uids, fact_filter
+    node_uids = await _get_scope_node_uids(db, program_node_uid, constraint_node_uids)
+    if not node_uids:
+        return {
+            "fact_count": 0,
+            "estimated_tokens": 0,
+            "warning": False,
+            "full_corpus_token_estimate": 0,
+        }
+
+    version_col = (
+        FcFact.current_signed_version_uid
+        if fact_filter == "signed"
+        else FcFact.current_published_version_uid
     )
-    fact_count = len(facts)
+    stmt = (
+        select(func.count())
+        .select_from(FcFact)
+        .where(
+            FcFact.node_uid.in_(node_uids),
+            FcFact.is_retired.is_(False),
+            version_col.isnot(None),
+        )
+    )
+    result = await db.execute(stmt)
+    fact_count = result.scalar() or 0
     estimated_tokens = fact_count * 15
+
     return {
         "fact_count": fact_count,
         "estimated_tokens": estimated_tokens,
         "warning": estimated_tokens > 2000,
+        "full_corpus_token_estimate": estimated_tokens,
     }

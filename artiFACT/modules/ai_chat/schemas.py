@@ -1,9 +1,21 @@
 """Pydantic models for AI chat endpoints."""
 
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from pydantic import BaseModel, Field
+
+
+@dataclass
+class ScoredFact:
+    """A fact with its BM25 blended relevance score."""
+
+    version_uid: uuid.UUID
+    display_sentence: str
+    smart_tags: list[str] = field(default_factory=list)
+    node_uid: uuid.UUID = field(default_factory=uuid.uuid4)
+    blended_score: float = 0.0
 
 
 class ChatMessage(BaseModel):
@@ -86,6 +98,7 @@ class ChatSessionOut(BaseModel):
 
 class SendMessage(BaseModel):
     content: str = Field(..., min_length=1, max_length=10_000)
+    full_corpus: bool = False
 
 
 class ChatMessageOut(BaseModel):

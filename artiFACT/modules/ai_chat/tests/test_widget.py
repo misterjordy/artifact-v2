@@ -138,7 +138,7 @@ class TestActiveSessionsAPI:
             db, contributor_user.user_uid, root_node.node_uid
         )
         s2 = await create_session(
-            db, contributor_user.user_uid, root_node.node_uid, mode="smart"
+            db, contributor_user.user_uid, root_node.node_uid,
         )
         sessions = await get_active_sessions(db, contributor_user.user_uid)
         assert len(sessions) == 2

@@ -41,15 +41,15 @@ class TestBuildSystemPrompt:
         prompt, _ = build_system_prompt(["Fact."], program_name="Boatwing H-12")
         assert "Boatwing H-12" in prompt
 
-    def test_efficient_mode_prompt_includes_coverage_note(self) -> None:
+    def test_partial_load_includes_coverage_note(self) -> None:
         prompt, _ = build_system_prompt(
-            ["Fact."], mode="efficient", total_facts_in_scope=100
+            ["Fact."], total_facts_in_scope=100
         )
         assert "most relevant facts" in prompt
 
-    def test_smart_mode_no_coverage_note(self) -> None:
+    def test_full_load_no_coverage_note(self) -> None:
         prompt, _ = build_system_prompt(
-            ["Fact."], mode="smart", total_facts_in_scope=1
+            ["Fact."], total_facts_in_scope=1
         )
         assert "most relevant facts" not in prompt
 
