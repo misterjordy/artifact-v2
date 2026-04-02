@@ -141,59 +141,19 @@
         </div>
       </template>
 
-      {# ── SETUP FLOW: mode selection ────────────────── #}
-      <template x-if="newChatStep === 'mode'">
-        <div>
-          <div class="arti-msg-arti">
-            <div class="flex items-start gap-2">
-              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-              <div class="text-sm text-[var(--color-text)]">
-                <p>How should I search?</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex gap-3 mt-3 ml-6" x-show="!setupLoading">
-            <button @click="selectMode('efficient')"
-                    class="flex-1 px-3 py-3 text-center rounded-lg border transition-colors
-                           border-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-on-accent)]">
-              <span class="block text-sm font-semibold">Efficient</span>
-              <span class="block text-2xs text-[var(--color-text-muted)] mt-1">Finds relevant facts per question (faster)</span>
-            </button>
-            <button @click="selectMode('smart')"
-                    class="flex-1 px-3 py-3 text-center rounded-lg border transition-colors
-                           border-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-on-accent)]">
-              <span class="block text-sm font-semibold">Smart</span>
-              <span class="block text-2xs text-[var(--color-text-muted)] mt-1">Reads everything in scope every time (thorough)</span>
-            </button>
-          </div>
-
-          <div x-show="setupLoading" class="mt-3 ml-6 text-xs text-[var(--color-text-muted)]">Creating session...</div>
-        </div>
-      </template>
-
-      {# ── CHAT READY: welcome + token warning ───────── #}
+      {# ── CHAT READY: welcome ─────────────────────────── #}
       <template x-if="!newChatStep && activeChat && activeChat !== '__new__' && messages.length === 0">
         <div>
           <div class="arti-msg-arti">
             <div class="flex items-start gap-2">
               <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
               <div class="text-sm text-[var(--color-text)]">
-                <p>Ready. What would you like to know?</p>
-                <p class="mt-2 text-xs text-[var(--color-text-muted)]">Bundle multiple questions in one message to save tokens — facts are resent with each message.</p>
-                <p class="mt-1 text-xs text-[var(--color-text-muted)]">Or click 'site questions' to learn how to use this tool.</p>
+                <p class="font-semibold">Ready. What would you like to know?</p>
+                <p class="mt-1 text-xs text-[var(--color-text-muted)]">I'll find the most relevant facts in your scope to answer. Click <strong>Search full corpus</strong> on any response for a deeper search.</p>
               </div>
             </div>
           </div>
-          {# Token warning #}
-          <template x-if="tokenEstimate && tokenEstimate.warning">
-            <div class="mt-2 ml-6 px-3 py-2 rounded text-xs bg-[var(--color-warning)]/15 text-[var(--color-warning)] border border-[var(--color-warning)]/30">
-              This scope has ~<span x-text="tokenEstimate.fact_count"></span> facts
-              (~<span x-text="tokenEstimate.estimated_tokens"></span> tokens).
-              Smart mode sends all of them with every message.
-              Consider narrowing your scope or using Efficient mode.
-            </div>
-          </template>
+          <p class="mt-2 ml-6 text-2xs text-[var(--color-text-muted)]" x-text="scopeFactCount + ' facts in scope'"></p>
         </div>
       </template>
 
@@ -209,11 +169,45 @@
             </div>
           </template>
           {# Assistant message #}
-          <template x-if="msg.role === 'assistant'">
+          <template x-if="msg.role === 'assistant' && !msg._staticFrame">
+            <div>
+              <p x-show="msg._fullCorpus" class="text-2xs text-[var(--color-text-muted)] italic ml-6 mb-1">Searched full corpus</p>
+              <div class="arti-msg-arti">
+                <div class="flex items-start gap-2">
+                  <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                  <div class="max-w-[85%] text-sm text-[var(--color-text)]" x-text="msg.content"></div>
+                </div>
+              </div>
+              {# Search full corpus button — hidden if already used or error #}
+              <div class="flex justify-end mt-1" x-show="!msg._fullCorpus && !msg._error && !streaming && fullCorpusTokenEstimate > 0">
+                <button class="text-2xs px-2 py-1 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)]/40 flex items-center gap-1 transition-colors"
+                        @click="resendWithFullCorpus(msg)"
+                        :title="'Resend with all ' + scopeFactCount + ' facts'">
+                  <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l4 4"/></svg>
+                  <span x-text="'Search full corpus (' + formatTokens(fullCorpusTokenEstimate) + ')'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+          {# Static frame (no API key) #}
+          <template x-if="msg.role === 'assistant' && msg._staticFrame">
             <div class="arti-msg-arti">
               <div class="flex items-start gap-2">
                 <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                <div class="max-w-[85%] text-sm text-[var(--color-text)]" x-text="msg.content"></div>
+                <div class="max-w-[85%] text-sm text-[var(--color-text)]">
+                  <p x-text="msg._frameMessage"></p>
+                  <div class="mt-2 space-y-1.5">
+                    <template x-for="(fact, fi) in msg._frameFacts" :key="fi">
+                      <div class="px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg)]/50 text-xs">
+                        <span class="text-[var(--color-text-muted)] mr-1.5" x-text="(fi + 1) + '.'"></span>
+                        <span x-text="fact.sentence"></span>
+                      </div>
+                    </template>
+                  </div>
+                  <a :href="msg._frameAction.url"
+                     class="inline-block mt-2 text-xs text-[var(--color-accent)] hover:underline"
+                     x-text="msg._frameAction.label"></a>
+                </div>
               </div>
             </div>
           </template>
@@ -256,7 +250,7 @@
       <div class="border-t border-[var(--color-border)]">
         {# Token counter #}
         <div class="flex items-center justify-between px-3 pt-1.5">
-          <span class="text-2xs text-[var(--color-text-muted)]"><span x-text="formatTokens(sessionTokens)"></span> tokens this session</span>
+          <span class="text-2xs text-[var(--color-text-muted)]" x-text="sessionTokens > 0 ? formatTokens(sessionTokens) + ' tokens this session' : scopeFactCount + ' facts in scope'"></span>
           <button @click="startNewChat()" title="New chat"
                   class="text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>

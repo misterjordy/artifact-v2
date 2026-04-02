@@ -27,14 +27,14 @@ function artiChat() {
     selectedProgram: null,
     constraintNodes: [],
     constraintNodeUids: [],
-    selectedMode: "efficient",
     factFilter: "published",
-    tokenEstimate: null,
     setupLoading: false,
 
     /* current chat state */
     messages: [],
     sessionTokens: 0,
+    scopeFactCount: 0,
+    fullCorpusTokenEstimate: 0,
     messageCache: {},
 
     /* ── lifecycle ─────────────────────────────────────── */
@@ -90,9 +90,9 @@ function artiChat() {
       this.constraintNodes = [];
       this.constraintNodeUids = [];
       this.selectedProgram = null;
-      this.selectedMode = "efficient";
       this.factFilter = "published";
-      this.tokenEstimate = null;
+      this.scopeFactCount = 0;
+      this.fullCorpusTokenEstimate = 0;
       sessionStorage.setItem("arti-active-chat", "__new__");
       await this.loadPrograms();
     },
@@ -138,18 +138,17 @@ function artiChat() {
     },
 
     skipConstraints() {
-      this.newChatStep = "mode";
+      this.createSession();
     },
 
     confirmConstraints() {
-      this.newChatStep = "mode";
+      this.createSession();
     },
 
-    async selectMode(mode) {
-      this.selectedMode = mode;
+    async createSession() {
       this.setupLoading = true;
 
-      /* estimate tokens */
+      /* estimate scope tokens */
       var params = "program_node_uid=" + this.selectedProgram.node_uid +
         "&fact_filter=" + this.factFilter;
       if (this.constraintNodeUids.length > 0) {
@@ -157,14 +156,17 @@ function artiChat() {
       }
       try {
         var resp = await fetch("/api/v1/ai/chat/estimate?" + params);
-        if (resp.ok) { this.tokenEstimate = await resp.json(); }
+        if (resp.ok) {
+          var est = await resp.json();
+          this.scopeFactCount = est.fact_count || 0;
+          this.fullCorpusTokenEstimate = est.full_corpus_token_estimate || est.estimated_tokens || 0;
+        }
       } catch (e) { /* silent */ }
 
       /* create session */
       try {
         var body = {
           program_node_uid: this.selectedProgram.node_uid,
-          mode: this.selectedMode,
           fact_filter: this.factFilter,
         };
         if (this.constraintNodeUids.length > 0) {
@@ -262,22 +264,44 @@ function artiChat() {
       } catch (e) { /* silent */ }
     },
 
-    async sendMessage() {
+    async sendMessage(fullCorpus) {
       var text = this.inputText.trim();
       if (!text || this.streaming) return;
       this.inputText = "";
+      await this._sendText(text, !!fullCorpus);
+    },
+
+    async resendWithFullCorpus(msg) {
+      /* Find the user message that preceded this assistant message */
+      var idx = this.messages.indexOf(msg);
+      if (idx <= 0) return;
+      var userMsg = null;
+      for (var j = idx - 1; j >= 0; j--) {
+        if (this.messages[j].role === "user") {
+          userMsg = this.messages[j];
+          break;
+        }
+      }
+      if (!userMsg) return;
+      /* Remove old assistant response and resend */
+      this.messages.splice(idx, 1);
+      await this._sendText(userMsg.content, true);
+    },
+
+    async _sendText(text, fullCorpus) {
       this.streaming = true;
 
-      /* optimistic user message */
-      this.messages.push({
-        message_uid: "pending-" + Date.now(),
-        role: "user",
-        content: text,
-        input_tokens: 0,
-        output_tokens: 0,
-        facts_loaded: 0,
-        created_at: new Date().toISOString(),
-      });
+      /* optimistic user message (only if not resending) */
+      var lastMsg = this.messages[this.messages.length - 1];
+      if (!lastMsg || lastMsg.role !== "user" || lastMsg.content !== text) {
+        this.messages.push({
+          message_uid: "pending-" + Date.now(),
+          role: "user",
+          content: text,
+          input_tokens: 0, output_tokens: 0, facts_loaded: 0,
+          created_at: new Date().toISOString(),
+        });
+      }
       this.scrollToBottom();
 
       /* placeholder for arti response */
@@ -285,10 +309,9 @@ function artiChat() {
         message_uid: "streaming-" + Date.now(),
         role: "assistant",
         content: "",
-        input_tokens: 0,
-        output_tokens: 0,
-        facts_loaded: 0,
+        input_tokens: 0, output_tokens: 0, facts_loaded: 0,
         created_at: new Date().toISOString(),
+        _fullCorpus: fullCorpus || false,
       };
       this.messages.push(artiMsg);
       var chatUid = this.activeChat;
@@ -300,7 +323,7 @@ function artiChat() {
             "Content-Type": "application/json",
             "X-CSRF-Token": getCsrfToken(),
           },
-          body: JSON.stringify({ content: text }),
+          body: JSON.stringify({ content: text, full_corpus: !!fullCorpus }),
         });
 
         if (!resp.ok) {
@@ -319,6 +342,23 @@ function artiChat() {
           return;
         }
 
+        var contentType = resp.headers.get("Content-Type") || "";
+
+        if (contentType.indexOf("application/json") !== -1) {
+          /* Static frame (no API key) */
+          var data = await resp.json();
+          var frame = data.data || data;
+          artiMsg._staticFrame = true;
+          artiMsg._frameMessage = frame.message || "";
+          artiMsg._frameFacts = frame.facts || [];
+          artiMsg._frameAction = frame.action || { label: "Add AI key in Settings", url: "/settings#ai-key" };
+          artiMsg.content = frame.message || "";
+          this.streaming = false;
+          this.scrollToBottom();
+          return;
+        }
+
+        /* SSE streaming */
         var reader = resp.body.getReader();
         var decoder = new TextDecoder();
         var buffer = "";
@@ -348,6 +388,8 @@ function artiChat() {
               }
               if (evt.done) {
                 this.sessionTokens = evt.session_total_tokens || this.sessionTokens;
+                if (evt.scope_fact_count) this.scopeFactCount = evt.scope_fact_count;
+                if (evt.full_corpus_token_estimate) this.fullCorpusTokenEstimate = evt.full_corpus_token_estimate;
                 if (evt.input_tokens === 0 && evt.output_tokens === 0) {
                   artiMsg._error = true;
                 }
@@ -361,8 +403,6 @@ function artiChat() {
       }
 
       this.streaming = false;
-      /* reload full messages + sessions to sync server state,
-         but skip if the response was an error (no content saved to DB) */
       if (artiMsg.content && !artiMsg._error) {
         await this.loadMessages(this.activeChat);
         await this.loadSessions();

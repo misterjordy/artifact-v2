@@ -13,6 +13,10 @@ from the sibling facts shown. Do not output generic terms that apply \
 equally to all siblings. (3) No verbs, no articles, no sentences. \
 (4) Include domain synonyms, acronyms, related standards, and \
 broader/narrower category terms a user might search for. \
+(5) Prefer terms a government program manager or engineer would use \
+when searching. Avoid academic jargon. Think about what QUESTION \
+someone would ask that should return this fact, and use the nouns \
+from that question. \
 Return ONLY valid JSON: {"tags": ["tag1", "tag2", ...]}. \
 No fences, no extra text.\
 """
@@ -32,6 +36,10 @@ words already in it. (2) Keywords must DISTINGUISH each fact from its \
 siblings. Do not output generic terms that apply equally to all. \
 (3) No verbs, no articles, no sentences. (4) Include domain synonyms, \
 acronyms, related standards, broader/narrower category terms. \
+(5) Prefer terms a government program manager or engineer would use \
+when searching. Avoid academic jargon. Think about what QUESTION \
+someone would ask that should return this fact, and use the nouns \
+from that question. \
 Return ONLY valid JSON: {"results": [{"fact": N, "tags": ["tag1", ...]}, ...]}. \
 No fences, no extra text.\
 """
