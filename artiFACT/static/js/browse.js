@@ -71,6 +71,7 @@ window.generateSmartTags = function (btn, factUid, versionUid) {
       var row = btn.closest("[data-fact-uid]");
       if (row) row.dataset.smartTags = JSON.stringify(tags);
       _showToast("Generated " + tags.length + " smart tags");
+      document.dispatchEvent(new CustomEvent("ai-usage-changed"));
     })
     .catch(function (e) {
       if (e.message.indexOf("400") !== -1) {
@@ -137,6 +138,7 @@ function makeAllSmartPane(nodeUid) {
         _showToast(verb + " " + data.data.tagged_count + " facts" +
           (data.data.skipped_count > 0 ? " (" + data.data.skipped_count + " skipped)" : ""));
         this.expanded = false;
+        document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       } catch (e) {
         if (e.message.indexOf("400") !== -1) {
           _showToast("AI key required. Add one in Settings → AI Key.", "error");
@@ -187,6 +189,7 @@ function smartTagEditor(factUid, versionUid) {
         this.autoTags = data.data.tags;
         this._updateRowBulb();
         _showToast("Generated " + this.autoTags.length + " auto tags");
+        document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       } catch (e) {
         _showToast("Failed to generate tags", "error");
       } finally {

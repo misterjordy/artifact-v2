@@ -410,6 +410,7 @@ function artiChat() {
         if (session) {
           this.sessionTokens = session.total_input_tokens + session.total_output_tokens;
         }
+        document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       }
     },
 
