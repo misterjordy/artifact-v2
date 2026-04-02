@@ -384,16 +384,19 @@ async def estimate_smart_tags_endpoint(
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Estimate token cost for bulk smart tag generation."""
+    """Estimate token cost for bulk smart tag generation (includes descendants)."""
     from artiFACT.kernel.exceptions import NotFound
     from artiFACT.kernel.models import FcNode
+    from artiFACT.modules.facts.smart_tags import _load_published_versions
 
     node = await db.get(FcNode, node_uid)
     if not node:
         raise NotFound("Node not found", code="NODE_NOT_FOUND")
 
-    estimate = await estimate_bulk_tokens(db, node_uid, replace=replace)
-    return {"data": estimate}
+    versions = await _load_published_versions(
+        db, node_uid, untagged_only=not replace, include_descendants=True,
+    )
+    return {"data": estimate_bulk_tokens(len(versions))}
 
 
 @router.patch("/facts/{fact_uid}/versions/{version_uid}/smart-tags")

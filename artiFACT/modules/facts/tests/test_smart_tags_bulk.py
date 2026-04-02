@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.modules.facts.service import create_fact, edit_fact
 from artiFACT.modules.facts.smart_tags import (
+    _load_published_versions,
     estimate_bulk_tokens,
     filter_tags,
     generate_tags_batch,
@@ -298,7 +299,8 @@ async def test_estimate_nondestructive_counts_untagged_only(
             v.smart_tags = [f"tag-{i}"]
     await db.flush()
 
-    est = await estimate_bulk_tokens(db, child_node.node_uid, replace=False)
+    versions = await _load_published_versions(db, child_node.node_uid, untagged_only=True)
+    est = estimate_bulk_tokens(len(versions))
     assert est["fact_count"] == 3
     assert est["batch_count"] == 1
 
@@ -315,7 +317,8 @@ async def test_estimate_replace_counts_all(
         v.smart_tags = [f"tag-{i}"]
     await db.flush()
 
-    est = await estimate_bulk_tokens(db, child_node.node_uid, replace=True)
+    versions = await _load_published_versions(db, child_node.node_uid)
+    est = estimate_bulk_tokens(len(versions))
     assert est["fact_count"] == 5
     assert est["batch_count"] == 1
 
@@ -330,7 +333,7 @@ async def test_estimate_returns_token_numbers(
     )
     await db.flush()
 
-    est = await estimate_bulk_tokens(db, child_node.node_uid, replace=True)
+    est = estimate_bulk_tokens(1)
     assert est["estimated_input_tokens"] > 0
     assert est["estimated_output_tokens"] > 0
     assert est["estimated_total_tokens"] > 0

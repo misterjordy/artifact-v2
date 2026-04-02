@@ -26,14 +26,28 @@
                 hx-get="/partials/fact-form?node={{ node.node_uid }}"
                 hx-target="#modal"
                 hx-swap="innerHTML">+ Fact</button>
-        <button class="px-3 py-1.5 text-xs font-medium rounded-md border border-yellow-600/40 bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30 transition-colors flex items-center gap-1"
-                id="make-all-smart-btn"
-                onclick="window.makeAllSmart('{{ node.node_uid }}', this)">
-          <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 1a4.5 4.5 0 00-1.7 8.67V11a1 1 0 001 1h1.4a1 1 0 001-1V9.67A4.5 4.5 0 008 1z"/>
-          </svg>
-          <span>Make All Smart</span>
-        </button>
+        <div x-data="makeAllSmartPane('{{ node.node_uid }}')" @click.outside="expanded = false" @keydown.escape.window="expanded = false" class="relative inline-flex items-center">
+          <button class="px-3 py-1.5 text-xs font-medium rounded-md border border-yellow-600/40 bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30 transition-colors flex items-center gap-1"
+                  @click="toggle()" :disabled="loading">
+            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 1a4.5 4.5 0 00-1.7 8.67V11a1 1 0 001 1h1.4a1 1 0 001-1V9.67A4.5 4.5 0 008 1z"/>
+            </svg>
+            <span>Make All Smart</span>
+            <svg class="w-3 h-3 transition-transform" :class="expanded && 'rotate-180'" viewBox="0 0 12 12" fill="currentColor"><path d="M6 8L1 3h10z"/></svg>
+          </button>
+          <div x-show="expanded" x-cloak x-transition class="ml-2 flex items-center gap-2">
+            <button class="px-2 py-1.5 text-2xs font-medium rounded border border-green-600/40 bg-green-600/20 text-green-400 hover:bg-green-600/30 whitespace-nowrap"
+                    @click="run(false)" :disabled="loading || est_nd.fact_count === 0">
+              <span x-show="!loading || mode !== 'nd'">Fill Gaps <span class="text-[var(--color-text-muted)]" x-text="est_nd.fact_count > 0 ? '(' + est_nd.fact_count + ' facts · ~' + formatTokens(est_nd.estimated_total_tokens) + ' tokens)' : '(all tagged)'"></span></span>
+              <span x-show="loading && mode === 'nd'" class="animate-pulse">Tagging...</span>
+            </button>
+            <button class="px-2 py-1.5 text-2xs font-medium rounded border border-amber-600/40 bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 whitespace-nowrap"
+                    @click="confirmRun()" :disabled="loading">
+              <span x-show="!loading || mode !== 'repl'">Replace Existing <span class="text-[var(--color-text-muted)]" x-text="'(' + est_repl.fact_count + ' facts · ~' + formatTokens(est_repl.estimated_total_tokens) + ' tokens)'"></span></span>
+              <span x-show="loading && mode === 'repl'" class="animate-pulse">Replacing...</span>
+            </button>
+          </div>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -49,15 +63,17 @@
          data-version-uid="{{ item.version_uid }}"
          data-fact-sentence="{{ item.sentence | e }}"
          data-smart-tags='{{ item.smart_tags | tojson }}'
+         data-smart-tags-manual='{{ item.smart_tags_manual | tojson }}'
          hx-get="/partials/fact-history/{{ item.fact_uid }}"
          hx-target="#right-pane-content"
          hx-swap="innerHTML"
          onclick="window.openRightPane('{{ item.sentence[:60] | e }}')">
       <div class="flex items-start justify-between gap-3">
         <p class="text-sm text-[var(--color-text)] leading-4 flex-1">{{ item.sentence }}</p>
-        <button class="smart-tag-bulb flex-shrink-0 mr-1 {% if item.smart_tags %}text-yellow-400 hover:text-yellow-300{% else %}text-[var(--color-text-muted)] hover:text-yellow-400{% endif %} transition-colors"
+        {% set has_any_tags = item.smart_tags or item.smart_tags_manual %}
+        <button class="smart-tag-bulb flex-shrink-0 mr-1 {% if has_any_tags %}text-yellow-400 hover:text-yellow-300{% else %}text-[var(--color-text-muted)] hover:text-yellow-400{% endif %} transition-colors"
                 onclick="event.stopPropagation(); window.generateSmartTags(this, '{{ item.fact_uid }}', '{{ item.version_uid }}')"
-                title="{% if item.smart_tags %}Smart: {{ item.smart_tags | length }} tags{% else %}Generate smart tags{% endif %}">
+                title="{% if has_any_tags %}Smart: {{ item.smart_tags | length }} auto + {{ item.smart_tags_manual | length }} manual tags{% else %}Generate smart tags{% endif %}">
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a4.5 4.5 0 00-1.7 8.67V11a1 1 0 001 1h1.4a1 1 0 001-1V9.67A4.5 4.5 0 008 1zm-.3 12a.5.5 0 00.5.5h.6a.5.5 0 000-1H8.2a.5.5 0 00-.5.5z"/>
           </svg>
@@ -100,15 +116,17 @@
          data-version-uid="{{ item.version_uid }}"
          data-fact-sentence="{{ item.sentence | e }}"
          data-smart-tags='{{ item.smart_tags | tojson }}'
+         data-smart-tags-manual='{{ item.smart_tags_manual | tojson }}'
          hx-get="/partials/fact-history/{{ item.fact_uid }}"
          hx-target="#right-pane-content"
          hx-swap="innerHTML"
          onclick="window.openRightPane('{{ item.sentence[:60] | e }}')">
       <div class="flex items-start justify-between gap-3">
         <p class="text-sm text-[var(--color-text)] leading-4 flex-1">{{ item.sentence }}</p>
-        <button class="smart-tag-bulb flex-shrink-0 mr-1 {% if item.smart_tags %}text-yellow-400 hover:text-yellow-300{% else %}text-[var(--color-text-muted)] hover:text-yellow-400{% endif %} transition-colors"
+        {% set has_any_tags = item.smart_tags or item.smart_tags_manual %}
+        <button class="smart-tag-bulb flex-shrink-0 mr-1 {% if has_any_tags %}text-yellow-400 hover:text-yellow-300{% else %}text-[var(--color-text-muted)] hover:text-yellow-400{% endif %} transition-colors"
                 onclick="event.stopPropagation(); window.generateSmartTags(this, '{{ item.fact_uid }}', '{{ item.version_uid }}')"
-                title="{% if item.smart_tags %}Smart: {{ item.smart_tags | length }} tags{% else %}Generate smart tags{% endif %}">
+                title="{% if has_any_tags %}Smart: {{ item.smart_tags | length }} auto + {{ item.smart_tags_manual | length }} manual tags{% else %}Generate smart tags{% endif %}">
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a4.5 4.5 0 00-1.7 8.67V11a1 1 0 001 1h1.4a1 1 0 001-1V9.67A4.5 4.5 0 008 1zm-.3 12a.5.5 0 00.5.5h.6a.5.5 0 000-1H8.2a.5.5 0 00-.5.5z"/>
           </svg>

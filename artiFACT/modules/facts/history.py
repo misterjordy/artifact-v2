@@ -191,11 +191,13 @@ async def get_fact_history(
 
     # Resolve smart tags from the current published version
     current_smart_tags: list[str] = []
+    current_smart_tags_manual: list[str] = []
     current_version_uid = fact.current_published_version_uid
     if current_version_uid:
         for v in versions:
             if v.version_uid == current_version_uid:
                 current_smart_tags = list(v.smart_tags or [])
+                current_smart_tags_manual = list(v.smart_tags_manual or [])
                 break
 
     return {
@@ -204,6 +206,7 @@ async def get_fact_history(
         "current_sentence": current_sentence,
         "current_version_uid": current_version_uid,
         "current_smart_tags": current_smart_tags,
+        "current_smart_tags_manual": current_smart_tags_manual,
         "is_retired": fact.is_retired,
         "versions": version_dicts,
         "move_events": move_dicts,

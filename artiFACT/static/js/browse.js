@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// === Smart Tags — lightbulb generate + batch ===
+// === Smart Tags — utilities ===
 
 function _showToast(msg, type) {
   var el = document.createElement("div");
@@ -59,6 +59,14 @@ function _showToast(msg, type) {
   document.body.appendChild(el);
   setTimeout(function () { el.remove(); }, 4000);
 }
+
+function formatTokens(n) {
+  if (n == null || n === 0) return "0";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+  return String(n);
+}
+
+// === Smart Tags — lightbulb generate ===
 
 window.generateSmartTags = function (btn, factUid, versionUid) {
   if (btn.disabled) return;
@@ -76,11 +84,8 @@ window.generateSmartTags = function (btn, factUid, versionUid) {
     })
     .then(function (data) {
       var tags = data.data.tags;
-      // Light up the bulb
-      btn.classList.remove("text-gray-500");
+      btn.classList.remove("text-[var(--color-text-muted)]");
       btn.classList.add("text-yellow-400");
-      btn.title = "Smart: " + tags.length + " tags";
-      // Update data attribute
       var row = btn.closest("[data-fact-uid]");
       if (row) row.dataset.smartTags = JSON.stringify(tags);
       _showToast("Generated " + tags.length + " smart tags");
@@ -98,68 +103,97 @@ window.generateSmartTags = function (btn, factUid, versionUid) {
     });
 };
 
-window.makeAllSmart = function (nodeUid, btn) {
-  if (!confirm("Generate smart tags for all untagged facts in this node? This uses your AI key.")) return;
-  var origText = btn.querySelector("span").textContent;
-  btn.disabled = true;
-  btn.querySelector("span").textContent = "Tagging...";
+// === Make All Smart — sub-button pane Alpine component ===
 
-  fetch("/api/v1/nodes/" + nodeUid + "/smart-tags/generate-all", {
-    method: "POST",
-    headers: { "X-CSRF-Token": getCsrfToken() },
-  })
-    .then(function (r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
-    .then(function (data) {
-      var results = data.data.results;
-      var tagged = data.data.tagged_count;
-      var skipped = data.data.skipped_count;
-      // Update lightbulbs for tagged facts
-      for (var versionUid in results) {
-        var row = document.querySelector('[data-version-uid="' + versionUid + '"]');
-        if (row) {
-          var bulb = row.querySelector(".smart-tag-bulb");
-          if (bulb) {
-            bulb.classList.remove("text-[var(--color-text-muted)]");
-            bulb.classList.add("text-yellow-400");
-            bulb.title = "Smart: " + results[versionUid].length + " tags";
+function makeAllSmartPane(nodeUid) {
+  return {
+    nodeUid: nodeUid,
+    expanded: false,
+    loading: false,
+    mode: null,
+    est_nd: { fact_count: 0, estimated_total_tokens: 0 },
+    est_repl: { fact_count: 0, estimated_total_tokens: 0 },
+
+    async toggle() {
+      if (this.expanded) { this.expanded = false; return; }
+      await this.fetchEstimates();
+      this.expanded = true;
+    },
+
+    async fetchEstimates() {
+      try {
+        var base = "/api/v1/nodes/" + this.nodeUid + "/smart-tags/estimate";
+        var r1 = await fetch(base + "?replace=false");
+        var r2 = await fetch(base + "?replace=true");
+        if (r1.ok) this.est_nd = (await r1.json()).data;
+        if (r2.ok) this.est_repl = (await r2.json()).data;
+      } catch (e) { _showToast("Failed to estimate cost", "error"); }
+    },
+
+    async run(replace) {
+      this.loading = true;
+      this.mode = replace ? "repl" : "nd";
+      try {
+        var resp = await fetch(
+          "/api/v1/nodes/" + this.nodeUid + "/smart-tags/generate-all?replace=" + replace,
+          { method: "POST", headers: { "X-CSRF-Token": getCsrfToken() } }
+        );
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        var data = await resp.json();
+        for (var vid in data.data.results) {
+          var row = document.querySelector('[data-version-uid="' + vid + '"]');
+          if (row) {
+            var bulb = row.querySelector(".smart-tag-bulb");
+            if (bulb) {
+              bulb.classList.remove("text-[var(--color-text-muted)]");
+              bulb.classList.add("text-yellow-400");
+            }
+            row.dataset.smartTags = JSON.stringify(data.data.results[vid]);
           }
-          row.dataset.smartTags = JSON.stringify(results[versionUid]);
         }
+        var verb = replace ? "Replaced" : "Tagged";
+        _showToast(verb + " " + data.data.tagged_count + " facts" +
+          (data.data.skipped_count > 0 ? " (" + data.data.skipped_count + " skipped)" : ""));
+        this.expanded = false;
+      } catch (e) {
+        if (e.message.indexOf("400") !== -1) {
+          _showToast("AI key required. Add one in Settings → AI Key.", "error");
+        } else {
+          _showToast("Batch tagging failed", "error");
+        }
+      } finally {
+        this.loading = false;
+        this.mode = null;
       }
-      _showToast("Tagged " + tagged + " facts (" + skipped + " already had tags)");
-    })
-    .catch(function (e) {
-      if (e.message.indexOf("400") !== -1) {
-        _showToast("AI key required. Add one in Settings → AI Key.", "error");
-      } else {
-        _showToast("Batch tagging failed", "error");
+    },
+
+    confirmRun() {
+      if (confirm("Replace all auto-generated tags? Manual tags (solid border) will not be affected.")) {
+        this.run(true);
       }
-    })
-    .finally(function () {
-      btn.disabled = false;
-      btn.querySelector("span").textContent = origText;
-    });
-};
+    },
+  };
+}
 
-// === Smart Tags — right pane Alpine component ===
+// === Smart Tags — right pane editor (auto + manual) ===
 
-function smartTagEditor(factUid, versionUid, initialTags) {
+function smartTagEditor(factUid, versionUid) {
   return {
     factUid: factUid,
     versionUid: versionUid,
-    tags: initialTags || [],
+    autoTags: [],
+    manualTags: [],
     generating: false,
-    editingIndex: -1,
+    editingManualIndex: -1,
     editValue: "",
     tagInputValid: true,
     tagInputMessage: "",
-    _validateTimer: null,
 
     async generateTags() {
-      if (this.tags.length > 0 && !confirm("Regenerate will replace existing tags. Continue?")) return;
+      var msg = this.manualTags.length > 0
+        ? "Regenerate auto tags? Your " + this.manualTags.length + " manual tag(s) will not be affected."
+        : (this.autoTags.length > 0 ? "Regenerate auto tags?" : "Generate smart tags?");
+      if (this.autoTags.length > 0 && !confirm(msg)) return;
       this.generating = true;
       try {
         var resp = await fetch(
@@ -168,79 +202,81 @@ function smartTagEditor(factUid, versionUid, initialTags) {
         );
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         var data = await resp.json();
-        this.tags = data.data.tags;
+        this.autoTags = data.data.tags;
         this._updateRowBulb();
-        _showToast("Generated " + this.tags.length + " smart tags");
+        _showToast("Generated " + this.autoTags.length + " auto tags");
       } catch (e) {
-        if (String(e).indexOf("400") !== -1) {
-          _showToast("AI key required. Add one in Settings → AI Key.", "error");
-        } else {
-          _showToast("Failed to generate tags", "error");
-        }
+        _showToast("Failed to generate tags", "error");
       } finally {
         this.generating = false;
       }
     },
 
-    async saveTags(newTags) {
-      try {
-        var resp = await fetch(
-          "/api/v1/facts/" + this.factUid + "/versions/" + this.versionUid + "/smart-tags",
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", "X-CSRF-Token": getCsrfToken() },
-            body: JSON.stringify({ tags: newTags }),
-          }
-        );
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        var data = await resp.json();
-        this.tags = data.data.accepted;
-        this._updateRowBulb();
-        if (data.data.rejected && data.data.rejected.length) {
-          _showToast("Rejected: " + data.data.rejected.join(", ") + " (duplicates fact words)", "warn");
+    async _patchTags(tags, origin) {
+      var resp = await fetch(
+        "/api/v1/facts/" + this.factUid + "/versions/" + this.versionUid + "/smart-tags",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": getCsrfToken() },
+          body: JSON.stringify({ tags: tags, origin: origin }),
         }
-      } catch (e) {
-        _showToast("Failed to save tags", "error");
+      );
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      var data = await resp.json();
+      if (data.data.rejected && data.data.rejected.length) {
+        _showToast("Rejected: " + data.data.rejected.join(", "), "warn");
       }
+      return data.data.accepted;
     },
 
-    addTag(inputEl) {
+    async removeAutoTag(index) {
+      try {
+        var newTags = this.autoTags.filter(function (_, i) { return i !== index; });
+        this.autoTags = await this._patchTags(newTags, "auto");
+        this._updateRowBulb();
+      } catch (e) { _showToast("Failed to update tags", "error"); }
+    },
+
+    async removeManualTag(index) {
+      try {
+        var newTags = this.manualTags.filter(function (_, i) { return i !== index; });
+        this.manualTags = await this._patchTags(newTags, "manual");
+        this._updateRowBulb();
+      } catch (e) { _showToast("Failed to update tags", "error"); }
+    },
+
+    async addManualTag(inputEl) {
       var text = inputEl.value.trim();
       if (!text) return;
-      var newTags = this.tags.concat([text]);
-      this.saveTags(newTags);
-      this.tagInputValid = true;
-      this.tagInputMessage = "";
+      try {
+        var newTags = this.manualTags.concat([text]);
+        this.manualTags = await this._patchTags(newTags, "manual");
+        this._updateRowBulb();
+        this.tagInputValid = true;
+        this.tagInputMessage = "";
+      } catch (e) { _showToast("Failed to add tag", "error"); }
     },
 
-    removeTag(index) {
-      var newTags = this.tags.filter(function (_, i) { return i !== index; });
-      this.saveTags(newTags);
+    startEditManual(index) {
+      this.editingManualIndex = index;
+      this.editValue = this.manualTags[index];
     },
 
-    startEdit(index) {
-      this.editingIndex = index;
-      this.editValue = this.tags[index];
-      var self = this;
-      this.$nextTick(function () {
-        var input = self.$refs.editInput;
-        if (input) input.focus();
-      });
-    },
-
-    saveEdit(index) {
-      if (this.editingIndex !== index) return;
+    async saveEditManual(index) {
+      if (this.editingManualIndex !== index) return;
       var text = this.editValue.trim();
-      this.editingIndex = -1;
-      if (!text) return this.removeTag(index);
-      if (text === this.tags[index]) return;
-      var newTags = this.tags.slice();
+      this.editingManualIndex = -1;
+      if (!text) return this.removeManualTag(index);
+      if (text === this.manualTags[index]) return;
+      var newTags = this.manualTags.slice();
       newTags[index] = text;
-      this.saveTags(newTags);
+      try {
+        this.manualTags = await this._patchTags(newTags, "manual");
+      } catch (e) { _showToast("Failed to update tag", "error"); }
     },
 
     cancelEdit() {
-      this.editingIndex = -1;
+      this.editingManualIndex = -1;
       this.editValue = "";
     },
 
@@ -263,9 +299,7 @@ function smartTagEditor(factUid, versionUid, initialTags) {
         var data = await resp.json();
         this.tagInputValid = data.data.valid;
         this.tagInputMessage = data.data.valid ? "" : "Tags should contextualize the fact, not repeat it.";
-      } catch (e) {
-        // Validation is best-effort
-      }
+      } catch (e) { /* best-effort */ }
     },
 
     _updateRowBulb() {
@@ -273,16 +307,16 @@ function smartTagEditor(factUid, versionUid, initialTags) {
       if (!row) return;
       var bulb = row.querySelector(".smart-tag-bulb");
       if (!bulb) return;
-      if (this.tags.length > 0) {
+      var total = this.autoTags.length + this.manualTags.length;
+      if (total > 0) {
         bulb.classList.remove("text-[var(--color-text-muted)]");
         bulb.classList.add("text-yellow-400");
-        bulb.title = "Smart: " + this.tags.length + " tags";
       } else {
         bulb.classList.remove("text-yellow-400");
         bulb.classList.add("text-[var(--color-text-muted)]");
-        bulb.title = "Generate smart tags";
       }
-      row.dataset.smartTags = JSON.stringify(this.tags);
+      row.dataset.smartTags = JSON.stringify(this.autoTags);
+      row.dataset.smartTagsManual = JSON.stringify(this.manualTags);
     },
   };
 }

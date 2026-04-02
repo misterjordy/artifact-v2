@@ -7,7 +7,7 @@ from uuid import UUID
 
 import structlog
 from nltk.stem import PorterStemmer
-from sqlalchemy import cast, select
+from sqlalchemy import cast, select, text
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,8 +30,11 @@ _stemmer = PorterStemmer()
 
 MAX_TAGS = 12
 BATCH_SIZE = 8
-INPUT_TOKENS_PER_BATCH = 420
-OUTPUT_TOKENS_PER_BATCH = 200
+
+# Empirical token constants (from production measurements)
+FIXED_INPUT_PER_BATCH = 300   # system prompt + template + sibling nodes
+MARGINAL_INPUT_PER_FACT = 10  # each fact sentence in the prompt
+OUTPUT_PER_FACT = 53          # ~10 tags + JSON structure per fact
 
 
 def stem_word(word: str) -> str:
@@ -63,14 +66,7 @@ def filter_tags(
     *,
     exclude_stems: set[str] | None = None,
 ) -> list[str]:
-    """Filter, deduplicate, and clean tags.
-
-    1. Strip whitespace, replace underscores with spaces, lowercase.
-    2. Deduplicate exact matches.
-    3. Reject tags that only repeat words from the fact sentence (stemmed).
-    4. Cross-tag stem dedup: skip tags whose stems are all already covered.
-    5. Cap at 12.
-    """
+    """Filter, deduplicate, cross-tag stem dedup, cap at 12."""
     seen: set[str] = set()
     validated: list[str] = []
     for tag in tags:
@@ -81,7 +77,6 @@ def filter_tags(
         if validate_tag(cleaned, fact_sentence):
             validated.append(cleaned)
 
-    # Cross-tag dedup, seeded with exclude_stems (e.g. from manual tags)
     seen_stems: set[str] = set(exclude_stems or set())
     unique: list[str] = []
     for tag in validated:
@@ -109,6 +104,58 @@ def _get_manual_stems(manual_tags: list[str]) -> set[str]:
             if len(w) > 2:
                 stems.add(stem_word(w))
     return stems
+
+
+# ── Descendant traversal ──
+
+
+async def get_descendant_node_uids(db: AsyncSession, node_uid: UUID) -> list[UUID]:
+    """Get node_uid + all descendant node UIDs via recursive CTE."""
+    result = await db.execute(
+        text("""
+            WITH RECURSIVE subtree AS (
+                SELECT node_uid FROM fc_node WHERE node_uid = :root
+                UNION ALL
+                SELECT n.node_uid
+                FROM fc_node n
+                JOIN subtree s ON n.parent_node_uid = s.node_uid
+            )
+            SELECT node_uid FROM subtree
+        """),
+        {"root": node_uid},
+    )
+    return [row[0] for row in result.all()]
+
+
+# ── Version loading ──
+
+
+async def _load_published_versions(
+    db: AsyncSession,
+    node_uid: UUID,
+    *,
+    untagged_only: bool = False,
+    include_descendants: bool = False,
+) -> list[FcFactVersion]:
+    """Load current published versions for facts in a node (optionally + descendants)."""
+    if include_descendants:
+        node_uids = await get_descendant_node_uids(db, node_uid)
+    else:
+        node_uids = [node_uid]
+
+    stmt = (
+        select(FcFactVersion)
+        .join(FcFact, FcFact.fact_uid == FcFactVersion.fact_uid)
+        .where(FcFact.is_retired.is_(False))
+        .where(FcFactVersion.state.in_(["published", "signed"]))
+        .where(FcFact.node_uid.in_(node_uids))
+        .where(FcFact.current_published_version_uid == FcFactVersion.version_uid)
+        .order_by(FcFactVersion.created_at.asc())
+    )
+    if untagged_only:
+        stmt = stmt.where(FcFactVersion.smart_tags == cast([], PG_JSONB))
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def _load_sibling_sentences(
@@ -153,25 +200,7 @@ async def _load_sibling_node_names(
     return "\n".join(f"- {n}" for n in names) if names else "(none)"
 
 
-async def _load_published_versions(
-    db: AsyncSession,
-    node_uid: UUID,
-    *,
-    untagged_only: bool = False,
-) -> list[FcFactVersion]:
-    """Load published/signed versions for facts in a node."""
-    stmt = (
-        select(FcFactVersion)
-        .join(FcFact, FcFact.fact_uid == FcFactVersion.fact_uid)
-        .where(FcFact.node_uid == node_uid)
-        .where(FcFact.is_retired.is_(False))
-        .where(FcFactVersion.state.in_(["published", "signed"]))
-        .order_by(FcFactVersion.created_at.asc())
-    )
-    if untagged_only:
-        stmt = stmt.where(FcFactVersion.smart_tags == cast([], PG_JSONB))
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
+# ── Parsing ──
 
 
 def _parse_single_response(raw: str) -> list[str]:
@@ -190,6 +219,9 @@ def _parse_batch_response(raw: str) -> list[dict]:
     if not isinstance(results, list):
         return []
     return results
+
+
+# ── Single-fact generation ──
 
 
 async def generate_tags_single(
@@ -246,42 +278,24 @@ async def generate_tags_single(
     return filtered
 
 
-async def generate_tags_batch(
+# ── Batch generation (with descendant traversal) ──
+
+
+async def _process_node_batch(
     db: AsyncSession,
-    node_uid: UUID,
+    child_node: FcNode,
+    versions: list[FcFactVersion],
+    sibling_node_names: str,
+    provider: AIProvider,
     actor: FcUser,
-    *,
-    replace: bool = False,
-) -> dict:
-    """Generate smart tags for facts in a node.
-
-    replace=False: only process facts with empty smart_tags.
-    replace=True: clear auto tags per-batch, regenerate. Manual tags untouched.
-
-    Returns: {"tagged_count": int, "skipped_count": int, "results": {uid: [tags]}}
-    """
-    node = await db.get(FcNode, node_uid)
-    if not node:
-        raise NotFound("Node not found", code="NODE_NOT_FOUND")
-
-    sibling_node_names = await _load_sibling_node_names(db, node)
-
-    if replace:
-        versions = await _load_published_versions(db, node_uid)
-    else:
-        versions = await _load_published_versions(db, node_uid, untagged_only=True)
-
-    total_in_node = len(await _load_published_versions(db, node_uid))
-    if not versions:
-        return {"tagged_count": 0, "skipped_count": total_in_node, "results": {}}
-
+    replace: bool,
+) -> dict[UUID, list[str]]:
+    """Process one node's facts in batches of BATCH_SIZE. Returns {uid: tags}."""
     results: dict[UUID, list[str]] = {}
-    provider = AIProvider()
 
     for batch_start in range(0, len(versions), BATCH_SIZE):
         batch = versions[batch_start: batch_start + BATCH_SIZE]
 
-        # If replacing, clear auto tags for THIS batch only (serial)
         if replace:
             for ver in batch:
                 ver.smart_tags = []
@@ -290,24 +304,21 @@ async def generate_tags_batch(
             f"{i + 1}. {v.display_sentence}" for i, v in enumerate(batch)
         )
 
-        # Check if any facts in batch have manual tags
         has_manual = any(v.smart_tags_manual for v in batch)
         if has_manual:
-            manual_lines = []
-            for i, v in enumerate(batch):
-                if v.smart_tags_manual:
-                    manual_lines.append(
-                        f"Fact {i + 1}: {', '.join(v.smart_tags_manual)}"
-                    )
+            manual_lines = [
+                f"Fact {i + 1}: {', '.join(v.smart_tags_manual)}"
+                for i, v in enumerate(batch) if v.smart_tags_manual
+            ]
             user_content = SMART_TAG_BATCH_USER_TEMPLATE_WITH_MANUAL.format(
-                node_title=node.title,
+                node_title=child_node.title,
                 numbered_facts=numbered,
                 manual_tags_per_fact="\n".join(manual_lines),
                 sibling_node_names=sibling_node_names,
             )
         else:
             user_content = SMART_TAG_BATCH_USER_TEMPLATE.format(
-                node_title=node.title,
+                node_title=child_node.title,
                 numbered_facts=numbered,
                 sibling_node_names=sibling_node_names,
             )
@@ -324,8 +335,7 @@ async def generate_tags_batch(
             action="smart_tags_batch",
         )
 
-        parsed = _parse_batch_response(raw)
-        for entry in parsed:
+        for entry in _parse_batch_response(raw):
             fact_num = entry.get("fact")
             tags = entry.get("tags", [])
             if not isinstance(fact_num, int) or not isinstance(tags, list):
@@ -344,32 +354,84 @@ async def generate_tags_batch(
 
         await db.flush()
 
-    tagged = len(results)
-    skipped = total_in_node - tagged
-    log.info("smart_tags.batch_done", node_uid=str(node_uid), tagged=tagged)
-    return {
-        "tagged_count": tagged,
-        "skipped_count": skipped,
-        "results": results,
-    }
+    return results
 
 
-async def estimate_bulk_tokens(
+async def generate_tags_batch(
     db: AsyncSession,
     node_uid: UUID,
+    actor: FcUser,
     *,
     replace: bool = False,
 ) -> dict:
-    """Estimate tokens for a bulk smart tag run."""
-    if replace:
-        versions = await _load_published_versions(db, node_uid)
-    else:
-        versions = await _load_published_versions(db, node_uid, untagged_only=True)
+    """Generate smart tags for facts in a node and all descendants.
 
-    fact_count = len(versions)
-    batch_count = math.ceil(fact_count / BATCH_SIZE) if fact_count > 0 else 0
-    est_input = batch_count * INPUT_TOKENS_PER_BATCH
-    est_output = batch_count * OUTPUT_TOKENS_PER_BATCH
+    Batches by child node so each LLM call gets proper sibling context.
+    """
+    descendant_uids = await get_descendant_node_uids(db, node_uid)
+
+    all_results: dict[str, list[str]] = {}
+    total_tagged = 0
+    provider = AIProvider()
+
+    for child_uid in descendant_uids:
+        child_node = await db.get(FcNode, child_uid)
+        if not child_node:
+            continue
+
+        versions = await _load_published_versions(
+            db, child_uid, untagged_only=not replace,
+        )
+        if not versions:
+            continue
+
+        sibling_node_names = await _load_sibling_node_names(db, child_node)
+
+        node_results = await _process_node_batch(
+            db, child_node, versions, sibling_node_names,
+            provider, actor, replace,
+        )
+
+        for vid, tags in node_results.items():
+            all_results[str(vid)] = tags
+            total_tagged += 1
+
+    # Count total published facts across all descendants for skipped count
+    total_versions = await _load_published_versions(
+        db, node_uid, include_descendants=True,
+    )
+    skipped = len(total_versions) - total_tagged
+
+    log.info("smart_tags.batch_done", node_uid=str(node_uid), tagged=total_tagged)
+    return {
+        "tagged_count": total_tagged,
+        "skipped_count": skipped,
+        "results": all_results,
+    }
+
+
+# ── Token estimation (empirically calibrated) ──
+
+
+def estimate_bulk_tokens(fact_count: int) -> dict:
+    """Estimate tokens for a bulk smart tag run.
+
+    Based on empirical measurements from production runs:
+    - 8 facts: ~382 in + ~407 out = ~789 total
+    - 3 facts: ~330 in + ~168 out = ~498 total
+    """
+    if fact_count == 0:
+        return {
+            "fact_count": 0,
+            "batch_count": 0,
+            "estimated_input_tokens": 0,
+            "estimated_output_tokens": 0,
+            "estimated_total_tokens": 0,
+        }
+
+    batch_count = math.ceil(fact_count / BATCH_SIZE)
+    est_input = batch_count * FIXED_INPUT_PER_BATCH + fact_count * MARGINAL_INPUT_PER_FACT
+    est_output = fact_count * OUTPUT_PER_FACT
 
     return {
         "fact_count": fact_count,
@@ -378,6 +440,9 @@ async def estimate_bulk_tokens(
         "estimated_output_tokens": est_output,
         "estimated_total_tokens": est_input + est_output,
     }
+
+
+# ── Manual tag CRUD ──
 
 
 async def update_tags_manual(
@@ -414,7 +479,7 @@ async def update_tags_auto(
     tags: list[str],
     actor: FcUser,
 ) -> tuple[list[str], list[str]]:
-    """Update auto-generated tags directly (e.g. remove individual auto tag)."""
+    """Update auto-generated tags directly."""
     version = await db.get(FcFactVersion, version_uid)
     if not version:
         raise NotFound("Version not found", code="VERSION_NOT_FOUND")

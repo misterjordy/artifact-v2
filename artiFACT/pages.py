@@ -266,6 +266,7 @@ async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dic
                 "state": ver.state,
                 "classification": ver.classification or "UNCLASSIFIED",
                 "smart_tags": ver.smart_tags or [],
+                "smart_tags_manual": ver.smart_tags_manual or [],
             }
         )
     return items

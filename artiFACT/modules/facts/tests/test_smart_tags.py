@@ -310,8 +310,8 @@ async def test_generate_batch_returns_results_dict(
 
     assert isinstance(results, dict)
     assert "results" in results
-    assert v.version_uid in results["results"]
-    assert isinstance(results["results"][v.version_uid], list)
+    assert str(v.version_uid) in results["results"]
+    assert isinstance(results["results"][str(v.version_uid)], list)
 
 
 # ── Manual CRUD ──
