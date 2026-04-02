@@ -261,9 +261,11 @@ async def _get_facts_for_node(db: AsyncSession, node_uid: uuid.UUID) -> list[dic
         items.append(
             {
                 "fact_uid": str(fact.fact_uid),
+                "version_uid": str(ver.version_uid),
                 "sentence": ver.display_sentence,
                 "state": ver.state,
                 "classification": ver.classification or "UNCLASSIFIED",
+                "smart_tags": ver.smart_tags or [],
             }
         )
     return items

@@ -189,10 +189,21 @@ async def get_fact_history(
     timeline = version_dicts + move_dicts
     timeline.sort(key=lambda e: e.get("created_at") or e.get("occurred_at"), reverse=True)
 
+    # Resolve smart tags from the current published version
+    current_smart_tags: list[str] = []
+    current_version_uid = fact.current_published_version_uid
+    if current_version_uid:
+        for v in versions:
+            if v.version_uid == current_version_uid:
+                current_smart_tags = list(v.smart_tags or [])
+                break
+
     return {
         "fact_uid": fact.fact_uid,
         "node_uid": fact.node_uid,
         "current_sentence": current_sentence,
+        "current_version_uid": current_version_uid,
+        "current_smart_tags": current_smart_tags,
         "is_retired": fact.is_retired,
         "versions": version_dicts,
         "move_events": move_dicts,
