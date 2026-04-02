@@ -116,6 +116,7 @@ function makeAllSmartPane(nodeUid) {
     async run(replace) {
       this.loading = true;
       this.mode = replace ? "repl" : "nd";
+      this.expanded = false;
       try {
         var resp = await fetch(
           "/api/v1/nodes/" + this.nodeUid + "/smart-tags/generate-all?replace=" + replace,
@@ -123,7 +124,8 @@ function makeAllSmartPane(nodeUid) {
         );
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         var data = await resp.json();
-        for (var vid in data.data.results) {
+        var results = (data.data && data.data.results) || {};
+        for (var vid in results) {
           var row = document.querySelector('[data-version-uid="' + vid + '"]');
           if (row) {
             var bulb = row.querySelector(".smart-tag-bulb");
@@ -131,19 +133,21 @@ function makeAllSmartPane(nodeUid) {
               bulb.classList.remove("text-[var(--color-text-muted)]");
               bulb.classList.add("text-yellow-400");
             }
-            row.dataset.smartTags = JSON.stringify(data.data.results[vid]);
+            row.dataset.smartTags = JSON.stringify(results[vid]);
           }
         }
+        var tagged = (data.data && data.data.tagged_count) || 0;
+        var skipped = (data.data && data.data.skipped_count) || 0;
         var verb = replace ? "Replaced" : "Tagged";
-        _showToast(verb + " " + data.data.tagged_count + " facts" +
-          (data.data.skipped_count > 0 ? " (" + data.data.skipped_count + " skipped)" : ""));
-        this.expanded = false;
+        _showToast(verb + " " + tagged + " facts" +
+          (skipped > 0 ? " (" + skipped + " skipped)" : ""));
         document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       } catch (e) {
-        if (e.message.indexOf("400") !== -1) {
+        console.error("Bulk tagging error:", e);
+        if (e.message && e.message.indexOf("400") !== -1) {
           _showToast("AI key required. Add one in Settings → AI Key.", "error");
         } else {
-          _showToast("Batch tagging failed", "error");
+          _showToast("Bulk tagging error: " + (e.message || "unknown"), "error");
         }
       } finally {
         this.loading = false;
