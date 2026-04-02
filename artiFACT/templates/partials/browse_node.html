@@ -48,7 +48,7 @@
          data-fact-uid="{{ item.fact_uid }}"
          data-version-uid="{{ item.version_uid }}"
          data-fact-sentence="{{ item.sentence | e }}"
-         data-smart-tags="{{ item.smart_tags | tojson | e }}"
+         data-smart-tags='{{ item.smart_tags | tojson }}'
          hx-get="/partials/fact-history/{{ item.fact_uid }}"
          hx-target="#right-pane-content"
          hx-swap="innerHTML"
@@ -99,7 +99,7 @@
          data-fact-uid="{{ item.fact_uid }}"
          data-version-uid="{{ item.version_uid }}"
          data-fact-sentence="{{ item.sentence | e }}"
-         data-smart-tags="{{ item.smart_tags | tojson | e }}"
+         data-smart-tags='{{ item.smart_tags | tojson }}'
          hx-get="/partials/fact-history/{{ item.fact_uid }}"
          hx-target="#right-pane-content"
          hx-swap="innerHTML"
