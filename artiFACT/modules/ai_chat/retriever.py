@@ -4,6 +4,7 @@ Replaces the old smart/efficient mode split. Every chat message goes
 through this retriever unless the user requests full corpus.
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -21,6 +22,21 @@ log = structlog.get_logger()
 
 DEFAULT_TEXT_WEIGHT = 0.4
 DEFAULT_TAG_WEIGHT = 0.6
+
+
+def _build_or_tsquery_str(terms: str) -> str:
+    """Build an OR-joined tsquery string from space-separated terms.
+
+    Deduplicates, strips non-alpha, joins with ' | '.
+    """
+    words = re.findall(r"[A-Za-z0-9]+", terms.lower())
+    seen: set[str] = set()
+    unique: list[str] = []
+    for w in words:
+        if len(w) > 1 and w not in seen:
+            seen.add(w)
+            unique.append(w)
+    return " | ".join(unique) if unique else ""
 
 
 async def _get_scope_node_uids(
@@ -80,11 +96,13 @@ async def retrieve_facts(
 
     tw, tgw = await _get_retrieval_weights(db, text_weight, tag_weight)
 
-    # Build OR-based tsquery: original query terms OR intent expansion tags
+    # Build OR-based tsquery: all query + intent terms joined with |
     _, intent_tags = detect_intent(query)
-    query_tsq = func.plainto_tsquery("english", query)
-    tags_tsq = func.plainto_tsquery("english", " ".join(intent_tags))
-    tsquery = query_tsq.op("||")(tags_tsq)
+    all_terms = f"{query} {' '.join(intent_tags)}"
+    or_str = _build_or_tsquery_str(all_terms)
+    if not or_str:
+        return []
+    tsquery = func.to_tsquery("english", or_str)
 
     text_score = tw * func.coalesce(
         func.ts_rank(FcFactVersion.search_vector, tsquery), 0.0
