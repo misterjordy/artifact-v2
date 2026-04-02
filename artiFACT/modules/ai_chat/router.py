@@ -334,7 +334,7 @@ async def get_token_estimate(
     return TokenEstimate(**result)
 
 
-@router.get("/ai/usage/summary")
+@router.get("/usage/summary")
 async def ai_usage_summary(
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
