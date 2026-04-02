@@ -12,10 +12,24 @@ from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.modules.facts.service import create_fact
 from artiFACT.modules.facts.smart_tags import (
     estimate_bulk_tokens,
-    generate_tags_batch,
+    generate_tags_batch_stream,
+
     get_descendant_node_uids,
     _load_published_versions,
 )
+
+
+
+async def _consume_batch_stream(db, node_uid, actor, **kwargs):
+    """Test helper: consume the async generator, return final summary."""
+    final = {"tagged_count": 0, "skipped_count": 0, "results": {}}
+    async for evt in generate_tags_batch_stream(db, node_uid, actor, **kwargs):
+        if evt.get("done"):
+            final["tagged_count"] = evt.get("tagged_count", 0)
+            final["skipped_count"] = evt.get("skipped_count", 0)
+        elif evt.get("results"):
+            final["results"].update(evt["results"])
+    return final
 
 
 # ── Token estimation (empirically calibrated) ──
@@ -185,7 +199,7 @@ async def test_generate_batch_processes_descendants(
         ]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        result = await generate_tags_batch(db, root_node.node_uid, admin_user)
+        result = await _consume_batch_stream(db, root_node.node_uid, admin_user)
 
     assert result["tagged_count"] == 5
     assert call_count >= 2  # at least one call per child node
@@ -233,7 +247,7 @@ async def test_generate_batch_uses_child_node_context(
         return (json.dumps({"results": [{"fact": 1, "tags": ["test"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        await generate_tags_batch(db, root_node.node_uid, admin_user)
+        await _consume_batch_stream(db, root_node.node_uid, admin_user)
 
     # Should have called AI at least twice — once per child
     assert len(captured_prompts) >= 2
@@ -255,7 +269,7 @@ async def test_generate_batch_empty_parent_returns_zero(
         return (json.dumps({"results": []}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        result = await generate_tags_batch(db, root_node.node_uid, admin_user)
+        result = await _consume_batch_stream(db, root_node.node_uid, admin_user)
 
     assert result["tagged_count"] == 0
     assert call_count == 0

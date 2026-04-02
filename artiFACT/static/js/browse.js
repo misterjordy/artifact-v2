@@ -123,24 +123,54 @@ function makeAllSmartPane(nodeUid) {
           { method: "POST", headers: { "X-CSRF-Token": getCsrfToken() } }
         );
         if (!resp.ok) throw new Error("HTTP " + resp.status);
-        var data = await resp.json();
-        var results = (data.data && data.data.results) || {};
-        for (var vid in results) {
-          var row = document.querySelector('[data-version-uid="' + vid + '"]');
-          if (row) {
-            var bulb = row.querySelector(".smart-tag-bulb");
-            if (bulb) {
-              bulb.classList.remove("text-[var(--color-text-muted)]");
-              bulb.classList.add("text-yellow-400");
+
+        // Read NDJSON stream — one JSON object per line
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = "";
+        var totalTagged = 0;
+        var totalSkipped = 0;
+
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li].trim();
+            if (!line) continue;
+            try {
+              var evt = JSON.parse(line);
+            } catch (pe) { continue; }
+
+            if (evt.done) {
+              totalTagged = evt.tagged_count || totalTagged;
+              totalSkipped = evt.skipped_count || 0;
+              continue;
             }
-            row.dataset.smartTags = JSON.stringify(results[vid]);
+
+            // Batch progress — update lightbulbs as they arrive
+            var results = evt.results || {};
+            for (var vid in results) {
+              var row = document.querySelector('[data-version-uid="' + vid + '"]');
+              if (row) {
+                var bulb = row.querySelector(".smart-tag-bulb");
+                if (bulb) {
+                  bulb.classList.remove("text-[var(--color-text-muted)]");
+                  bulb.classList.add("text-yellow-400");
+                }
+                row.dataset.smartTags = JSON.stringify(results[vid]);
+              }
+            }
+            totalTagged += evt.tagged || 0;
           }
         }
-        var tagged = (data.data && data.data.tagged_count) || 0;
-        var skipped = (data.data && data.data.skipped_count) || 0;
+
         var verb = replace ? "Replaced" : "Tagged";
-        _showToast(verb + " " + tagged + " facts" +
-          (skipped > 0 ? " (" + skipped + " skipped)" : ""));
+        _showToast(verb + " " + totalTagged + " facts" +
+          (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : ""));
         document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       } catch (e) {
         console.error("Bulk tagging error:", e);

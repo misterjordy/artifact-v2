@@ -14,12 +14,26 @@ from artiFACT.modules.facts.smart_tags import (
     _load_published_versions,
     estimate_bulk_tokens,
     filter_tags,
-    generate_tags_batch,
+    generate_tags_batch_stream,
+
     generate_tags_single,
     sync_tags_text,
     update_tags_auto,
     update_tags_manual,
 )
+
+
+
+async def _consume_batch_stream(db, node_uid, actor, **kwargs):
+    """Test helper: consume the async generator, return final summary."""
+    final = {"tagged_count": 0, "skipped_count": 0, "results": {}}
+    async for evt in generate_tags_batch_stream(db, node_uid, actor, **kwargs):
+        if evt.get("done"):
+            final["tagged_count"] = evt.get("tagged_count", 0)
+            final["skipped_count"] = evt.get("skipped_count", 0)
+        elif evt.get("results"):
+            final["results"].update(evt["results"])
+    return final
 
 
 # ── Tag origin separation ──
@@ -201,7 +215,7 @@ async def test_nondestructive_skips_already_tagged(
         ]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        result = await generate_tags_batch(db, child_node.node_uid, admin_user, replace=False)
+        result = await _consume_batch_stream(db, child_node.node_uid, admin_user, replace=False)
 
     assert result["tagged_count"] == 3
     assert versions[0].smart_tags == ["existing"]
@@ -224,7 +238,7 @@ async def test_nondestructive_preserves_manual_tags(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
-        await generate_tags_batch(db, child_node.node_uid, admin_user, replace=False)
+        await _consume_batch_stream(db, child_node.node_uid, admin_user, replace=False)
 
     assert ver.smart_tags_manual == ["fips"]
 
@@ -254,7 +268,7 @@ async def test_replace_regenerates_auto_tags(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
-        result = await generate_tags_batch(db, child_node.node_uid, admin_user, replace=True)
+        result = await _consume_batch_stream(db, child_node.node_uid, admin_user, replace=True)
 
     assert result["tagged_count"] == 3
     for v in versions:
@@ -278,7 +292,7 @@ async def test_replace_preserves_manual_tags(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
-        await generate_tags_batch(db, child_node.node_uid, admin_user, replace=True)
+        await _consume_batch_stream(db, child_node.node_uid, admin_user, replace=True)
 
     assert ver.smart_tags_manual == ["fips 140-2"]
     assert "old auto" not in ver.smart_tags
@@ -372,7 +386,7 @@ async def test_batch_prompt_includes_sibling_node_names(
         return (json.dumps({"results": [{"fact": 1, "tags": ["test tag"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        await generate_tags_batch(db, child_node.node_uid, admin_user)
+        await _consume_batch_stream(db, child_node.node_uid, admin_user)
 
     user_msg = captured[1]["content"]
     assert "SIBLING CATEGORIES" in user_msg
@@ -400,7 +414,7 @@ async def test_batch_prompt_includes_manual_tags_when_present(
         return (json.dumps({"results": [{"fact": 1, "tags": ["crypto module"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        await generate_tags_batch(db, child_node.node_uid, admin_user)
+        await _consume_batch_stream(db, child_node.node_uid, admin_user)
 
     user_msg = captured[1]["content"]
     assert "HUMAN-ASSIGNED TAGS" in user_msg
@@ -424,7 +438,7 @@ async def test_batch_prompt_excludes_manual_section_when_none(
         return (json.dumps({"results": [{"fact": 1, "tags": ["test tag"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
-        await generate_tags_batch(db, child_node.node_uid, admin_user)
+        await _consume_batch_stream(db, child_node.node_uid, admin_user)
 
     user_msg = captured[1]["content"]
     assert "HUMAN-ASSIGNED TAGS" not in user_msg

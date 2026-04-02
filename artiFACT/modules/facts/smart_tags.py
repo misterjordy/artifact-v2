@@ -3,6 +3,7 @@
 import json
 import math
 import re
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 import structlog
@@ -281,97 +282,93 @@ async def generate_tags_single(
 # ── Batch generation (with descendant traversal) ──
 
 
-async def _process_node_batch(
+async def _run_single_batch(
     db: AsyncSession,
     child_node: FcNode,
-    versions: list[FcFactVersion],
+    batch: list[FcFactVersion],
     sibling_node_names: str,
     provider: AIProvider,
     actor: FcUser,
     replace: bool,
 ) -> dict[UUID, list[str]]:
-    """Process one node's facts in batches of BATCH_SIZE. Returns {uid: tags}."""
-    results: dict[UUID, list[str]] = {}
+    """Run one LLM call for a single batch of facts. Returns {uid: tags}."""
+    if replace:
+        for ver in batch:
+            ver.smart_tags = []
 
-    for batch_start in range(0, len(versions), BATCH_SIZE):
-        batch = versions[batch_start: batch_start + BATCH_SIZE]
+    numbered = "\n".join(
+        f"{i + 1}. {v.display_sentence}" for i, v in enumerate(batch)
+    )
 
-        if replace:
-            for ver in batch:
-                ver.smart_tags = []
-
-        numbered = "\n".join(
-            f"{i + 1}. {v.display_sentence}" for i, v in enumerate(batch)
-        )
-
-        has_manual = any(v.smart_tags_manual for v in batch)
-        if has_manual:
-            manual_lines = [
-                f"Fact {i + 1}: {', '.join(v.smart_tags_manual)}"
-                for i, v in enumerate(batch) if v.smart_tags_manual
-            ]
-            user_content = SMART_TAG_BATCH_USER_TEMPLATE_WITH_MANUAL.format(
-                node_title=child_node.title,
-                numbered_facts=numbered,
-                manual_tags_per_fact="\n".join(manual_lines),
-                sibling_node_names=sibling_node_names,
-            )
-        else:
-            user_content = SMART_TAG_BATCH_USER_TEMPLATE.format(
-                node_title=child_node.title,
-                numbered_facts=numbered,
-                sibling_node_names=sibling_node_names,
-            )
-
-        messages = [
-            {"role": "system", "content": SMART_TAG_BATCH_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
+    has_manual = any(v.smart_tags_manual for v in batch)
+    if has_manual:
+        manual_lines = [
+            f"Fact {i + 1}: {', '.join(v.smart_tags_manual)}"
+            for i, v in enumerate(batch) if v.smart_tags_manual
         ]
-
-        raw, _usage = await provider.complete(
-            db, actor.user_uid, messages,
-            response_format={"type": "json_object"},
-            max_tokens=2048,
-            action="smart_tags_batch",
+        user_content = SMART_TAG_BATCH_USER_TEMPLATE_WITH_MANUAL.format(
+            node_title=child_node.title,
+            numbered_facts=numbered,
+            manual_tags_per_fact="\n".join(manual_lines),
+            sibling_node_names=sibling_node_names,
+        )
+    else:
+        user_content = SMART_TAG_BATCH_USER_TEMPLATE.format(
+            node_title=child_node.title,
+            numbered_facts=numbered,
+            sibling_node_names=sibling_node_names,
         )
 
-        for entry in _parse_batch_response(raw):
-            fact_num = entry.get("fact")
-            tags = entry.get("tags", [])
-            if not isinstance(fact_num, int) or not isinstance(tags, list):
-                continue
-            idx = fact_num - 1
-            if 0 <= idx < len(batch):
-                ver = batch[idx]
-                manual_stems = _get_manual_stems(ver.smart_tags_manual or [])
-                filtered = filter_tags(
-                    [str(t) for t in tags], ver.display_sentence,
-                    exclude_stems=manual_stems,
-                )
-                ver.smart_tags = filtered
-                sync_tags_text(ver)
-                results[ver.version_uid] = filtered
+    messages = [
+        {"role": "system", "content": SMART_TAG_BATCH_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
 
-        await db.flush()
+    raw, _usage = await provider.complete(
+        db, actor.user_uid, messages,
+        response_format={"type": "json_object"},
+        max_tokens=2048,
+        action="smart_tags_batch",
+    )
 
+    results: dict[UUID, list[str]] = {}
+    for entry in _parse_batch_response(raw):
+        fact_num = entry.get("fact")
+        tags = entry.get("tags", [])
+        if not isinstance(fact_num, int) or not isinstance(tags, list):
+            continue
+        idx = fact_num - 1
+        if 0 <= idx < len(batch):
+            ver = batch[idx]
+            manual_stems = _get_manual_stems(ver.smart_tags_manual or [])
+            filtered = filter_tags(
+                [str(t) for t in tags], ver.display_sentence,
+                exclude_stems=manual_stems,
+            )
+            ver.smart_tags = filtered
+            sync_tags_text(ver)
+            results[ver.version_uid] = filtered
+
+    await db.flush()
     return results
 
 
-async def generate_tags_batch(
+async def generate_tags_batch_stream(
     db: AsyncSession,
     node_uid: UUID,
     actor: FcUser,
     *,
     replace: bool = False,
-) -> dict:
-    """Generate smart tags for facts in a node and all descendants.
+) -> AsyncIterator[dict]:
+    """Generate smart tags, yielding progress after each batch.
 
-    Batches by child node so each LLM call gets proper sibling context.
+    Yields dicts: {"batch": N, "tagged": N, "results": {uid: tags}}
+    Final yield: {"done": true, "tagged_count": N, "skipped_count": N}
     """
     descendant_uids = await get_descendant_node_uids(db, node_uid)
 
-    all_results: dict[str, list[str]] = {}
     total_tagged = 0
+    batch_num = 0
     provider = AIProvider()
 
     for child_uid in descendant_uids:
@@ -387,26 +384,32 @@ async def generate_tags_batch(
 
         sibling_node_names = await _load_sibling_node_names(db, child_node)
 
-        node_results = await _process_node_batch(
-            db, child_node, versions, sibling_node_names,
-            provider, actor, replace,
-        )
+        for batch_start in range(0, len(versions), BATCH_SIZE):
+            batch = versions[batch_start: batch_start + BATCH_SIZE]
+            batch_num += 1
 
-        for vid, tags in node_results.items():
-            all_results[str(vid)] = tags
-            total_tagged += 1
+            batch_results = await _run_single_batch(
+                db, child_node, batch, sibling_node_names,
+                provider, actor, replace,
+            )
 
-    # Count total published facts across all descendants for skipped count
+            total_tagged += len(batch_results)
+            yield {
+                "batch": batch_num,
+                "tagged": len(batch_results),
+                "results": {str(k): v for k, v in batch_results.items()},
+            }
+
     total_versions = await _load_published_versions(
         db, node_uid, include_descendants=True,
     )
     skipped = len(total_versions) - total_tagged
 
     log.info("smart_tags.batch_done", node_uid=str(node_uid), tagged=total_tagged)
-    return {
+    yield {
+        "done": True,
         "tagged_count": total_tagged,
         "skipped_count": skipped,
-        "results": all_results,
     }
 
 

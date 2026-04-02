@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,7 +40,7 @@ from artiFACT.modules.facts.service import (
 )
 from artiFACT.modules.facts.smart_tags import (
     estimate_bulk_tokens,
-    generate_tags_batch,
+    generate_tags_batch_stream,
     generate_tags_single,
     update_tags_auto,
     update_tags_manual,
@@ -342,18 +343,20 @@ async def generate_smart_tags_endpoint(
     return {"data": {"tags": tags, "version_uid": str(version_uid)}}
 
 
-@router.post("/nodes/{node_uid}/smart-tags/generate-all")
+@router.post("/nodes/{node_uid}/smart-tags/generate-all", response_model=None)
 async def generate_smart_tags_batch_endpoint(
     node_uid: uuid.UUID,
     replace: bool = Query(default=False),
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
-    """Generate AI smart tags for facts in a node.
+) -> StreamingResponse:
+    """Generate AI smart tags, streaming progress per batch (NDJSON).
 
-    replace=false: only process untagged facts (nondestructive).
-    replace=true: regenerate auto tags on all facts (preserves manual tags).
+    Each line is a JSON object. Intermediate lines have batch results.
+    Final line has done=true with totals.
     """
+    import json as _json
+
     from artiFACT.kernel.exceptions import Forbidden, NotFound
     from artiFACT.kernel.models import FcNode
     from artiFACT.kernel.permissions.resolver import can
@@ -365,16 +368,18 @@ async def generate_smart_tags_batch_endpoint(
     if not await can(user, "contribute", node_uid, db):
         raise Forbidden("Cannot generate tags in this node", code="FORBIDDEN")
 
-    result = await generate_tags_batch(db, node_uid, user, replace=replace)
-    await db.commit()
+    async def _stream():
+        async for event in generate_tags_batch_stream(
+            db, node_uid, user, replace=replace,
+        ):
+            yield _json.dumps(event) + "\n"
+        await db.commit()
 
-    return {
-        "data": {
-            "tagged_count": result["tagged_count"],
-            "skipped_count": result["skipped_count"],
-            "results": {str(k): v for k, v in result["results"].items()},
-        }
-    }
+    return StreamingResponse(
+        _stream(),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/nodes/{node_uid}/smart-tags/estimate")

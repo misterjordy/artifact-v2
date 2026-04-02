@@ -12,7 +12,8 @@ from artiFACT.kernel.models import FcFact, FcFactVersion, FcUser
 from artiFACT.modules.facts.service import create_fact, edit_fact
 from artiFACT.modules.facts.smart_tags import (
     filter_tags,
-    generate_tags_batch,
+    generate_tags_batch_stream,
+
     generate_tags_single,
     get_fact_stems,
     stem_word,
@@ -20,6 +21,19 @@ from artiFACT.modules.facts.smart_tags import (
     update_tags_manual,
     validate_tag,
 )
+
+
+
+async def _consume_batch_stream(db, node_uid, actor, **kwargs):
+    """Test helper: consume the async generator, return final summary."""
+    final = {"tagged_count": 0, "skipped_count": 0, "results": {}}
+    async for evt in generate_tags_batch_stream(db, node_uid, actor, **kwargs):
+        if evt.get("done"):
+            final["tagged_count"] = evt.get("tagged_count", 0)
+            final["skipped_count"] = evt.get("skipped_count", 0)
+        elif evt.get("results"):
+            final["results"].update(evt["results"])
+    return final
 
 
 # ── Stem validation ──
@@ -251,7 +265,7 @@ async def test_generate_batch_skips_already_tagged(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         mock_complete,
     ):
-        results = await generate_tags_batch(db, child_node.node_uid, admin_user)
+        results = await _consume_batch_stream(db, child_node.node_uid, admin_user)
 
     assert len(results) == 3
     assert versions[0].version_uid not in results
@@ -283,7 +297,7 @@ async def test_generate_batch_groups_by_8(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         mock_complete,
     ):
-        await generate_tags_batch(db, child_node.node_uid, admin_user)
+        await _consume_batch_stream(db, child_node.node_uid, admin_user)
 
     assert call_count == 3
 
@@ -307,7 +321,7 @@ async def test_generate_batch_returns_results_dict(
         new_callable=AsyncMock,
         return_value=(mock_response, AIUsage()),
     ):
-        results = await generate_tags_batch(db, child_node.node_uid, admin_user)
+        results = await _consume_batch_stream(db, child_node.node_uid, admin_user)
 
     assert isinstance(results, dict)
     assert "results" in results
