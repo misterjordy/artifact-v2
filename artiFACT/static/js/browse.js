@@ -94,6 +94,8 @@ function makeAllSmartPane(nodeUid) {
     expanded: false,
     loading: false,
     mode: null,
+    progressTagged: 0,
+    progressTotal: 0,
     est_nd: { fact_count: 0, estimated_total_tokens: 0 },
     est_repl: { fact_count: 0, estimated_total_tokens: 0 },
 
@@ -117,6 +119,8 @@ function makeAllSmartPane(nodeUid) {
       this.loading = true;
       this.mode = replace ? "repl" : "nd";
       this.expanded = false;
+      this.progressTagged = 0;
+      this.progressTotal = 0;
       try {
         var resp = await fetch(
           "/api/v1/nodes/" + this.nodeUid + "/smart-tags/generate-all?replace=" + replace,
@@ -124,11 +128,9 @@ function makeAllSmartPane(nodeUid) {
         );
         if (!resp.ok) throw new Error("HTTP " + resp.status);
 
-        // Read NDJSON stream — one JSON object per line
         var reader = resp.body.getReader();
         var decoder = new TextDecoder();
         var buffer = "";
-        var totalTagged = 0;
         var totalSkipped = 0;
 
         while (true) {
@@ -141,17 +143,19 @@ function makeAllSmartPane(nodeUid) {
           for (var li = 0; li < lines.length; li++) {
             var line = lines[li].trim();
             if (!line) continue;
-            try {
-              var evt = JSON.parse(line);
-            } catch (pe) { continue; }
+            try { var evt = JSON.parse(line); } catch (pe) { continue; }
 
             if (evt.done) {
-              totalTagged = evt.tagged_count || totalTagged;
+              this.progressTagged = evt.tagged_count || this.progressTagged;
               totalSkipped = evt.skipped_count || 0;
               continue;
             }
 
-            // Batch progress — update lightbulbs as they arrive
+            // Update progress counter
+            if (evt.tagged_so_far) this.progressTagged = evt.tagged_so_far;
+            if (evt.total) this.progressTotal = evt.total;
+
+            // Update lightbulbs as each batch arrives
             var results = evt.results || {};
             for (var vid in results) {
               var row = document.querySelector('[data-version-uid="' + vid + '"]');
@@ -164,24 +168,28 @@ function makeAllSmartPane(nodeUid) {
                 row.dataset.smartTags = JSON.stringify(results[vid]);
               }
             }
-            totalTagged += evt.tagged || 0;
           }
         }
 
         var verb = replace ? "Replaced" : "Tagged";
-        _showToast(verb + " " + totalTagged + " facts" +
+        _showToast(verb + " " + this.progressTagged + " facts" +
           (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : ""));
         document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       } catch (e) {
         console.error("Bulk tagging error:", e);
-        if (e.message && e.message.indexOf("400") !== -1) {
+        if (this.progressTagged > 0) {
+          _showToast("Partial: tagged " + this.progressTagged + "/" + this.progressTotal + " before error", "warn");
+        } else if (e.message && e.message.indexOf("400") !== -1) {
           _showToast("AI key required. Add one in Settings → AI Key.", "error");
         } else {
           _showToast("Bulk tagging error: " + (e.message || "unknown"), "error");
         }
+        document.dispatchEvent(new CustomEvent("ai-usage-changed"));
       } finally {
         this.loading = false;
         this.mode = null;
+        this.progressTagged = 0;
+        this.progressTotal = 0;
       }
     },
 

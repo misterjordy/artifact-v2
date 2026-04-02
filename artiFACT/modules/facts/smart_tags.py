@@ -349,7 +349,7 @@ async def _run_single_batch(
             sync_tags_text(ver)
             results[ver.version_uid] = filtered
 
-    await db.flush()
+    await db.commit()
     return results
 
 
@@ -362,13 +362,22 @@ async def generate_tags_batch_stream(
 ) -> AsyncIterator[dict]:
     """Generate smart tags, yielding progress after each batch.
 
-    Yields dicts: {"batch": N, "tagged": N, "results": {uid: tags}}
-    Final yield: {"done": true, "tagged_count": N, "skipped_count": N}
+    Commits per batch so partial progress survives disconnects.
+    Yields: {"tagged_so_far": N, "total": N, "results": {uid: tags}}
+    Final:  {"done": true, "tagged_count": N, "skipped_count": N}
     """
-    descendant_uids = await get_descendant_node_uids(db, node_uid)
+    # Count total facts upfront for progress denominator
+    all_versions = await _load_published_versions(
+        db, node_uid, untagged_only=not replace, include_descendants=True,
+    )
+    total_facts = len(all_versions)
 
-    total_tagged = 0
-    batch_num = 0
+    if total_facts == 0:
+        yield {"done": True, "tagged_count": 0, "skipped_count": 0, "total": 0}
+        return
+
+    descendant_uids = await get_descendant_node_uids(db, node_uid)
+    tagged_so_far = 0
     provider = AIProvider()
 
     for child_uid in descendant_uids:
@@ -386,30 +395,31 @@ async def generate_tags_batch_stream(
 
         for batch_start in range(0, len(versions), BATCH_SIZE):
             batch = versions[batch_start: batch_start + BATCH_SIZE]
-            batch_num += 1
 
             batch_results = await _run_single_batch(
                 db, child_node, batch, sibling_node_names,
                 provider, actor, replace,
             )
+            # _run_single_batch already calls db.commit()
 
-            total_tagged += len(batch_results)
+            tagged_so_far += len(batch_results)
             yield {
-                "batch": batch_num,
-                "tagged": len(batch_results),
+                "tagged_so_far": tagged_so_far,
+                "total": total_facts,
                 "results": {str(k): v for k, v in batch_results.items()},
             }
 
-    total_versions = await _load_published_versions(
+    total_all = len(await _load_published_versions(
         db, node_uid, include_descendants=True,
-    )
-    skipped = len(total_versions) - total_tagged
+    ))
+    skipped = total_all - tagged_so_far
 
-    log.info("smart_tags.batch_done", node_uid=str(node_uid), tagged=total_tagged)
+    log.info("smart_tags.batch_done", node_uid=str(node_uid), tagged=tagged_so_far)
     yield {
         "done": True,
-        "tagged_count": total_tagged,
+        "tagged_count": tagged_so_far,
         "skipped_count": skipped,
+        "total": total_facts,
     }
 
 

@@ -373,7 +373,7 @@ async def generate_smart_tags_batch_endpoint(
             db, node_uid, user, replace=replace,
         ):
             yield _json.dumps(event) + "\n"
-        await db.commit()
+        # No db.commit() here — each batch commits itself
 
     return StreamingResponse(
         _stream(),

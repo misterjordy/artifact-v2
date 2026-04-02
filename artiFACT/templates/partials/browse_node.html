@@ -40,7 +40,7 @@
                 <path d="M8 1a4.5 4.5 0 00-1.7 8.67V11a1 1 0 001 1h1.4a1 1 0 001-1V9.67A4.5 4.5 0 008 1z"/>
               </svg>
             </template>
-            <span x-text="loading ? (mode === 'repl' ? 'Replacing...' : 'Tagging...') : 'Make All Smart'"></span>
+            <span x-text="loading ? (progressTotal > 0 ? progressTagged + '/' + progressTotal : 'Starting...') : 'Make All Smart'"></span>
             <svg x-show="!loading" class="w-3 h-3 transition-transform" :class="expanded && 'rotate-180'" viewBox="0 0 12 12" fill="currentColor"><path d="M6 8L1 3h10z"/></svg>
           </button>
           <div x-show="expanded" x-cloak x-transition class="ml-2 flex items-center gap-2">
