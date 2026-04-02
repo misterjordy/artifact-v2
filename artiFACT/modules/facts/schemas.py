@@ -32,6 +32,7 @@ class VersionOut(BaseModel):
     display_sentence: str
     metadata_tags: list[str] = []
     smart_tags: list[str] = []
+    smart_tags_manual: list[str] = []
     source_reference: dict[str, Any] | None = None
     effective_date: str | None = None
     classification: str = "UNCLASSIFIED"
@@ -168,6 +169,7 @@ class FactHistoryOut(BaseModel):
 
 class SmartTagUpdate(BaseModel):
     tags: list[str] = Field(..., max_length=12)
+    origin: str = Field(default="manual", pattern="^(manual|auto)$")
 
 
 class SmartTagValidate(BaseModel):

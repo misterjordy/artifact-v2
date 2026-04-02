@@ -33,11 +33,13 @@ async def create_version(
     """
     # Carry smart tags forward from superseded version
     carry_smart_tags: list[str] = []
+    carry_smart_tags_manual: list[str] = []
     carry_smart_tags_text: str = ""
     if fact.current_published_version_uid:
         superseded = await db.get(FcFactVersion, fact.current_published_version_uid)
-        if superseded and superseded.smart_tags:
-            carry_smart_tags = list(superseded.smart_tags)
+        if superseded:
+            carry_smart_tags = list(superseded.smart_tags or [])
+            carry_smart_tags_manual = list(superseded.smart_tags_manual or [])
             carry_smart_tags_text = superseded.smart_tags_text or ""
 
     version = FcFactVersion(
@@ -51,6 +53,7 @@ async def create_version(
         supersedes_version_uid=fact.current_published_version_uid,
         created_by_uid=actor.user_uid,
         smart_tags=carry_smart_tags,
+        smart_tags_manual=carry_smart_tags_manual,
         smart_tags_text=carry_smart_tags_text,
     )
 

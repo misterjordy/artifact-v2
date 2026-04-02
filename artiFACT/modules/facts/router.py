@@ -38,8 +38,10 @@ from artiFACT.modules.facts.service import (
     unretire_fact,
 )
 from artiFACT.modules.facts.smart_tags import (
+    estimate_bulk_tokens,
     generate_tags_batch,
     generate_tags_single,
+    update_tags_auto,
     update_tags_manual,
     validate_tag,
 )
@@ -343,10 +345,15 @@ async def generate_smart_tags_endpoint(
 @router.post("/nodes/{node_uid}/smart-tags/generate-all")
 async def generate_smart_tags_batch_endpoint(
     node_uid: uuid.UUID,
+    replace: bool = Query(default=False),
     user: FcUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Generate AI smart tags for all untagged facts in a node."""
+    """Generate AI smart tags for facts in a node.
+
+    replace=false: only process untagged facts (nondestructive).
+    replace=true: regenerate auto tags on all facts (preserves manual tags).
+    """
     from artiFACT.kernel.exceptions import Forbidden, NotFound
     from artiFACT.kernel.models import FcNode
     from artiFACT.kernel.permissions.resolver import can
@@ -358,30 +365,35 @@ async def generate_smart_tags_batch_endpoint(
     if not await can(user, "contribute", node_uid, db):
         raise Forbidden("Cannot generate tags in this node", code="FORBIDDEN")
 
-    results = await generate_tags_batch(db, node_uid, user)
+    result = await generate_tags_batch(db, node_uid, user, replace=replace)
     await db.commit()
 
-    total_in_node = await _count_published_versions(db, node_uid)
     return {
         "data": {
-            "tagged_count": len(results),
-            "skipped_count": total_in_node - len(results),
-            "results": {str(k): v for k, v in results.items()},
+            "tagged_count": result["tagged_count"],
+            "skipped_count": result["skipped_count"],
+            "results": {str(k): v for k, v in result["results"].items()},
         }
     }
 
 
-async def _count_published_versions(db: AsyncSession, node_uid: uuid.UUID) -> int:
-    """Count published/signed versions in a node."""
-    stmt = (
-        select(FcFactVersion.version_uid)
-        .join(FcFact, FcFact.fact_uid == FcFactVersion.fact_uid)
-        .where(FcFact.node_uid == node_uid)
-        .where(FcFact.is_retired.is_(False))
-        .where(FcFactVersion.state.in_(["published", "signed"]))
-    )
-    result = await db.execute(stmt)
-    return len(result.all())
+@router.get("/nodes/{node_uid}/smart-tags/estimate")
+async def estimate_smart_tags_endpoint(
+    node_uid: uuid.UUID,
+    replace: bool = Query(default=False),
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Estimate token cost for bulk smart tag generation."""
+    from artiFACT.kernel.exceptions import NotFound
+    from artiFACT.kernel.models import FcNode
+
+    node = await db.get(FcNode, node_uid)
+    if not node:
+        raise NotFound("Node not found", code="NODE_NOT_FOUND")
+
+    estimate = await estimate_bulk_tokens(db, node_uid, replace=replace)
+    return {"data": estimate}
 
 
 @router.patch("/facts/{fact_uid}/versions/{version_uid}/smart-tags")
@@ -403,9 +415,12 @@ async def update_smart_tags_endpoint(
     if not version or version.fact_uid != fact.fact_uid:
         raise NotFound("Version not found", code="VERSION_NOT_FOUND")
 
-    accepted, rejected = await update_tags_manual(db, version_uid, body.tags, user)
+    if body.origin == "auto":
+        accepted, rejected = await update_tags_auto(db, version_uid, body.tags, user)
+    else:
+        accepted, rejected = await update_tags_manual(db, version_uid, body.tags, user)
     await db.commit()
-    return {"data": {"accepted": accepted, "rejected": rejected}}
+    return {"data": {"accepted": accepted, "rejected": rejected, "origin": body.origin}}
 
 
 @router.post("/facts/{fact_uid}/versions/{version_uid}/smart-tags/validate")

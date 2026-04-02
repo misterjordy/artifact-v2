@@ -309,8 +309,9 @@ async def test_generate_batch_returns_results_dict(
         results = await generate_tags_batch(db, child_node.node_uid, admin_user)
 
     assert isinstance(results, dict)
-    assert v.version_uid in results
-    assert isinstance(results[v.version_uid], list)
+    assert "results" in results
+    assert v.version_uid in results["results"]
+    assert isinstance(results["results"][v.version_uid], list)
 
 
 # ── Manual CRUD ──
@@ -332,8 +333,8 @@ async def test_update_tags_manual_stores_valid_tags(
 
     assert accepted == ["cloud", "hosting", "deployment"]
     assert rejected == []
-    assert version.smart_tags == ["cloud", "hosting", "deployment"]
-    assert version.smart_tags_text == "cloud hosting deployment"
+    assert version.smart_tags_manual == ["cloud", "hosting", "deployment"]
+    assert "cloud" in version.smart_tags_text
 
 
 async def test_update_tags_manual_rejects_fact_word_tags(

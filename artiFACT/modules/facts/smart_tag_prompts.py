@@ -7,19 +7,20 @@ SMART_TAG_SYSTEM_PROMPT = """\
 You generate retrieval keywords for an atomic fact database. Given one \
 TARGET fact and its sibling facts (same category), produce 8-12 single \
 words or short noun phrases that would help a search engine find this \
-fact. STRICT RULES: (1) Keywords must CONTEXTUALIZE the fact, not \
-repeat words already in it. (2) Keywords must DISTINGUISH this fact \
-from the sibling facts shown. Do not output generic terms that apply \
-equally to all siblings. (3) No verbs, no articles, no sentences. \
+fact. STRICT RULES: \
+(1) Keywords must CONTEXTUALIZE the fact, not repeat words already in it. \
+(2) Keywords must DISTINGUISH this fact from the sibling facts shown. \
+Do not output generic terms that apply equally to all siblings. \
+(3) No verbs, no articles, no sentences. \
 (4) Include domain synonyms, acronyms, related standards, and \
 broader/narrower category terms a user might search for. \
 (5) Prefer terms a government program manager or engineer would use \
 when searching. Avoid academic jargon. Think about what QUESTION \
 someone would ask that should return this fact, and use the nouns \
 from that question. \
-(6) Do not use ANY word that appears in the target fact, even as \
-part of a multi-word phrase. Every word in every tag must be absent \
-from the target fact. \
+(6) Do not use ANY word that appears in the target fact, even as part \
+of a multi-word phrase. Every word in every tag must be absent from \
+the target fact. \
 (7) Minimize word repetition ACROSS tags. If a word already appears \
 in one tag, do not use it in another. Each tag should contribute a \
 unique retrieval term. \
@@ -36,31 +37,56 @@ SIBLING FACTS (same category — generate tags that distinguish the target):
 {numbered_siblings}\
 """
 
+SMART_TAG_USER_TEMPLATE_WITH_MANUAL = """\
+TARGET FACT: "{target_fact}"
+
+HUMAN-ASSIGNED TAGS (expert domain knowledge — extend these themes \
+into related retrieval paths the user hasn't covered yet):
+{manual_tags}
+
+SIBLING FACTS (same category — generate tags that distinguish the target):
+{numbered_siblings}\
+"""
+
 SMART_TAG_BATCH_SYSTEM_PROMPT = """\
 You generate retrieval keywords for an atomic fact database. Given \
 numbered facts from the SAME category, produce 8-12 keywords per fact. \
-STRICT RULES: (1) Keywords must CONTEXTUALIZE each fact, not repeat \
-words already in it. (2) Keywords must DISTINGUISH each fact from its \
-siblings. Do not output generic terms that apply equally to all. \
-(3) No verbs, no articles, no sentences. (4) Include domain synonyms, \
-acronyms, related standards, broader/narrower category terms. \
-(5) Prefer terms a government program manager or engineer would use \
-when searching. Avoid academic jargon. Think about what QUESTION \
-someone would ask that should return this fact, and use the nouns \
-from that question. \
-(6) Do not use ANY word that appears in the fact, even as part of \
-a multi-word phrase. Every word in every tag must be absent from \
-the fact. \
-(7) Minimize word repetition ACROSS tags. If a word already appears \
-in one tag, do not use it in another. Each tag should contribute a \
-unique retrieval term. \
-(8) Use natural spacing, not underscores or camelCase. Output \
-"defense acquisition" not "defense_acquisition". \
+STRICT RULES: \
+(1) Keywords must CONTEXTUALIZE each fact, not repeat words already in it. \
+(2) Keywords must DISTINGUISH each fact from its siblings. \
+Do not output generic terms that apply equally to all. \
+(3) No verbs, no articles, no sentences. \
+(4) Include domain synonyms, acronyms, related standards, \
+broader/narrower category terms. \
+(5) Prefer terms a government program manager or engineer would use. \
+Avoid academic jargon. Think about what QUESTION should return each fact. \
+(6) Do not use ANY word that appears in a fact's own text. \
+(7) Minimize word repetition across tags for the same fact. \
+(8) Use natural spacing, not underscores or camelCase. \
 Return ONLY valid JSON: {"results": [{"fact": N, "tags": ["tag1", ...]}, ...]}. \
 No fences, no extra text.\
 """
 
 SMART_TAG_BATCH_USER_TEMPLATE = """\
 FACTS (all from category "{node_title}"):
-{numbered_facts}\
+{numbered_facts}
+
+SIBLING CATEGORIES (other categories under the same parent — for context, \
+do NOT generate tags about these, just use them to better distinguish \
+the facts above):
+{sibling_node_names}\
+"""
+
+SMART_TAG_BATCH_USER_TEMPLATE_WITH_MANUAL = """\
+FACTS (all from category "{node_title}"):
+{numbered_facts}
+
+HUMAN-ASSIGNED TAGS PER FACT (expert domain knowledge — extend these \
+themes into related retrieval paths not yet covered):
+{manual_tags_per_fact}
+
+SIBLING CATEGORIES (other categories under the same parent — for context, \
+do NOT generate tags about these, just use them to better distinguish \
+the facts above):
+{sibling_node_names}\
 """

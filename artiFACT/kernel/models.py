@@ -260,6 +260,11 @@ class FcFactVersion(Base):
     smart_tags: Mapped[list[str]] = mapped_column(
         JSONB, default=list, server_default=text("'[]'::jsonb")
     )
+    # Manual smart tags — added by humans, protected from auto-overwrite
+    smart_tags_manual: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    # Space-joined union of auto + manual for BM25 search
     smart_tags_text: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
     search_vector = mapped_column(
         TSVECTOR,
