@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.ai_provider import AIProvider
+from artiFACT.kernel.ai_provider import AIProvider, AIUsage
 from artiFACT.kernel.models import (
     FcFact,
     FcFactVersion,
@@ -81,7 +81,7 @@ class TestChat:
     ) -> None:
         """Full chat flow with mocked AIProvider only."""
         node, _ = node_with_facts
-        mock_complete = AsyncMock(return_value="The system uses AES-256 encryption.")
+        mock_complete = AsyncMock(return_value=("The system uses AES-256 encryption.", AIUsage()))
 
         with patch.object(AIProvider, "complete_for_key", mock_complete):
             result = await chat(
@@ -110,7 +110,7 @@ class TestChat:
             async def _gen():
                 yield "Hello "
                 yield "world."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             collected: list[str] = []
@@ -141,7 +141,7 @@ class TestRateLimit:
         from artiFACT.kernel.exceptions import RateLimited
 
         node, _ = node_with_facts
-        mock_complete = AsyncMock(return_value="The system uses AES-256 encryption.")
+        mock_complete = AsyncMock(return_value=("The system uses AES-256 encryption.", AIUsage()))
 
         with patch.object(AIProvider, "complete_for_key", mock_complete):
             # Override rate limit to a small number for testing

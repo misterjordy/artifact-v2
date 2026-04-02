@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIUsage
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.modules.facts.service import create_fact, edit_fact
 from artiFACT.modules.facts.smart_tags import (
@@ -54,7 +55,7 @@ async def test_auto_tags_stored_in_auto_column(
     mock_resp = json.dumps({"tags": ["cloud hosting", "deployment"]})
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
-        new_callable=AsyncMock, return_value=mock_resp,
+        new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
         await generate_tags_single(db, ver.version_uid, admin_user)
 
@@ -195,9 +196,9 @@ async def test_nondestructive_skips_already_tagged(
         call_count += 1
         content = messages[1]["content"]
         n = len([l for l in content.split("\n") if l.strip().startswith(("1.", "2.", "3.", "4.", "5."))])
-        return json.dumps({"results": [
+        return (json.dumps({"results": [
             {"fact": j + 1, "tags": [f"gen-{j}"]} for j in range(n)
-        ]})
+        ]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         result = await generate_tags_batch(db, child_node.node_uid, admin_user, replace=False)
@@ -221,7 +222,7 @@ async def test_nondestructive_preserves_manual_tags(
     mock_resp = json.dumps({"results": [{"fact": 1, "tags": ["cloud hosting"]}]})
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
-        new_callable=AsyncMock, return_value=mock_resp,
+        new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
         await generate_tags_batch(db, child_node.node_uid, admin_user, replace=False)
 
@@ -251,7 +252,7 @@ async def test_replace_regenerates_auto_tags(
     ]})
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
-        new_callable=AsyncMock, return_value=mock_resp,
+        new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
         result = await generate_tags_batch(db, child_node.node_uid, admin_user, replace=True)
 
@@ -275,7 +276,7 @@ async def test_replace_preserves_manual_tags(
     mock_resp = json.dumps({"results": [{"fact": 1, "tags": ["new auto tag"]}]})
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
-        new_callable=AsyncMock, return_value=mock_resp,
+        new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
         await generate_tags_batch(db, child_node.node_uid, admin_user, replace=True)
 
@@ -368,7 +369,7 @@ async def test_batch_prompt_includes_sibling_node_names(
 
     async def mock_complete(self, db, user_uid, messages, **kwargs):
         captured.extend(messages)
-        return json.dumps({"results": [{"fact": 1, "tags": ["test tag"]}]})
+        return (json.dumps({"results": [{"fact": 1, "tags": ["test tag"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         await generate_tags_batch(db, child_node.node_uid, admin_user)
@@ -396,7 +397,7 @@ async def test_batch_prompt_includes_manual_tags_when_present(
 
     async def mock_complete(self, db, user_uid, messages, **kwargs):
         captured.extend(messages)
-        return json.dumps({"results": [{"fact": 1, "tags": ["crypto module"]}]})
+        return (json.dumps({"results": [{"fact": 1, "tags": ["crypto module"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         await generate_tags_batch(db, child_node.node_uid, admin_user)
@@ -420,7 +421,7 @@ async def test_batch_prompt_excludes_manual_section_when_none(
 
     async def mock_complete(self, db, user_uid, messages, **kwargs):
         captured.extend(messages)
-        return json.dumps({"results": [{"fact": 1, "tags": ["test tag"]}]})
+        return (json.dumps({"results": [{"fact": 1, "tags": ["test tag"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         await generate_tags_batch(db, child_node.node_uid, admin_user)
@@ -448,7 +449,7 @@ async def test_auto_generation_excludes_manual_stem_overlap(
     mock_resp = json.dumps({"tags": ["fips standard", "crypto module", "key management"]})
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
-        new_callable=AsyncMock, return_value=mock_resp,
+        new_callable=AsyncMock, return_value=(mock_resp, AIUsage()),
     ):
         tags = await generate_tags_single(db, ver.version_uid, admin_user)
 

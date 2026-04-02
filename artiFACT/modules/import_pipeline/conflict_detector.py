@@ -111,7 +111,7 @@ async def _check_dcx_batch(
     user_msg = user_template.format(comparisons="\n".join(lines))
 
     ai = AIProvider()
-    content = await ai.complete(
+    content, _usage = await ai.complete(
         db,
         user_uid,
         messages=[
@@ -120,6 +120,7 @@ async def _check_dcx_batch(
         ],
         response_format={"type": "json_object"},
         max_tokens=4096,
+        action="import_conflict",
     )
     data = json.loads(content)
 

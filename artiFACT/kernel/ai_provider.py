@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from uuid import UUID
 
 import httpx
@@ -17,14 +18,26 @@ log = structlog.get_logger()
 
 DEFAULT_MODELS: dict[str, str] = {
     "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-20250514",
 }
 
-# Rough cost per 1M tokens (USD) — used for estimated_cost column
 _COST_PER_1M: dict[str, dict[str, float]] = {
     "gpt-4o": {"input": 2.50, "output": 10.00},
-    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
+    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+    "gpt-4.1": {"input": 2.00, "output": 8.00},
 }
+
+
+@dataclass
+class AIUsage:
+    """Token usage from an LLM API call."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    is_actual: bool = False
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
 
 
 def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -36,11 +49,35 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     )
 
 
+async def record_ai_usage(
+    db: AsyncSession,
+    user_uid: UUID,
+    provider: str,
+    model: str,
+    usage: AIUsage,
+    action: str,
+) -> None:
+    """Record AI token usage. Prefers actual counts from the API."""
+    db.add(FcAiUsage(
+        user_uid=user_uid,
+        provider=provider,
+        model=model,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        estimated_cost=_compute_cost(model, usage.input_tokens, usage.output_tokens),
+        action=action,
+    ))
+
+
 class AIProvider:
-    """Single abstraction for all LLM calls. Handles key lookup, decryption, provider routing."""
+    """Single abstraction for all LLM calls.
+
+    Supported providers: openai, azure_openai.
+    Future: bedrock (COSMOS IAM-based, no user key).
+    """
 
     def __init__(self) -> None:
-        self.last_usage: dict[str, int] = {}
+        self.last_usage: AIUsage = AIUsage()
 
     # --- High-level: auto key lookup + usage recording ---
 
@@ -54,33 +91,22 @@ class AIProvider:
         max_tokens: int = 4096,
         timeout: int = 120,
         action: str = "ai_complete",
-    ) -> str:
-        """Async LLM completion — looks up user's key, routes, and records usage."""
+    ) -> tuple[str, AIUsage]:
+        """Async LLM completion — looks up key, routes, records usage.
+
+        Returns (content, usage).
+        """
         key_row = await self._get_key(db, user_uid)
-        content = await self.complete_for_key(
+        content, usage = await self.complete_for_key(
             key_row, messages,
             response_format=response_format,
             max_tokens=max_tokens,
             timeout=timeout,
         )
-        # Record real usage from last_usage (set by provider methods)
-        usage = self.last_usage
         provider = key_row.provider
         model = key_row.model_override or DEFAULT_MODELS.get(provider, "gpt-4o")
-        db.add(FcAiUsage(
-            user_uid=user_uid,
-            provider=provider,
-            model=model,
-            input_tokens=usage.get("input_tokens", 0),
-            output_tokens=usage.get("output_tokens", 0),
-            estimated_cost=_compute_cost(
-                model,
-                usage.get("input_tokens", 0),
-                usage.get("output_tokens", 0),
-            ),
-            action=action,
-        ))
-        return content
+        await record_ai_usage(db, user_uid, provider, model, usage, action)
+        return content, usage
 
     # --- Mid-level: caller provides key_row ---
 
@@ -92,22 +118,21 @@ class AIProvider:
         response_format: dict | None = None,
         max_tokens: int = 4096,
         timeout: int = 120,
-    ) -> str:
-        """Async completion with a pre-fetched key row. Handles decrypt + routing."""
+    ) -> tuple[str, AIUsage]:
+        """Async completion with a pre-fetched key row. Returns (content, usage)."""
         plaintext_key = decrypt(key_row.encrypted_key)
         provider = key_row.provider
         model = key_row.model_override or DEFAULT_MODELS.get(provider, "gpt-4o")
 
         if provider in ("openai", "azure_openai"):
-            return await self._async_openai(
+            content, usage = await self._async_openai(
                 plaintext_key, model, messages, response_format, max_tokens, timeout,
-            )
-        elif provider == "anthropic":
-            return await self._async_anthropic(
-                plaintext_key, model, messages, max_tokens, timeout,
             )
         else:
             raise ValueError(f"Unsupported provider: {provider}")
+
+        self.last_usage = usage
+        return content, usage
 
     async def stream_for_key(
         self,
@@ -116,18 +141,21 @@ class AIProvider:
         *,
         max_tokens: int = 4096,
         timeout: int = 120,
-    ) -> AsyncIterator[str]:
-        """Async streaming with a pre-fetched key row. Yields text chunks."""
+    ) -> tuple[AsyncIterator[str], AIUsage]:
+        """Async streaming. Returns (iterator, usage).
+
+        Usage is populated after the stream is fully consumed.
+        """
         plaintext_key = decrypt(key_row.encrypted_key)
         provider = key_row.provider
         model = key_row.model_override or DEFAULT_MODELS.get(provider, "gpt-4o")
 
-        self.last_usage = {}
+        self.last_usage = AIUsage()
 
         if provider in ("openai", "azure_openai"):
-            return self._stream_openai(plaintext_key, model, messages, max_tokens, timeout)
-        elif provider == "anthropic":
-            return self._stream_anthropic(plaintext_key, model, messages, max_tokens, timeout)
+            return await self._stream_openai(
+                plaintext_key, model, messages, max_tokens, timeout,
+            )
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -142,12 +170,11 @@ class AIProvider:
         response_format: dict | None = None,
         max_tokens: int = 4096,
         timeout: int = 120,
-    ) -> str:
-        """Sync LLM completion for Celery tasks."""
+    ) -> tuple[str, AIUsage]:
+        """Sync LLM completion for Celery tasks. Returns (content, usage)."""
         key_row = db.execute(
             select(FcUserAiKey).where(FcUserAiKey.user_uid == user_uid)
         ).scalar_one_or_none()
-
         if not key_row:
             raise RuntimeError("No AI key configured for user")
 
@@ -158,10 +185,6 @@ class AIProvider:
         if provider in ("openai", "azure_openai"):
             return self._sync_openai(
                 plaintext_key, model, messages, response_format, max_tokens, timeout,
-            )
-        elif provider == "anthropic":
-            return self._sync_anthropic(
-                plaintext_key, model, messages, max_tokens, timeout,
             )
         else:
             raise ValueError(f"Unsupported provider: {provider}")
@@ -188,7 +211,7 @@ class AIProvider:
         response_format: dict | None,
         max_tokens: int,
         timeout: int,
-    ) -> str:
+    ) -> tuple[str, AIUsage]:
         body: dict = {"model": model, "messages": messages, "max_tokens": max_tokens}
         if response_format:
             body["response_format"] = response_format
@@ -201,12 +224,13 @@ class AIProvider:
             )
             resp.raise_for_status()
         data = resp.json()
-        usage = data.get("usage", {})
-        self.last_usage = {
-            "input_tokens": usage.get("prompt_tokens", 0),
-            "output_tokens": usage.get("completion_tokens", 0),
-        }
-        return str(data["choices"][0]["message"]["content"])
+        usage_data = data.get("usage", {})
+        usage = AIUsage(
+            input_tokens=usage_data.get("prompt_tokens", 0),
+            output_tokens=usage_data.get("completion_tokens", 0),
+            is_actual=bool(usage_data),
+        )
+        return str(data["choices"][0]["message"]["content"]), usage
 
     # --- OpenAI (async, streaming) ---
 
@@ -217,127 +241,49 @@ class AIProvider:
         messages: list[dict],
         max_tokens: int,
         timeout: int,
-    ) -> AsyncIterator[str]:
+    ) -> tuple[AsyncIterator[str], AIUsage]:
         body: dict = {
             "model": model, "messages": messages, "max_tokens": max_tokens,
             "stream": True, "stream_options": {"include_usage": True},
         }
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST",
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=body,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        payload = line[6:]
-                        if payload == "[DONE]":
-                            break
-                        chunk_data = json.loads(payload)
-                        # Final chunk with usage (stream_options.include_usage)
-                        if chunk_data.get("usage"):
-                            u = chunk_data["usage"]
-                            self.last_usage = {
-                                "input_tokens": u.get("prompt_tokens", 0),
-                                "output_tokens": u.get("completion_tokens", 0),
-                            }
-                        content = chunk_data["choices"][0].get("delta", {}).get("content", "") if chunk_data.get("choices") else ""
-                        if content:
-                            yield content
+        usage = AIUsage()
 
-    # --- Anthropic (async, non-streaming) ---
+        async def _generate() -> AsyncIterator[str]:
+            nonlocal usage
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream(
+                    "POST",
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=body,
+                ) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            payload = line[6:]
+                            if payload == "[DONE]":
+                                break
+                            chunk_data = json.loads(payload)
+                            if chunk_data.get("usage"):
+                                u = chunk_data["usage"]
+                                usage.input_tokens = u.get("prompt_tokens", 0)
+                                usage.output_tokens = u.get("completion_tokens", 0)
+                                usage.is_actual = True
+                            choices = chunk_data.get("choices", [])
+                            if choices:
+                                content = choices[0].get("delta", {}).get("content", "")
+                                if content:
+                                    yield content
+            self.last_usage = usage
 
-    async def _async_anthropic(
-        self,
-        api_key: str,
-        model: str,
-        messages: list[dict],
-        max_tokens: int,
-        timeout: int,
-    ) -> str:
-        system_content, api_messages = self._split_system(messages)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "max_tokens": max_tokens,
-                    "system": system_content,
-                    "messages": api_messages,
-                },
-            )
-            resp.raise_for_status()
-        data = resp.json()
-        usage = data.get("usage", {})
-        self.last_usage = {
-            "input_tokens": usage.get("input_tokens", 0),
-            "output_tokens": usage.get("output_tokens", 0),
-        }
-        return str(data["content"][0]["text"])
-
-    # --- Anthropic (async, streaming) ---
-
-    async def _stream_anthropic(
-        self,
-        api_key: str,
-        model: str,
-        messages: list[dict],
-        max_tokens: int,
-        timeout: int,
-    ) -> AsyncIterator[str]:
-        system_content, api_messages = self._split_system(messages)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST",
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "max_tokens": max_tokens,
-                    "system": system_content,
-                    "messages": api_messages,
-                    "stream": True,
-                },
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        payload = line[6:]
-                        chunk_data = json.loads(payload)
-                        if chunk_data.get("type") == "content_block_delta":
-                            text = chunk_data.get("delta", {}).get("text", "")
-                            if text:
-                                yield text
-                        elif chunk_data.get("type") == "message_delta":
-                            u = chunk_data.get("usage", {})
-                            if u:
-                                self.last_usage["output_tokens"] = u.get(
-                                    "output_tokens", 0
-                                )
-                        elif chunk_data.get("type") == "message_start":
-                            u = chunk_data.get("message", {}).get("usage", {})
-                            if u:
-                                self.last_usage["input_tokens"] = u.get(
-                                    "input_tokens", 0
-                                )
+        return _generate(), usage
 
     # --- OpenAI (sync) ---
 
     def _sync_openai(
         self, api_key: str, model: str, messages: list[dict],
         response_format: dict | None, max_tokens: int, timeout: int,
-    ) -> str:
+    ) -> tuple[str, AIUsage]:
         body: dict = {"model": model, "messages": messages, "max_tokens": max_tokens}
         if response_format:
             body["response_format"] = response_format
@@ -348,47 +294,20 @@ class AIProvider:
         )
         resp.raise_for_status()
         data = resp.json()
-        usage = data.get("usage", {})
-        self.last_usage = {
-            "input_tokens": usage.get("prompt_tokens", 0),
-            "output_tokens": usage.get("completion_tokens", 0),
-        }
-        return str(data["choices"][0]["message"]["content"])
-
-    # --- Anthropic (sync) ---
-
-    def _sync_anthropic(
-        self, api_key: str, model: str, messages: list[dict],
-        max_tokens: int, timeout: int,
-    ) -> str:
-        system_content, api_messages = self._split_system(messages)
-        resp = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model, "max_tokens": max_tokens,
-                "system": system_content, "messages": api_messages,
-            },
-            timeout=timeout,
+        usage_data = data.get("usage", {})
+        usage = AIUsage(
+            input_tokens=usage_data.get("prompt_tokens", 0),
+            output_tokens=usage_data.get("completion_tokens", 0),
+            is_actual=bool(usage_data),
         )
-        resp.raise_for_status()
-        data = resp.json()
-        usage = data.get("usage", {})
-        self.last_usage = {
-            "input_tokens": usage.get("input_tokens", 0),
-            "output_tokens": usage.get("output_tokens", 0),
-        }
-        return str(data["content"][0]["text"])
+        self.last_usage = usage
+        return str(data["choices"][0]["message"]["content"]), usage
 
     # --- Utility ---
 
     @staticmethod
     def _split_system(messages: list[dict]) -> tuple[str, list[dict]]:
-        """Extract system message from messages list (Anthropic API format)."""
+        """Extract system message from messages list."""
         system_content = ""
         api_messages = []
         for msg in messages:

@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.ai_provider import AIProvider
+from artiFACT.kernel.ai_provider import AIProvider, AIUsage
 from artiFACT.kernel.auth.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from artiFACT.kernel.auth.session import create_session, get_redis, update_session_field
 from artiFACT.kernel.models import (
@@ -336,7 +336,7 @@ async def test_classifier_batches_8_facts():
         user_msg = messages[-1]["content"] if messages else ""
         fact_lines = [l for l in user_msg.split("\n") if l.strip()[:2].rstrip(".") .isdigit()]
         batch_size = max(len(fact_lines), 1)
-        return json.dumps({"a": [[i + 1, 1, 0.9] for i in range(batch_size)]})
+        return (json.dumps({"a": [[i + 1, 1, 0.9] for i in range(batch_size)]}), AIUsage())
 
     mock_db = MagicMock()
     mock_user_uid = uuid.uuid4()
@@ -381,7 +381,7 @@ async def test_classifier_top1_becomes_suggested_node():
     id_mapping = {1: node_uid_1, 2: node_uid_2, 3: node_uid_3}
 
     mock_response = {"a": [[1, 1, 0.92]]}
-    mock_complete = AsyncMock(return_value=json.dumps(mock_response))
+    mock_complete = AsyncMock(return_value=(json.dumps(mock_response), AIUsage()))
 
     with patch.object(AIProvider, "complete", mock_complete):
         results = await classify_batch(
@@ -402,7 +402,7 @@ async def test_classifier_assigns_single_node_per_fact():
     uids = {i: str(uuid.uuid4()) for i in range(1, 4)}
 
     mock_response = {"a": [[1, 2, 0.88]]}
-    mock_complete = AsyncMock(return_value=json.dumps(mock_response))
+    mock_complete = AsyncMock(return_value=(json.dumps(mock_response), AIUsage()))
 
     with patch.object(AIProvider, "complete", mock_complete):
         results = await classify_batch(
@@ -423,7 +423,7 @@ async def test_node_constraint_appears_in_classifier_prompt():
     uid_2 = str(uuid.uuid4())
     id_mapping = {1: uid_1, 2: uid_2}
 
-    mock_complete = AsyncMock(return_value=json.dumps({"a": [[1, 1, 0.9]]}))
+    mock_complete = AsyncMock(return_value=(json.dumps({"a": [[1, 1, 0.9]]}), AIUsage()))
 
     with patch.object(AIProvider, "complete", mock_complete):
         await classify_batch(
@@ -484,7 +484,7 @@ async def test_conflict_only_jaccard_03_to_085():
     ]
 
     mock_complete = AsyncMock(
-        return_value=json.dumps({"r": [{"n": 1, "t": "X", "e": "e1", "reason": "different topic"}]})
+        return_value=(json.dumps({"r": [{"n": 1, "t": "X", "e": "e1", "reason": "different topic"}]}), AIUsage())
     )
 
     with patch.object(AIProvider, "complete", mock_complete):
@@ -521,7 +521,7 @@ async def test_conflict_detected_sets_fields():
         "r": [{"n": 1, "t": "C", "e": "e1", "reason": "Incompatible MW values"}]
     }
 
-    mock_complete = AsyncMock(return_value=json.dumps(mock_ai_response))
+    mock_complete = AsyncMock(return_value=(json.dumps(mock_ai_response), AIUsage()))
 
     with patch.object(AIProvider, "complete", mock_complete):
         results = await detect_conflicts(

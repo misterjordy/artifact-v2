@@ -90,7 +90,6 @@
         <label class="block text-sm font-medium mb-1">Provider</label>
         <select x-model="form.provider" class="w-full border border-[var(--color-border-input)] rounded px-3 py-2 text-sm bg-[var(--color-bg-input)]">
           <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
         </select>
       </div>
       <div>
@@ -122,5 +121,12 @@
       </div>
     </form>
   </section>
+
+  <div class="mt-8 pt-4 border-t border-[var(--color-border)]">
+    <button onclick="if(confirm('Sign out?')){fetch('/api/v1/auth/logout',{method:'POST',headers:{'X-CSRF-Token':document.cookie.match(/csrf_token=([^;]+)/)?.[1]||''}}).then(()=>window.location.href='/')}"
+            class="text-sm text-red-400 hover:text-red-300 transition-colors">
+      Sign out
+    </button>
+  </div>
 </div>
 {% endblock %}

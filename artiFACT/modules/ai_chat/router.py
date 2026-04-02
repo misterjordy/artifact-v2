@@ -332,3 +332,67 @@ async def get_token_estimate(
         db, program_node_uid, parsed_constraints, fact_filter
     )
     return TokenEstimate(**result)
+
+
+@router.get("/ai/usage/summary")
+async def ai_usage_summary(
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return token usage summary for the current user (this week)."""
+    from datetime import datetime, timedelta, timezone
+
+    from artiFACT.kernel.models import FcAiUsage
+
+    now = datetime.now(timezone.utc)
+    week_start = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+
+    totals = await db.execute(
+        select(
+            func.coalesce(func.sum(FcAiUsage.input_tokens), 0).label("inp"),
+            func.coalesce(func.sum(FcAiUsage.output_tokens), 0).label("out"),
+            func.count(FcAiUsage.id).label("calls"),
+        ).where(FcAiUsage.user_uid == user.user_uid, FcAiUsage.created_at >= week_start)
+    )
+    row = totals.one()
+
+    by_action_rows = await db.execute(
+        select(
+            FcAiUsage.action,
+            func.coalesce(
+                func.sum(FcAiUsage.input_tokens + FcAiUsage.output_tokens), 0
+            ).label("total"),
+        ).where(FcAiUsage.user_uid == user.user_uid, FcAiUsage.created_at >= week_start)
+        .group_by(FcAiUsage.action)
+    )
+    by_action = {r.action: r.total for r in by_action_rows.all()}
+
+    by_provider_rows = await db.execute(
+        select(
+            FcAiUsage.provider,
+            FcAiUsage.model,
+            func.coalesce(
+                func.sum(FcAiUsage.input_tokens + FcAiUsage.output_tokens), 0
+            ).label("total"),
+            func.count(FcAiUsage.id).label("calls"),
+        ).where(FcAiUsage.user_uid == user.user_uid, FcAiUsage.created_at >= week_start)
+        .group_by(FcAiUsage.provider, FcAiUsage.model)
+    )
+    by_provider = [
+        {"provider": r.provider, "model": r.model, "total_tokens": r.total, "call_count": r.calls}
+        for r in by_provider_rows.all()
+    ]
+
+    return {
+        "data": {
+            "total_tokens": row.inp + row.out,
+            "input_tokens": row.inp,
+            "output_tokens": row.out,
+            "call_count": row.calls,
+            "week_start": week_start.isoformat(),
+            "by_action": by_action,
+            "by_provider": by_provider,
+        }
+    }

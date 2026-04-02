@@ -260,7 +260,7 @@ async def generate_tags_single(
     ]
 
     provider = AIProvider()
-    raw = await provider.complete(
+    raw, _usage = await provider.complete(
         db, actor.user_uid, messages,
         response_format={"type": "json_object"},
         max_tokens=512,
@@ -328,7 +328,7 @@ async def _process_node_batch(
             {"role": "user", "content": user_content},
         ]
 
-        raw = await provider.complete(
+        raw, _usage = await provider.complete(
             db, actor.user_uid, messages,
             response_format={"type": "json_object"},
             max_tokens=2048,

@@ -8,7 +8,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.ai_provider import AIProvider
+from artiFACT.kernel.ai_provider import AIProvider, AIUsage
 from artiFACT.kernel.models import (
     FcChatMessage,
     FcChatSession,
@@ -348,7 +348,7 @@ class TestUnifiedPipeline:
 
             async def _gen():
                 yield "Test response."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             collected: list[str] = []
@@ -376,7 +376,7 @@ class TestUnifiedPipeline:
 
             async def _gen():
                 yield "Propulsion info."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             async for _ in chat_with_session(
@@ -405,7 +405,7 @@ class TestUnifiedPipeline:
 
             async def _gen():
                 yield "Hydraulics info."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             async for _ in chat_with_session(
@@ -453,7 +453,7 @@ class TestChatWithSession:
         async def _mock_stream(self, key_row, messages, **kwargs):
             async def _gen():
                 yield "The answer."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             async for _ in chat_with_session(
@@ -486,7 +486,7 @@ class TestChatWithSession:
             async def _gen():
                 yield "Hello "
                 yield "world."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             collected: list[str] = []
@@ -594,7 +594,7 @@ class TestConversationHistoryCap:
 
             async def _gen():
                 yield "Response."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             async for _ in chat_with_session(
@@ -692,7 +692,7 @@ class TestStreamingFormat:
             async def _gen():
                 yield "Part 1 "
                 yield "Part 2."
-            return _gen()
+            return (_gen(), AIUsage())
 
         with patch.object(AIProvider, "stream_for_key", new=_mock_stream):
             chunks = []

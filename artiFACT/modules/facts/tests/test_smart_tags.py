@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIUsage
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcUser
 from artiFACT.modules.facts.service import create_fact, edit_fact
 from artiFACT.modules.facts.smart_tags import (
@@ -139,7 +140,7 @@ async def test_generate_single_calls_ai_and_stores_tags(
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         new_callable=AsyncMock,
-        return_value=mock_response,
+        return_value=(mock_response, AIUsage()),
     ):
         tags = await generate_tags_single(db, version.version_uid, admin_user)
 
@@ -172,7 +173,7 @@ async def test_generate_single_includes_siblings_in_prompt(
 
     async def capture_complete(self, db, user_uid, messages, **kwargs):
         captured_messages.extend(messages)
-        return json.dumps({"tags": ["testing", "validation"]})
+        return (json.dumps({"tags": ["testing", "validation"]}), AIUsage())
 
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
@@ -202,7 +203,7 @@ async def test_generate_single_filters_duplicates_from_ai_output(
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         new_callable=AsyncMock,
-        return_value=mock_response,
+        return_value=(mock_response, AIUsage()),
     ):
         tags = await generate_tags_single(db, version.version_uid, admin_user)
 
@@ -244,7 +245,7 @@ async def test_generate_batch_skips_already_tagged(
         lines = [l for l in content.split("\n") if l.strip().startswith(("1.", "2.", "3.", "4.", "5."))]
         for i in range(len(lines)):
             results.append({"fact": i + 1, "tags": [f"gen-tag-{i}"]})
-        return json.dumps({"results": results})
+        return (json.dumps({"results": results}), AIUsage())
 
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
@@ -273,10 +274,10 @@ async def test_generate_batch_groups_by_8(
     async def mock_complete(self, db, user_uid, messages, **kwargs):
         nonlocal call_count
         call_count += 1
-        return json.dumps({"results": [
+        return (json.dumps({"results": [
             {"fact": j + 1, "tags": [f"tag-{call_count}-{j}"]}
             for j in range(8)
-        ]})
+        ]}), AIUsage())
 
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
@@ -304,7 +305,7 @@ async def test_generate_batch_returns_results_dict(
     with patch(
         "artiFACT.modules.facts.smart_tags.AIProvider.complete",
         new_callable=AsyncMock,
-        return_value=mock_response,
+        return_value=(mock_response, AIUsage()),
     ):
         results = await generate_tags_batch(db, child_node.node_uid, admin_user)
 

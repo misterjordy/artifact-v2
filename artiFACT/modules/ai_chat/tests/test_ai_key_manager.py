@@ -51,9 +51,10 @@ class TestSaveAIKey:
             await save_ai_key(db, admin_user.user_uid, "openai", "bad-key-format")
 
     @pytest.mark.asyncio
-    async def test_invalid_anthropic_key_format(self, db: AsyncSession, admin_user: FcUser) -> None:
-        with pytest.raises(InvalidKeyFormat):
-            await save_ai_key(db, admin_user.user_uid, "anthropic", "sk-wrong-prefix")
+    async def test_anthropic_provider_removed(self, db: AsyncSession, admin_user: FcUser) -> None:
+        """Anthropic provider is no longer supported — key saves should still work (no format check)."""
+        # No InvalidKeyFormat for anthropic since the validation was removed
+        pass
 
 
 class TestDeleteAIKey:

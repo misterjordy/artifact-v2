@@ -98,7 +98,7 @@ async def classify_batch(
     )
 
     ai = AIProvider()
-    content = await ai.complete(
+    content, _usage = await ai.complete(
         db,
         user_uid,
         messages=[
@@ -107,6 +107,7 @@ async def classify_batch(
         ],
         response_format={"type": "json_object"},
         max_tokens=4096,
+        action="import_classify",
     )
     data = json.loads(content)
 

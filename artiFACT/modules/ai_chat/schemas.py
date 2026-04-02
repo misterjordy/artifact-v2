@@ -52,7 +52,7 @@ class ContextOut(BaseModel):
 
 
 class AIKeyIn(BaseModel):
-    provider: str = Field(pattern="^(openai|anthropic|azure_openai|bedrock)$")
+    provider: str = Field(pattern="^(openai|azure_openai|bedrock)$")
     api_key: str = Field(min_length=5, max_length=500)
     model_override: str | None = None
 

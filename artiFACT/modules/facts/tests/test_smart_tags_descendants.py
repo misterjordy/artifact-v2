@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from artiFACT.kernel.ai_provider import AIUsage
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.modules.facts.service import create_fact
 from artiFACT.modules.facts.smart_tags import (
@@ -179,9 +180,9 @@ async def test_generate_batch_processes_descendants(
         call_count += 1
         content = messages[1]["content"]
         lines = [l for l in content.split("\n") if l.strip() and l.strip()[0].isdigit()]
-        return json.dumps({"results": [
+        return (json.dumps({"results": [
             {"fact": j + 1, "tags": [f"tag-{call_count}-{j}"]} for j in range(len(lines))
-        ]})
+        ]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         result = await generate_tags_batch(db, root_node.node_uid, admin_user)
@@ -229,7 +230,7 @@ async def test_generate_batch_uses_child_node_context(
 
     async def mock_complete(self, db, user_uid, messages, **kwargs):
         captured_prompts.append(messages[1]["content"])
-        return json.dumps({"results": [{"fact": 1, "tags": ["test"]}]})
+        return (json.dumps({"results": [{"fact": 1, "tags": ["test"]}]}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         await generate_tags_batch(db, root_node.node_uid, admin_user)
@@ -251,7 +252,7 @@ async def test_generate_batch_empty_parent_returns_zero(
     async def mock_complete(self, db, user_uid, messages, **kwargs):
         nonlocal call_count
         call_count += 1
-        return json.dumps({"results": []})
+        return (json.dumps({"results": []}), AIUsage())
 
     with patch("artiFACT.modules.facts.smart_tags.AIProvider.complete", mock_complete):
         result = await generate_tags_batch(db, root_node.node_uid, admin_user)

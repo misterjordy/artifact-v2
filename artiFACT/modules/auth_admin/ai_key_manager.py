@@ -20,8 +20,6 @@ class InvalidKeyFormat(AppError):
 def _validate_key_format(provider: str, plaintext_key: str) -> None:
     if provider == "openai" and not plaintext_key.startswith("sk-"):
         raise InvalidKeyFormat("OpenAI keys must start with 'sk-'")
-    if provider == "anthropic" and not plaintext_key.startswith("sk-ant-"):
-        raise InvalidKeyFormat("Anthropic keys must start with 'sk-ant-'")
 
 
 async def save_ai_key(

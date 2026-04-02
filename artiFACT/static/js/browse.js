@@ -6,18 +6,6 @@ function getCsrfToken() {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  var logoutLink = document.getElementById("logout-link");
-  if (logoutLink) {
-    logoutLink.addEventListener("click", async function (e) {
-      e.preventDefault();
-      await fetch("/api/v1/auth/logout", {
-        method: "POST",
-        headers: { "X-CSRF-Token": getCsrfToken() },
-      });
-      window.location.href = "/";
-    });
-  }
-
   // Inject CSRF token into every HTMX state-changing request
   document.body.addEventListener("htmx:configRequest", function (evt) {
     var token = getCsrfToken();
@@ -317,6 +305,49 @@ function smartTagEditor(factUid, versionUid) {
       }
       row.dataset.smartTags = JSON.stringify(this.autoTags);
       row.dataset.smartTagsManual = JSON.stringify(this.manualTags);
+    },
+  };
+}
+
+// === Token Counter — sidebar usage display ===
+
+function tokenCounter() {
+  return {
+    totalTokens: 0,
+    callCount: 0,
+    byAction: {},
+    byProvider: [],
+    showBreakdown: false,
+
+    init() {
+      this.load();
+      document.addEventListener("ai-usage-changed", this.load.bind(this));
+    },
+
+    async load() {
+      try {
+        var resp = await fetch("/api/v1/ai/usage/summary");
+        if (!resp.ok) return;
+        var data = await resp.json();
+        this.totalTokens = data.data.total_tokens || 0;
+        this.callCount = data.data.call_count || 0;
+        this.byAction = data.data.by_action || {};
+        this.byProvider = data.data.by_provider || [];
+      } catch (e) { /* silent */ }
+    },
+
+    formatTokens: formatTokens,
+
+    formatAction(action) {
+      var labels = {
+        "chat": "Arti Chat",
+        "ai_complete": "AI Call",
+        "smart_tags": "Smart Tags",
+        "smart_tags_batch": "Smart Tags (bulk)",
+        "import_classify": "Import",
+        "import_conflict": "Import",
+      };
+      return labels[action] || action;
     },
   };
 }
