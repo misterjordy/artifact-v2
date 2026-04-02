@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.ai_provider import AIProvider
 from artiFACT.kernel.exceptions import Forbidden, NotFound
-from artiFACT.kernel.models import FcAiUsage, FcFact, FcFactVersion, FcNode, FcUser
+from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcUser
 from artiFACT.kernel.permissions.resolver import can
 
 from .smart_tag_prompts import (
@@ -122,24 +122,6 @@ def _parse_batch_response(raw: str) -> list[dict]:
     return results
 
 
-async def _log_ai_usage(
-    db: AsyncSession,
-    user_uid: UUID,
-    action: str,
-) -> None:
-    """Log an AI usage record for tag generation."""
-    usage = FcAiUsage(
-        user_uid=user_uid,
-        provider="user_key",
-        model="",
-        input_tokens=0,
-        output_tokens=0,
-        estimated_cost=0,
-        action=action,
-    )
-    db.add(usage)
-
-
 async def generate_tags_single(
     db: AsyncSession,
     version_uid: UUID,
@@ -173,6 +155,7 @@ async def generate_tags_single(
         db, actor.user_uid, messages,
         response_format={"type": "json_object"},
         max_tokens=512,
+        action="smart_tags",
     )
 
     tags = _parse_single_response(raw)
@@ -181,7 +164,6 @@ async def generate_tags_single(
     version.smart_tags = filtered
     sync_tags_text(version)
 
-    await _log_ai_usage(db, actor.user_uid, "smart_tags")
     log.info("smart_tags.generated", version_uid=str(version_uid), count=len(filtered))
 
     return filtered
@@ -236,6 +218,7 @@ async def generate_tags_batch(
             db, actor.user_uid, messages,
             response_format={"type": "json_object"},
             max_tokens=2048,
+            action="smart_tags_batch",
         )
 
         parsed = _parse_batch_response(raw)
@@ -253,8 +236,6 @@ async def generate_tags_batch(
                 ver.smart_tags = filtered
                 sync_tags_text(ver)
                 results[ver.version_uid] = filtered
-
-        await _log_ai_usage(db, actor.user_uid, "smart_tags_batch")
 
     log.info("smart_tags.batch_done", node_uid=str(node_uid), tagged=len(results))
     return results

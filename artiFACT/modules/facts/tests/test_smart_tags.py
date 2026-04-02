@@ -5,10 +5,9 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from artiFACT.kernel.models import FcAiUsage, FcFact, FcFactVersion, FcUser
+from artiFACT.kernel.models import FcFact, FcFactVersion, FcUser
 from artiFACT.modules.facts.service import create_fact, edit_fact
 from artiFACT.modules.facts.smart_tags import (
     filter_tags,
@@ -147,11 +146,6 @@ async def test_generate_single_calls_ai_and_stores_tags(
     assert len(tags) > 0
     assert version.smart_tags == tags
     assert version.smart_tags_text == " ".join(tags)
-
-    result = await db.execute(
-        select(FcAiUsage).where(FcAiUsage.action == "smart_tags")
-    )
-    assert result.scalar_one_or_none() is not None
 
 
 async def test_generate_single_includes_siblings_in_prompt(

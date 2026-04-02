@@ -370,9 +370,10 @@ async def stream_chat_response(
         collected = filtered
         yield f"data: {json.dumps({'replace': filtered})}\n\n"
 
-    # Estimate tokens (rough: 4 chars per token)
-    input_tokens = len(system_prompt + input_check.normalized) // 4
-    output_tokens = len(collected) // 4
+    # Use real token counts from provider if available, fall back to estimate
+    provider_usage = _ai.last_usage
+    input_tokens = provider_usage.get("input_tokens") or (len(system_prompt + input_check.normalized) // 4)
+    output_tokens = provider_usage.get("output_tokens") or (len(collected) // 4)
 
     # Save assistant message + finalize — errors here must not kill the stream
     try:

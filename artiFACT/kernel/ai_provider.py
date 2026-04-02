@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from artiFACT.kernel.crypto import decrypt
-from artiFACT.kernel.models import FcUserAiKey
+from artiFACT.kernel.models import FcAiUsage, FcUserAiKey
 
 log = structlog.get_logger()
 
@@ -20,11 +20,29 @@ DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-sonnet-4-20250514",
 }
 
+# Rough cost per 1M tokens (USD) — used for estimated_cost column
+_COST_PER_1M: dict[str, dict[str, float]] = {
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
+}
+
+
+def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Estimate USD cost from token counts."""
+    rates = _COST_PER_1M.get(model, {"input": 3.0, "output": 10.0})
+    return round(
+        (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000,
+        6,
+    )
+
 
 class AIProvider:
     """Single abstraction for all LLM calls. Handles key lookup, decryption, provider routing."""
 
-    # --- High-level: auto key lookup ---
+    def __init__(self) -> None:
+        self.last_usage: dict[str, int] = {}
+
+    # --- High-level: auto key lookup + usage recording ---
 
     async def complete(
         self,
@@ -35,15 +53,34 @@ class AIProvider:
         response_format: dict | None = None,
         max_tokens: int = 4096,
         timeout: int = 120,
+        action: str = "ai_complete",
     ) -> str:
-        """Async LLM completion — looks up user's key and routes to correct provider."""
+        """Async LLM completion — looks up user's key, routes, and records usage."""
         key_row = await self._get_key(db, user_uid)
-        return await self.complete_for_key(
+        content = await self.complete_for_key(
             key_row, messages,
             response_format=response_format,
             max_tokens=max_tokens,
             timeout=timeout,
         )
+        # Record real usage from last_usage (set by provider methods)
+        usage = self.last_usage
+        provider = key_row.provider
+        model = key_row.model_override or DEFAULT_MODELS.get(provider, "gpt-4o")
+        db.add(FcAiUsage(
+            user_uid=user_uid,
+            provider=provider,
+            model=model,
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+            estimated_cost=_compute_cost(
+                model,
+                usage.get("input_tokens", 0),
+                usage.get("output_tokens", 0),
+            ),
+            action=action,
+        ))
+        return content
 
     # --- Mid-level: caller provides key_row ---
 
@@ -84,6 +121,8 @@ class AIProvider:
         plaintext_key = decrypt(key_row.encrypted_key)
         provider = key_row.provider
         model = key_row.model_override or DEFAULT_MODELS.get(provider, "gpt-4o")
+
+        self.last_usage = {}
 
         if provider in ("openai", "azure_openai"):
             return self._stream_openai(plaintext_key, model, messages, max_tokens, timeout)
@@ -161,7 +200,13 @@ class AIProvider:
                 json=body,
             )
             resp.raise_for_status()
-        return str(resp.json()["choices"][0]["message"]["content"])
+        data = resp.json()
+        usage = data.get("usage", {})
+        self.last_usage = {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+        }
+        return str(data["choices"][0]["message"]["content"])
 
     # --- OpenAI (async, streaming) ---
 
@@ -173,7 +218,10 @@ class AIProvider:
         max_tokens: int,
         timeout: int,
     ) -> AsyncIterator[str]:
-        body = {"model": model, "messages": messages, "max_tokens": max_tokens, "stream": True}
+        body: dict = {
+            "model": model, "messages": messages, "max_tokens": max_tokens,
+            "stream": True, "stream_options": {"include_usage": True},
+        }
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream(
                 "POST",
@@ -188,7 +236,14 @@ class AIProvider:
                         if payload == "[DONE]":
                             break
                         chunk_data = json.loads(payload)
-                        content = chunk_data["choices"][0].get("delta", {}).get("content", "")
+                        # Final chunk with usage (stream_options.include_usage)
+                        if chunk_data.get("usage"):
+                            u = chunk_data["usage"]
+                            self.last_usage = {
+                                "input_tokens": u.get("prompt_tokens", 0),
+                                "output_tokens": u.get("completion_tokens", 0),
+                            }
+                        content = chunk_data["choices"][0].get("delta", {}).get("content", "") if chunk_data.get("choices") else ""
                         if content:
                             yield content
 
@@ -219,7 +274,13 @@ class AIProvider:
                 },
             )
             resp.raise_for_status()
-        return str(resp.json()["content"][0]["text"])
+        data = resp.json()
+        usage = data.get("usage", {})
+        self.last_usage = {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        }
+        return str(data["content"][0]["text"])
 
     # --- Anthropic (async, streaming) ---
 
@@ -258,6 +319,18 @@ class AIProvider:
                             text = chunk_data.get("delta", {}).get("text", "")
                             if text:
                                 yield text
+                        elif chunk_data.get("type") == "message_delta":
+                            u = chunk_data.get("usage", {})
+                            if u:
+                                self.last_usage["output_tokens"] = u.get(
+                                    "output_tokens", 0
+                                )
+                        elif chunk_data.get("type") == "message_start":
+                            u = chunk_data.get("message", {}).get("usage", {})
+                            if u:
+                                self.last_usage["input_tokens"] = u.get(
+                                    "input_tokens", 0
+                                )
 
     # --- OpenAI (sync) ---
 
@@ -274,7 +347,13 @@ class AIProvider:
             json=body, timeout=timeout,
         )
         resp.raise_for_status()
-        return str(resp.json()["choices"][0]["message"]["content"])
+        data = resp.json()
+        usage = data.get("usage", {})
+        self.last_usage = {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+        }
+        return str(data["choices"][0]["message"]["content"])
 
     # --- Anthropic (sync) ---
 
@@ -297,7 +376,13 @@ class AIProvider:
             timeout=timeout,
         )
         resp.raise_for_status()
-        return str(resp.json()["content"][0]["text"])
+        data = resp.json()
+        usage = data.get("usage", {})
+        self.last_usage = {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        }
+        return str(data["content"][0]["text"])
 
     # --- Utility ---
 
