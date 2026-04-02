@@ -5,10 +5,7 @@ function getCsrfToken() {
   return match ? match[1] : "";
 }
 
-function formatTokens(n) {
-  if (n >= 1000) return "~" + (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
-  return String(n);
-}
+// formatTokens() is in /static/js/token-counter.js (loaded globally)
 
 function artiChat() {
   return {
