@@ -23,6 +23,27 @@ class SearchResult(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class GroupedSearchResult(BaseModel):
+    fact_uid: str
+    version_uid: str
+    display_sentence: str
+    state: str
+    node_uid: str
+    score: float
+    breadcrumb: str
+
+
+class ProgramGroup(BaseModel):
+    program_uid: str
+    program_title: str
+    results: list[GroupedSearchResult]
+
+
+class GroupedSearchResponse(BaseModel):
+    programs: list[ProgramGroup]
+    total: int
+
+
 class AcronymEntry(BaseModel):
     acronym: str
     count: int

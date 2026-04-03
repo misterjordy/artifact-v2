@@ -24,13 +24,16 @@
 </button>
 
 <!-- Search bar + collapse button (sticky) -->
-<div class="sticky top-0 z-10 flex items-center gap-1 px-1 pb-2 pt-0 bg-[var(--color-bg-sidebar)]">
+<div class="sticky top-0 z-10 flex items-center gap-1 px-1 pb-2 pt-0 bg-[var(--color-bg-sidebar)]"
+     x-data="browseSearch()" @keydown.escape.window="onEscape()">
   <input id="sidebar-search-input"
          type="text"
-         placeholder="Search taxonomy"
+         placeholder="Search facts"
+         x-model="searchQuery"
+         @input.debounce.300ms="doSearch()"
          class="flex-1 min-w-0 px-2 py-1 text-xs rounded bg-[var(--color-bg-input)] text-[var(--color-text)] border border-[var(--color-border-input)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
          autocomplete="off">
-  <button id="sidebar-collapse-btn"
+  <button x-show="!searchQuery" id="sidebar-collapse-btn"
           class="flex-shrink-0 p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
           title="Collapse all">
     <svg width="14" height="14" viewBox="0 0 48 48" fill="currentColor">
@@ -40,8 +43,9 @@
       <path d="M42,26H6a2,2,0,0,0,0,4H42a2,2,0,0,0,0-4Z"></path>
     </svg>
   </button>
-  <button id="sidebar-clear-btn"
-          class="hidden flex-shrink-0 p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
+  <button x-show="searchQuery.length > 0" x-cloak
+          @click="clearSearch()"
+          class="flex-shrink-0 p-1 rounded text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)] hover:bg-[var(--color-bg-hover)] transition-colors"
           title="Clear search">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -79,11 +83,45 @@
   <div class="border-b border-[var(--color-border)]/10 mt-2 mb-1"></div>
 </div>
 
-<!-- Search results container (hidden by default) -->
-<div id="sidebar-search-results" class="hidden mb-4 -mx-2 px-2"></div>
+<!-- Search results container (Alpine-rendered, grouped by program) -->
+<div id="sidebar-search-results" x-show="searchOpen" x-cloak class="mb-4 -mx-2 px-2">
+  <template x-if="searchResults.total > 0">
+    <div>
+      <p class="px-2 pb-2 text-2xs text-[var(--color-text-sidebar-heading)]">
+        <span x-text="searchResults.total"></span> RESULTS
+      </p>
+      <template x-for="group in searchResults.programs" :key="group.program_uid">
+        <div>
+          <p class="text-2xs font-bold text-[var(--color-text-sidebar-heading)] uppercase tracking-wider px-2 py-1 mt-2 border-b border-[var(--color-border)]/20"
+             x-text="group.program_title"></p>
+          <template x-for="result in group.results" :key="result.fact_uid">
+            <div class="px-2 py-1.5 cursor-pointer rounded hover:bg-[var(--color-bg-hover)] transition-colors"
+                 @click="navigateToFact(result)">
+              <p class="text-xs text-[var(--color-text-sidebar)] break-words"
+                 x-text="result.display_sentence"></p>
+              <p class="text-2xs text-[var(--color-text-sidebar-heading)] mt-0.5 break-words"
+                 x-text="result.breadcrumb"></p>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+  </template>
+  <template x-if="searchResults.total === 0 && searchQuery.length >= 2 && !searching">
+    <div class="px-2 py-4 text-center text-xs text-[var(--color-text-sidebar-heading)]">
+      No results found
+    </div>
+  </template>
+  <template x-if="searching">
+    <div class="px-2 py-4 text-center text-xs text-[var(--color-text-sidebar-heading)]">
+      Searching&hellip;
+    </div>
+  </template>
+</div>
 
-<!-- Tree container -->
+<!-- Tree container (hidden during search) -->
 <div id="tree-container"
+     x-show="!searchOpen"
      class="mb-4 -mx-2 px-2"
      hx-get="/partials/tree" hx-trigger="load, refreshTree from:body" hx-swap="innerHTML">
   <div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">Loading tree&hellip;</div>

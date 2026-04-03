@@ -29,6 +29,8 @@
     if (!pane) return;
     pane.classList.remove("open");
     pushCenter(0);
+    // Clear fact selection outline
+    if (window.clearFactSelection) window.clearFactSelection();
     // Clear content after the slide-out animation completes
     setTimeout(function () {
       if (!pane.classList.contains("open")) {

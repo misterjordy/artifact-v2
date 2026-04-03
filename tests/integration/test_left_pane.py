@@ -208,14 +208,14 @@ async def test_search_input_in_sidebar(authed_client: AsyncClient) -> None:
     resp = await authed_client.get("/browse")
     assert resp.status_code == 200
     html = resp.text
-    assert 'placeholder="Search taxonomy"' in html
+    assert 'placeholder="Search facts"' in html
     # No search submit button in sidebar
     assert '<button type="submit"' not in html or "Search" not in html.split("sidebar")[0]
     # Header should contain nav links, not search
     header_match = re.search(r"<header.*?</header>", html, re.DOTALL)
     if header_match:
         header_html = header_match.group()
-        assert "Search taxonomy" not in header_html
+        assert "Search facts" not in header_html
         assert "Queue" in header_html
         assert "Import" in header_html
         assert "AI Chat" in header_html
@@ -244,8 +244,8 @@ async def test_collapse_svg_and_sticky_search(authed_client: AsyncClient) -> Non
     if sidebar_match:
         # Should not have a standalone "Taxonomy" heading label
         assert ">Taxonomy<" not in sidebar_match.group().replace(" ", "").replace("\n", "")
-        # But "Search taxonomy" placeholder is fine
-        assert 'placeholder="Search taxonomy"' in sidebar_match.group()
+        # Search facts placeholder is present
+        assert 'placeholder="Search facts"' in sidebar_match.group()
 
 
 # ── TEST 8: Search results endpoint works ────────────────────────────────
@@ -276,8 +276,8 @@ async def test_search_respects_program_access(pam_client: AsyncClient) -> None:
 # ── TEST 10: Escape/clear mechanism ──────────────────────────────────────
 
 async def test_escape_clear_mechanism() -> None:
-    """sidebar-search.js contains Escape handler and clear logic."""
-    js = (JS_DIR / "sidebar-search.js").read_text()
-    assert "Escape" in js
-    # Should clear the search input
-    assert "clearSearch" in js or "input.value" in js
+    """browse.js contains Escape handler and clearSearch logic for search."""
+    js = (JS_DIR / "browse.js").read_text()
+    assert "Escape" in js or "onEscape" in js
+    # Should clear the search
+    assert "clearSearch" in js

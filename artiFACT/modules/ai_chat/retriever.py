@@ -4,7 +4,6 @@ Replaces the old smart/efficient mode split. Every chat message goes
 through this retriever unless the user requests full corpus.
 """
 
-import re
 import uuid
 from typing import Any
 
@@ -14,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from artiFACT.kernel.models import FcFact, FcFactVersion, FcNode, FcSystemConfig
 from artiFACT.kernel.tree.descendants import get_descendants
+from artiFACT.kernel.tsquery import build_or_tsquery
 
 from .intent_mapper import detect_intent
 from .schemas import ScoredFact
@@ -22,21 +22,6 @@ log = structlog.get_logger()
 
 DEFAULT_TEXT_WEIGHT = 0.4
 DEFAULT_TAG_WEIGHT = 0.6
-
-
-def _build_or_tsquery_str(terms: str) -> str:
-    """Build an OR-joined tsquery string from space-separated terms.
-
-    Deduplicates, strips non-alpha, joins with ' | '.
-    """
-    words = re.findall(r"[A-Za-z0-9]+", terms.lower())
-    seen: set[str] = set()
-    unique: list[str] = []
-    for w in words:
-        if len(w) > 1 and w not in seen:
-            seen.add(w)
-            unique.append(w)
-    return " | ".join(unique) if unique else ""
 
 
 async def _get_scope_node_uids(
@@ -99,7 +84,7 @@ async def retrieve_facts(
     # Build OR-based tsquery: all query + intent terms joined with |
     _, intent_tags = detect_intent(query)
     all_terms = f"{query} {' '.join(intent_tags)}"
-    or_str = _build_or_tsquery_str(all_terms)
+    or_str = build_or_tsquery(all_terms)
     if not or_str:
         return []
     tsquery = func.to_tsquery("english", or_str)

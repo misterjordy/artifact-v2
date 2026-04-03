@@ -55,3 +55,35 @@ def build_flat_tree(flat_nodes: list[FcNode]) -> list[dict[str, Any]]:
         entry["indent_level"] = node.node_depth
         result.append(entry)
     return result
+
+
+def get_program_for_node(
+    flat_nodes: list[FcNode],
+    node_uid: uuid.UUID,
+) -> FcNode | None:
+    """Find the nearest ancestor with is_program=True.
+
+    Walks from the given node up to root. Returns the first
+    node with is_program=True. If none found, returns root.
+    """
+    node_map: dict[uuid.UUID, FcNode] = {n.node_uid: n for n in flat_nodes}
+    current_uid: uuid.UUID | None = node_uid
+    ancestors: list[FcNode] = []
+    while current_uid is not None and current_uid in node_map:
+        ancestors.append(node_map[current_uid])
+        current_uid = node_map[current_uid].parent_node_uid
+
+    for node in ancestors:
+        if node.is_program:
+            return node
+    # Fallback: return the root (last in ancestors list)
+    return ancestors[-1] if ancestors else None
+
+
+def build_breadcrumb_str(
+    flat_nodes: list[FcNode],
+    node_uid: uuid.UUID,
+) -> str:
+    """Build a ' > ' separated breadcrumb string from root to node."""
+    crumbs = get_breadcrumb(flat_nodes, node_uid)
+    return " > ".join(c.title for c in crumbs)

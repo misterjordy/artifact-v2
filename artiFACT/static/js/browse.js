@@ -5,6 +5,116 @@ function getCsrfToken() {
   return match ? match[1] : "";
 }
 
+// === Fact selection / outline state ===
+
+window._selectedFactUid = null;
+
+window.selectFact = function (factUid, versionUid) {
+  // Clear previous outline
+  window.clearFactSelection();
+  // Set new selection
+  window._selectedFactUid = factUid;
+  var row = document.querySelector('[data-fact-uid="' + factUid + '"]');
+  if (row) {
+    row.classList.add("ring-2", "ring-[var(--color-accent)]", "bg-[var(--color-accent)]/5");
+  }
+  // Open right pane with fact history
+  window.openRightPane("Fact History");
+};
+
+window.clearFactSelection = function () {
+  if (window._selectedFactUid) {
+    var prev = document.querySelector('[data-fact-uid="' + window._selectedFactUid + '"]');
+    if (prev) {
+      prev.classList.remove("ring-2", "ring-[var(--color-accent)]", "bg-[var(--color-accent)]/5");
+    }
+  }
+  window._selectedFactUid = null;
+};
+
+// === Alpine component: browse search with program grouping ===
+
+function browseSearch() {
+  return {
+    searchQuery: "",
+    searchResults: { programs: [], total: 0 },
+    searchOpen: false,
+    searching: false,
+
+    async doSearch() {
+      var q = this.searchQuery.trim();
+      if (q.length < 2) {
+        this.searchResults = { programs: [], total: 0 };
+        this.searchOpen = false;
+        return;
+      }
+      this.searchOpen = true;
+      this.searching = true;
+      try {
+        var resp = await fetch("/api/v1/search?q=" + encodeURIComponent(q));
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        var json = await resp.json();
+        this.searchResults = json.data || { programs: [], total: 0 };
+      } catch (e) {
+        this.searchResults = { programs: [], total: 0 };
+      } finally {
+        this.searching = false;
+      }
+    },
+
+    clearSearch() {
+      this.searchQuery = "";
+      this.searchResults = { programs: [], total: 0 };
+      this.searchOpen = false;
+    },
+
+    onEscape() {
+      if (this.searchOpen) {
+        this.clearSearch();
+        var input = document.getElementById("sidebar-search-input");
+        if (input) input.blur();
+      }
+    },
+
+    async navigateToFact(result) {
+      // 1. Load the fact's node in the center pane
+      var promise = new Promise(function (resolve) {
+        var handler = function () {
+          document.body.removeEventListener("htmx:afterSettle", handler);
+          resolve();
+        };
+        document.body.addEventListener("htmx:afterSettle", handler);
+        // Timeout fallback in case HTMX doesn't fire settle
+        setTimeout(resolve, 2000);
+      });
+
+      htmx.ajax("GET", "/partials/browse/" + result.node_uid, {
+        target: "#center-pane",
+        swap: "innerHTML",
+      });
+
+      await promise;
+
+      // 2. Find the fact row and scroll to it
+      var factRow = document.querySelector('[data-fact-uid="' + result.fact_uid + '"]');
+      if (factRow) {
+        factRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+
+      // 3. Select the fact (outline + right pane)
+      window.selectFact(result.fact_uid, result.version_uid);
+
+      // 4. Load the right pane history
+      htmx.ajax("GET", "/partials/fact-history/" + result.fact_uid, {
+        target: "#right-pane-content",
+        swap: "innerHTML",
+      });
+
+      // 5. Search stays open — do NOT close
+    },
+  };
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   // Inject CSRF token into every HTMX state-changing request
   document.body.addEventListener("htmx:configRequest", function (evt) {
