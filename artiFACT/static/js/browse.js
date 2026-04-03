@@ -18,8 +18,9 @@ window.selectFact = function (factUid, versionUid) {
   if (row) {
     row.classList.add("ring-2", "ring-[var(--color-accent)]", "bg-[var(--color-accent)]/5");
   }
-  // Open right pane with fact history
-  window.openRightPane("Fact History");
+  // Open right pane — use the fact sentence as title if available
+  var sentence = row ? (row.getAttribute("data-fact-sentence") || "Fact History") : "Fact History";
+  window.openRightPane(sentence);
   // Notify Alpine component of selection change
   document.dispatchEvent(new CustomEvent("fact-selected", {
     detail: { factUid: factUid, versionUid: versionUid },
