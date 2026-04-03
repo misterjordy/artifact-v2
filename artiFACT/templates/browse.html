@@ -13,6 +13,9 @@
 {% block page_heading %}Browse{% endblock %}
 
 {% block sidebar_top %}
+<!-- Wrap entire sidebar content in browseSearch() so search state is shared -->
+<div x-data="browseSearch()" @keydown.escape.window="onEscape()">
+
 <!-- Close all comment panes button (only visible when >1 pane open) -->
 <button id="dnd-close-all-btn" style="display:none"
         onclick="window._dndCloseAllPanes && window._dndCloseAllPanes()"
@@ -21,8 +24,7 @@
 </button>
 
 <!-- Search bar + collapse button (sticky) -->
-<div class="sticky top-0 z-10 flex items-center gap-1 px-1 pb-2 pt-0 bg-[var(--color-bg-sidebar)]"
-     x-data="browseSearch()" @keydown.escape.window="onEscape()">
+<div class="sticky top-0 z-10 flex items-center gap-1 px-1 pb-2 pt-0 bg-[var(--color-bg-sidebar)]">
   <input id="sidebar-search-input"
          type="text"
          placeholder="Search facts"
@@ -51,7 +53,7 @@
 </div>
 
 <!-- Favorites section -->
-<div x-data="{ favOpen: true }" x-show="$store.favorites.items.length > 0" class="px-1 pb-2">
+<div x-data="{ favOpen: true }" x-show="!searchOpen && $store.favorites.items.length > 0" class="px-1 pb-2">
   <button @click="favOpen = !favOpen"
           class="flex items-center gap-1 w-full text-label font-semibold uppercase tracking-wider text-[var(--color-text-sidebar-heading)] hover:text-[var(--color-text-sidebar-bright)] transition-colors">
     <span x-text="favOpen ? '▾' : '▸'" class="text-2xs"></span>
@@ -123,6 +125,8 @@
      hx-get="/partials/tree" hx-trigger="load, refreshTree from:body" hx-swap="innerHTML">
   <div class="px-2 py-8 text-center text-xs text-[var(--color-text-muted)]">Loading tree&hellip;</div>
 </div>
+
+</div><!-- end browseSearch() scope -->
 {% endblock %}
 
 {% block content %}
