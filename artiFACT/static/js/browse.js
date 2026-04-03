@@ -264,13 +264,9 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Listen for custom HX-Trigger events from successful form submissions.
-  // Events fire on document.body (HTMX falls back to body when source element
-  // is removed from DOM after swap).
-  document.body.addEventListener("refreshTree", function () {
-    _saveTreeState();
-    htmx.trigger("#tree-container", "refreshTree");
-  });
+  // Listen for custom HX-Trigger-After-Settle events from form submissions.
+  // refreshTree is handled natively by the tree container's
+  // hx-trigger="refreshTree from:body" — no JS relay needed.
 
   document.body.addEventListener("refreshNode", function (evt) {
     var detail = evt.detail || {};
