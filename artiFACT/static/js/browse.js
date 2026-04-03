@@ -560,4 +560,106 @@ function smartTagEditor(factUid, versionUid) {
   };
 }
 
+// === Program Description — generate / manual entry ===
+
+function programDescription(nodeUid) {
+  return {
+    nodeUid: nodeUid,
+    description: null,
+    source: null,
+    editMode: false,
+    activeMode: null,
+    generating: false,
+    manualText: "",
+    estimate: { facts_sent: 0, estimated_total_tokens: 0 },
+
+    init() {
+      var desc = this.$el.dataset.description || "";
+      var src = this.$el.dataset.source || "";
+      this.description = desc || null;
+      this.source = src || null;
+      this.manualText = desc || "";
+    },
+
+    get wordCount() {
+      var text = this.manualText.trim();
+      if (!text) return 0;
+      return text.split(/\s+/).length;
+    },
+
+    async startGenerate() {
+      this.activeMode = "generate";
+      try {
+        var resp = await fetch(
+          "/api/v1/nodes/" + this.nodeUid + "/description/estimate"
+        );
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        var data = await resp.json();
+        this.estimate = data.data;
+      } catch (e) {
+        _showToast("Failed to estimate cost", "error");
+        this.activeMode = null;
+      }
+    },
+
+    async confirmGenerate() {
+      this.generating = true;
+      try {
+        var resp = await fetch(
+          "/api/v1/nodes/" + this.nodeUid + "/description/generate",
+          {
+            method: "POST",
+            headers: { "X-CSRF-Token": getCsrfToken() },
+          }
+        );
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        var data = await resp.json();
+        this.description = data.data.description;
+        this.source = data.data.source;
+        this.manualText = this.description;
+        this.activeMode = null;
+        this.editMode = false;
+        document.dispatchEvent(new CustomEvent("ai-usage-changed"));
+      } catch (e) {
+        if (e.message && e.message.indexOf("400") !== -1) {
+          _showToast("AI key required. Add one in Settings.", "error");
+        } else {
+          _showToast("Generation failed", "error");
+        }
+      } finally {
+        this.generating = false;
+      }
+    },
+
+    async saveManual() {
+      try {
+        var resp = await fetch(
+          "/api/v1/nodes/" + this.nodeUid + "/description",
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": getCsrfToken(),
+            },
+            body: JSON.stringify({ description: this.manualText.trim() }),
+          }
+        );
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        var data = await resp.json();
+        this.description = data.data.description;
+        this.source = data.data.source;
+        this.activeMode = null;
+        this.editMode = false;
+      } catch (e) {
+        _showToast("Save failed", "error");
+      }
+    },
+
+    formatTokens: function (count) {
+      if (count >= 1000) return (count / 1000).toFixed(1) + "k";
+      return String(count);
+    },
+  };
+}
+
 // tokenCounter() and formatTokens() are in /static/js/token-counter.js (loaded globally)

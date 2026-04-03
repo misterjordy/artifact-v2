@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from artiFACT.kernel.auth.middleware import get_current_user
 from artiFACT.kernel.auth.session import get_redis
 from artiFACT.kernel.db import get_db
-from artiFACT.kernel.exceptions import Forbidden
-from artiFACT.kernel.models import FcUser
+from artiFACT.kernel.exceptions import Conflict, Forbidden, NotFound
+from artiFACT.kernel.models import FcNode, FcUser
 from artiFACT.kernel.permissions.resolver import can
 from artiFACT.kernel.schemas import NodeOut
 from artiFACT.modules.taxonomy.schemas import (
@@ -21,6 +21,7 @@ from artiFACT.modules.taxonomy.schemas import (
     NodeDetail,
     NodeMove,
     NodeUpdate,
+    ProgramDescriptionUpdate,
     TreeOut,
 )
 from artiFACT.modules.taxonomy.service import (
@@ -147,6 +148,84 @@ async def archive(
     node = await archive_node(db, node_uid, user)
     await db.commit()
     return NodeOut.model_validate(node)
+
+
+@router.post("/nodes/{node_uid}/description/generate")
+async def generate_description_endpoint(
+    node_uid: uuid.UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Generate an AI program description from descendant facts."""
+    from artiFACT.modules.taxonomy.description_generator import (
+        generate_program_description,
+    )
+
+    node = await db.get(FcNode, node_uid)
+    if not node:
+        raise NotFound("Node not found")
+    if not node.is_program:
+        raise Conflict("Only program nodes can have descriptions")
+
+    description, tokens_used = await generate_program_description(db, node_uid, user)
+    node.program_description = description
+    node.program_description_source = "generated"
+    await db.commit()
+
+    return {
+        "data": {
+            "description": description,
+            "source": "generated",
+            "tokens_used": tokens_used,
+        }
+    }
+
+
+@router.patch("/nodes/{node_uid}/description")
+async def save_description_endpoint(
+    node_uid: uuid.UUID,
+    body: ProgramDescriptionUpdate,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Save a manually-entered program description."""
+    node = await db.get(FcNode, node_uid)
+    if not node:
+        raise NotFound("Node not found")
+    if not node.is_program:
+        raise Conflict("Only program nodes can have descriptions")
+
+    node.program_description = body.description
+    node.program_description_source = "manual"
+    await db.commit()
+
+    return {
+        "data": {
+            "description": body.description,
+            "source": "manual",
+        }
+    }
+
+
+@router.get("/nodes/{node_uid}/description/estimate")
+async def estimate_description_endpoint(
+    node_uid: uuid.UUID,
+    user: FcUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Estimate token cost for generating a program description."""
+    from artiFACT.modules.taxonomy.description_generator import (
+        estimate_description_tokens,
+    )
+
+    node = await db.get(FcNode, node_uid)
+    if not node:
+        raise NotFound("Node not found")
+    if not node.is_program:
+        raise Conflict("Only program nodes can have descriptions")
+
+    estimate = await estimate_description_tokens(db, node_uid)
+    return {"data": estimate}
 
 
 @partials_router.get("/partials/tree", response_class=HTMLResponse)

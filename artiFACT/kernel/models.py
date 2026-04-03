@@ -93,6 +93,11 @@ class FcNode(Base):
     created_by_uid: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("fc_user.user_uid"), nullable=True
     )
+    # Program description — AI-generated or manually entered
+    program_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    program_description_source: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )  # 'generated' or 'manual' or null
 
     __table_args__ = (
         Index("idx_node_parent", "parent_node_uid"),

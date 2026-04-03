@@ -32,3 +32,7 @@ class NodeDetail(NodeOut):
 class TreeOut(BaseModel):
     flat: list[NodeOut]
     nested: list[dict[str, Any]]
+
+
+class ProgramDescriptionUpdate(BaseModel):
+    description: str = Field(..., min_length=1, max_length=2222)

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class UserOut(BaseModel):
@@ -28,6 +28,14 @@ class NodeOut(BaseModel):
     node_depth: int
     sort_order: int
     is_archived: bool
+    is_program: bool = False
+    program_description: str | None = None
+    program_description_source: str | None = None
     created_at: datetime
+
+    @field_validator("is_program", mode="before")
+    @classmethod
+    def _coerce_is_program(cls, v: bool | None) -> bool:
+        return bool(v)
 
     model_config = {"from_attributes": True}
