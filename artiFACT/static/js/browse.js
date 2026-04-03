@@ -20,6 +20,10 @@ window.selectFact = function (factUid, versionUid) {
   }
   // Open right pane with fact history
   window.openRightPane("Fact History");
+  // Notify Alpine component of selection change
+  document.dispatchEvent(new CustomEvent("fact-selected", {
+    detail: { factUid: factUid, versionUid: versionUid },
+  }));
 };
 
 window.clearFactSelection = function () {
@@ -30,16 +34,125 @@ window.clearFactSelection = function () {
     }
   }
   window._selectedFactUid = null;
+  // Notify Alpine component
+  document.dispatchEvent(new CustomEvent("fact-deselected"));
 };
 
-// === Alpine component: browse search with program grouping ===
+// === Alpine component: browse search with program grouping + state persistence ===
+
+var BROWSE_STATE_KEY = "artifact:browse:state";
+var BROWSE_DEFAULTS = {
+  currentNodeUid: null,
+  selectedFactUid: null,
+  selectedVersionUid: null,
+  rightPaneOpen: false,
+  searchQuery: "",
+  searchOpen: false,
+};
 
 function browseSearch() {
+  var saved = loadState(BROWSE_STATE_KEY, BROWSE_DEFAULTS);
+
   return {
-    searchQuery: "",
-    searchResults: { programs: [], total: 0 },
+    currentNodeUid: saved.currentNodeUid,
+    selectedFactUid: saved.selectedFactUid,
+    selectedVersionUid: saved.selectedVersionUid,
+    rightPaneOpen: saved.rightPaneOpen,
+    searchQuery: saved.searchQuery,
     searchOpen: false,
+    searchResults: { programs: [], total: 0 },
     searching: false,
+    _initialized: false,
+
+    async init() {
+      var self = this;
+
+      // Restore node if saved
+      if (this.currentNodeUid) {
+        await this._loadNodeById(this.currentNodeUid);
+
+        // Restore fact selection after node loads
+        if (this.selectedFactUid && this.rightPaneOpen) {
+          await this.$nextTick();
+          window.selectFact(this.selectedFactUid, this.selectedVersionUid);
+          htmx.ajax("GET", "/partials/fact-history/" + this.selectedFactUid, {
+            target: "#right-pane-content",
+            swap: "innerHTML",
+          });
+          var factRow = document.querySelector(
+            '[data-fact-uid="' + this.selectedFactUid + '"]'
+          );
+          if (factRow) {
+            factRow.scrollIntoView({ block: "center" });
+          }
+        }
+      }
+
+      // Restore search if saved
+      if (this.searchQuery && this.searchQuery.length >= 2) {
+        this.searchOpen = true;
+        await this.doSearch();
+      }
+
+      this._initialized = true;
+
+      // Listen for fact selection/deselection from window.selectFact
+      document.addEventListener("fact-selected", function (e) {
+        self.selectedFactUid = e.detail.factUid;
+        self.selectedVersionUid = e.detail.versionUid;
+        self.rightPaneOpen = true;
+      });
+      document.addEventListener("fact-deselected", function () {
+        self.selectedFactUid = null;
+        self.selectedVersionUid = null;
+        self.rightPaneOpen = false;
+      });
+
+      // Track which node is loaded when HTMX swaps center pane
+      document.body.addEventListener("htmx:afterSettle", function (e) {
+        if (e.detail && e.detail.target && e.detail.target.id === "center-pane") {
+          var path = e.detail.pathInfo && e.detail.pathInfo.requestPath;
+          if (path && path.indexOf("/partials/browse/") === 0) {
+            self.currentNodeUid = path.replace("/partials/browse/", "");
+          }
+        }
+      });
+
+      // Watch state changes and persist
+      this.$watch("currentNodeUid", function () { self._persist(); });
+      this.$watch("selectedFactUid", function () { self._persist(); });
+      this.$watch("rightPaneOpen", function () { self._persist(); });
+      this.$watch("searchQuery", function () { self._persist(); });
+      this.$watch("searchOpen", function () { self._persist(); });
+    },
+
+    _persist() {
+      if (!this._initialized) return;
+      saveState(BROWSE_STATE_KEY, {
+        currentNodeUid: this.currentNodeUid,
+        selectedFactUid: this.selectedFactUid,
+        selectedVersionUid: this.selectedVersionUid,
+        rightPaneOpen: this.rightPaneOpen,
+        searchQuery: this.searchQuery,
+        searchOpen: this.searchOpen,
+      });
+    },
+
+    async _loadNodeById(nodeUid) {
+      var self = this;
+      return new Promise(function (resolve) {
+        var handler = function () {
+          document.body.removeEventListener("htmx:afterSettle", handler);
+          resolve();
+        };
+        document.body.addEventListener("htmx:afterSettle", handler);
+        setTimeout(resolve, 2000);
+        htmx.ajax("GET", "/partials/browse/" + nodeUid, {
+          target: "#center-pane",
+          swap: "innerHTML",
+        });
+      });
+    },
 
     async doSearch() {
       var q = this.searchQuery.trim();
@@ -78,22 +191,8 @@ function browseSearch() {
 
     async navigateToFact(result) {
       // 1. Load the fact's node in the center pane
-      var promise = new Promise(function (resolve) {
-        var handler = function () {
-          document.body.removeEventListener("htmx:afterSettle", handler);
-          resolve();
-        };
-        document.body.addEventListener("htmx:afterSettle", handler);
-        // Timeout fallback in case HTMX doesn't fire settle
-        setTimeout(resolve, 2000);
-      });
-
-      htmx.ajax("GET", "/partials/browse/" + result.node_uid, {
-        target: "#center-pane",
-        swap: "innerHTML",
-      });
-
-      await promise;
+      this.currentNodeUid = result.node_uid;
+      await this._loadNodeById(result.node_uid);
 
       // 2. Find the fact row and scroll to it
       var factRow = document.querySelector('[data-fact-uid="' + result.fact_uid + '"]');
@@ -102,6 +201,9 @@ function browseSearch() {
       }
 
       // 3. Select the fact (outline + right pane)
+      this.selectedFactUid = result.fact_uid;
+      this.selectedVersionUid = result.version_uid;
+      this.rightPaneOpen = true;
       window.selectFact(result.fact_uid, result.version_uid);
 
       // 4. Load the right pane history

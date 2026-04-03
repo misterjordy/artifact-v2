@@ -1,8 +1,31 @@
 /* Queue page Alpine.js component. */
 
+var QUEUE_STATE_KEY = "artifact:queue:state";
+
+// Client-side filter: hides queue cards whose text doesn't match the query
+window._filterQueueItems = function (query) {
+  var q = query.toLowerCase().trim();
+  var cards = document.querySelectorAll("[x-data='queuePage()'] .space-y-3 > *");
+  cards.forEach(function (card) {
+    if (!q) {
+      card.style.display = "";
+      return;
+    }
+    var text = (card.textContent || "").toLowerCase();
+    card.style.display = text.indexOf(q) >= 0 ? "" : "none";
+  });
+  // Persist filter
+  saveState(QUEUE_STATE_KEY, {
+    tab: document.querySelector("[x-data='queuePage()']") ?
+      document.querySelector("[x-data='queuePage()']")._x_dataStack[0].tab : "proposals",
+    filterQuery: query,
+  });
+};
+
 function queuePage() {
+  var saved = loadState(QUEUE_STATE_KEY, { tab: "proposals", filterQuery: "" });
   return {
-    tab: 'proposals',
+    tab: saved.tab,
     proposals: [],
     moves: [],
     pendingMoves: [],
@@ -20,8 +43,27 @@ function queuePage() {
     rejectChallengeNote: '',
 
     async init() {
+      var self = this;
       await this.refresh();
-      setInterval(() => this.refreshBadge(), 60000);
+      setInterval(function () { self.refreshBadge(); }, 60000);
+
+      // Restore filter input
+      var filterInput = document.getElementById("queue-filter-input");
+      if (filterInput && saved.filterQuery) {
+        filterInput.value = saved.filterQuery;
+        // Apply filter after data loads
+        this.$nextTick(function () {
+          window._filterQueueItems(saved.filterQuery);
+        });
+      }
+
+      // Persist tab changes
+      this.$watch("tab", function () {
+        saveState(QUEUE_STATE_KEY, {
+          tab: self.tab,
+          filterQuery: filterInput ? filterInput.value : "",
+        });
+      });
     },
 
     async refresh() {

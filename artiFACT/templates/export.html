@@ -4,6 +4,19 @@
 {% block title %}Export | artiFACT{% endblock %}
 {% block page_heading %}Export & Document Generation{% endblock %}
 
+{% block sidebar_top %}
+<div class="px-1">
+  <div class="sticky top-0 z-10 bg-[var(--color-bg-sidebar)] pb-2">
+    <input type="text"
+           id="export-filter-input"
+           placeholder="Filter node UIDs..."
+           class="w-full px-2 py-1 text-xs rounded bg-[var(--color-bg-input)] text-[var(--color-text)] border border-[var(--color-border-input)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+           autocomplete="off"
+           oninput="window._filterExportSections && window._filterExportSections(this.value)">
+  </div>
+</div>
+{% endblock %}
+
 {% block content %}
 <div x-data="exportPage()" class="max-w-5xl mx-auto space-y-8">
 

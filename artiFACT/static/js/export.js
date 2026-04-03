@@ -1,3 +1,17 @@
+// Client-side filter: hides export sections whose text doesn't match the query
+window._filterExportSections = function (query) {
+  var q = query.toLowerCase().trim();
+  var sections = document.querySelectorAll("[x-data='exportPage()'] section");
+  sections.forEach(function (section) {
+    if (!q) {
+      section.style.display = "";
+      return;
+    }
+    var text = (section.textContent || "").toLowerCase();
+    section.style.display = text.indexOf(q) >= 0 ? "" : "none";
+  });
+};
+
 function exportPage() {
   return {
     factsheetNodeUid: '',

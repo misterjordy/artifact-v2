@@ -7,6 +7,8 @@
 /* Shared non-color tokens */
 :root {
   --sidebar-width:     272px;
+  --sidebar-min-width: 180px;
+  --sidebar-max-width: 500px;
   --font-sans:         'Inter', system-ui, -apple-system, sans-serif;
   --font-mono:         'JetBrains Mono', ui-monospace, monospace;
   --font-scale:        1;
