@@ -27,6 +27,7 @@
   {% block head_scripts %}{% endblock %}
   <script src="https://unpkg.com/@alpinejs/collapse@3.14.8/dist/cdn.min.js" defer></script>
   <script src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+  <script src="/static/js/acronym-tooltips.js" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body class="h-full font-sans antialiased bg-[var(--color-bg)] text-[var(--color-text)]">
@@ -98,6 +99,10 @@
                class="px-2 py-1 text-xs rounded transition-colors
                       {% if active_nav == 'export' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
               Export</a>
+            <a href="/acronyms"
+               class="px-2 py-1 text-xs rounded transition-colors
+                      {% if active_nav == 'acronyms' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">
+              Acronyms</a>
             <a href="/playground"
                class="px-2 py-1 text-xs rounded transition-colors
                       {% if active_nav == 'playground' %}text-[var(--color-accent-gold)] font-semibold{% else %}text-[var(--color-text-sidebar)] hover:text-[var(--color-text-sidebar-bright)]{% endif %}">

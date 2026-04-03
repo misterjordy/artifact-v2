@@ -197,6 +197,18 @@ async def admin_page(
     return HTMLResponse(html)
 
 
+@router.get("/acronyms", response_class=HTMLResponse)
+async def acronyms_page(
+    user: FcUser = Depends(get_current_user),
+    playground_mode: str | None = Cookie(None, alias="playground_mode"),
+) -> HTMLResponse:
+    """Acronym management page."""
+    html = _jinja.get_template("acronyms.html").render(
+        user=user, active_nav="acronyms", playground_mode=(playground_mode == "true"),
+    )
+    return HTMLResponse(html)
+
+
 @router.get("/browse", response_class=HTMLResponse)
 async def browse_page(
     user: FcUser = Depends(get_current_user),

@@ -33,6 +33,7 @@ from artiFACT.modules.export.router import sync_router
 from artiFACT.modules.signing.router import router as signing_router
 from artiFACT.modules.taxonomy.router import partials_router as taxonomy_partials_router
 from artiFACT.modules.taxonomy.router import router as taxonomy_router
+from artiFACT.modules.acronyms.router import router as acronyms_router
 from artiFACT.modules.playground.router import router as playground_router
 from artiFACT.pages import router as pages_router
 
@@ -62,6 +63,7 @@ app.include_router(import_router)
 app.include_router(export_router)
 app.include_router(sync_router)
 app.include_router(admin_router)
+app.include_router(acronyms_router)
 app.include_router(playground_router)
 app.include_router(pages_router)
 

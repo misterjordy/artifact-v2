@@ -275,6 +275,10 @@ async def generate_tags_single(
     version.smart_tags = filtered
     sync_tags_text(version)
 
+    # Auto-detect unknown acronyms in the fact sentence
+    from artiFACT.modules.acronyms.scanner import detect_unknown_acronyms
+    await detect_unknown_acronyms(db, version.display_sentence, actor.user_uid)
+
     log.info("smart_tags.generated", version_uid=str(version_uid), count=len(filtered))
     return filtered
 
@@ -348,6 +352,11 @@ async def _run_single_batch(
             ver.smart_tags = filtered
             sync_tags_text(ver)
             results[ver.version_uid] = filtered
+
+    # Auto-detect unknown acronyms in batch fact sentences
+    from artiFACT.modules.acronyms.scanner import detect_unknown_acronyms
+    for ver in batch:
+        await detect_unknown_acronyms(db, ver.display_sentence, actor.user_uid)
 
     await db.commit()
     return results

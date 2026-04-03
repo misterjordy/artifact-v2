@@ -180,7 +180,7 @@
          hx-swap="innerHTML"
          onclick="window.selectFact('{{ item.fact_uid }}', '{{ item.version_uid }}')">
       <div class="flex items-start justify-between gap-3">
-        <p class="text-sm text-[var(--color-text)] leading-relaxed break-words flex-1">{{ item.sentence }}</p>
+        <p class="text-sm text-[var(--color-text)] leading-relaxed break-words flex-1 fact-text">{{ item.sentence }}</p>
         {% set has_any_tags = item.smart_tags or item.smart_tags_manual %}
         <button class="smart-tag-bulb flex-shrink-0 mr-1 {% if has_any_tags %}text-yellow-400 hover:text-yellow-300{% else %}text-[var(--color-text-muted)] hover:text-yellow-400{% endif %} transition-colors"
                 onclick="event.stopPropagation(); window.generateSmartTags(this, '{{ item.fact_uid }}', '{{ item.version_uid }}')"
@@ -233,7 +233,7 @@
          hx-swap="innerHTML"
          onclick="window.selectFact('{{ item.fact_uid }}', '{{ item.version_uid }}')">
       <div class="flex items-start justify-between gap-3">
-        <p class="text-sm text-[var(--color-text)] leading-relaxed break-words flex-1">{{ item.sentence }}</p>
+        <p class="text-sm text-[var(--color-text)] leading-relaxed break-words flex-1 fact-text">{{ item.sentence }}</p>
         {% set has_any_tags = item.smart_tags or item.smart_tags_manual %}
         <button class="smart-tag-bulb flex-shrink-0 mr-1 {% if has_any_tags %}text-yellow-400 hover:text-yellow-300{% else %}text-[var(--color-text-muted)] hover:text-yellow-400{% endif %} transition-colors"
                 onclick="event.stopPropagation(); window.generateSmartTags(this, '{{ item.fact_uid }}', '{{ item.version_uid }}')"

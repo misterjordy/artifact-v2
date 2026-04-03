@@ -557,6 +557,35 @@ html.default { --color-import-drop-empty: #D97706; }
   color: var(--color-text);
 }
 
+/* ── Acronym alphabet jump bar ── */
+
+#alphabet-bar {
+  width: 18px;
+  border-left: 1px solid var(--color-border);
+}
+
+#alphabet-bar a {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* ── Acronym tooltips ── */
+
+abbr.acronym-tooltip {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 1px;
+}
+
+abbr.acronym-tooltip:hover {
+  text-decoration-color: var(--color-accent-hover);
+}
+
 body {
   opacity: 1;
   transition: opacity 0.1s ease-in;
