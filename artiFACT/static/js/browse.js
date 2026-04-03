@@ -5,6 +5,29 @@ function getCsrfToken() {
   return match ? match[1] : "";
 }
 
+// === Tree state preservation ===
+
+/**
+ * Snapshot expanded node UIDs from the current tree DOM into a global Set.
+ * The tree template reads window._treeExpandedUids during Alpine x-data init.
+ */
+function _saveTreeState() {
+  var expanded = new Set();
+  var wrappers = document.querySelectorAll("#tree-container .dnd-node-wrapper");
+  wrappers.forEach(function (wrapper) {
+    var nodeEl = wrapper.querySelector("[data-node-uid]");
+    if (!nodeEl) return;
+    var uid = nodeEl.getAttribute("data-node-uid");
+    // Check if this node's Alpine "open" state is true.
+    // Alpine stores data on the element's _x_dataStack.
+    var alpineData = wrapper._x_dataStack && wrapper._x_dataStack[0];
+    if (alpineData && alpineData.open) {
+      expanded.add(uid);
+    }
+  });
+  window._treeExpandedUids = expanded;
+}
+
 // === Fact selection / outline state ===
 
 window._selectedFactUid = null;
@@ -227,13 +250,31 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Listen for custom triggers from successful form submissions
+  // ── Tree state preservation across refreshes ──
+  // Before HTMX swaps the tree, snapshot which nodes are expanded.
+  var treeContainer = document.getElementById("tree-container");
+  if (treeContainer) {
+    treeContainer.addEventListener("htmx:beforeSwap", function () {
+      _saveTreeState();
+    });
+    treeContainer.addEventListener("htmx:afterSettle", function () {
+      // Clear the saved state after Alpine has initialized the new tree
+      // (Alpine reads _treeExpandedUids during x-data init)
+      setTimeout(function () { window._treeExpandedUids = null; }, 100);
+    });
+  }
+
+  // Listen for custom HX-Trigger events from successful form submissions.
+  // Events fire on document.body (HTMX falls back to body when source element
+  // is removed from DOM after swap).
   document.body.addEventListener("refreshTree", function () {
+    _saveTreeState();
     htmx.trigger("#tree-container", "refreshTree");
   });
 
   document.body.addEventListener("refreshNode", function (evt) {
-    var nodeUid = evt.detail && evt.detail.nodeUid;
+    var detail = evt.detail || {};
+    var nodeUid = detail.nodeUid || detail.value;
     if (nodeUid) {
       htmx.ajax("GET", "/partials/browse/" + nodeUid, { target: "#center-pane", swap: "innerHTML" });
     }

@@ -419,7 +419,9 @@ async def node_form_post(
 
     # Success: clear modal, refresh tree
     resp = HTMLResponse("")
-    resp.headers["HX-Trigger"] = json.dumps({"closeModal": True, "refreshTree": True})
+    resp.headers["HX-Trigger-After-Settle"] = json.dumps(
+        {"closeModal": True, "refreshTree": True}
+    )
     return resp
 
 
@@ -498,7 +500,7 @@ async def fact_form_post(
 
     # Success: clear modal, refresh center pane
     resp = HTMLResponse("")
-    resp.headers["HX-Trigger"] = json.dumps({
+    resp.headers["HX-Trigger-After-Settle"] = json.dumps({
         "closeModal": True,
         "refreshTree": True,
         "refreshNode": {"nodeUid": node_uid},
